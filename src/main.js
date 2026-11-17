@@ -1293,6 +1293,27 @@ async function runTestScript() {
     log.push('shell: ' + await state());
     const steps = (process.env.MT_TEST_STEPS || '').split('|').filter(Boolean);
     for (const step of steps) {
+      if (step.startsWith('drag:')) { // real mouse drag: "drag:<from selector> >> <to selector or x,y> [@ dx,dy]"
+        const [fromSel, rest] = step.slice(5).split('>>').map((x) => x.trim());
+        const [toSel, off] = rest.split('@').map((x) => x.trim());
+        const pt = async (sel) => (/^\d+,\d+$/.test(sel) ? sel.split(',').map(Number)
+          : js(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)]; })()`));
+        const [x1, y1] = await pt(fromSel);
+        let [x2, y2] = await pt(toSel);
+        if (off) { const [dx, dy] = off.split(',').map(Number); x2 += dx; y2 += dy; }
+        const wc = win.webContents;
+        wc.sendInputEvent({ type: 'mouseMove', x: x1, y: y1 });
+        wc.sendInputEvent({ type: 'mouseDown', x: x1, y: y1, button: 'left', clickCount: 1 });
+        for (let i = 1; i <= 30; i++) {
+          const k = i / 30, ease = k * k * (3 - 2 * k);
+          wc.sendInputEvent({ type: 'mouseMove', x: Math.round(x1 + (x2 - x1) * ease), y: Math.round(y1 + (y2 - y1) * ease), button: 'left', modifiers: ['leftButtonDown'] });
+          await wait(22);
+        }
+        await wait(350);
+        wc.sendInputEvent({ type: 'mouseUp', x: x2, y: y2, button: 'left', clickCount: 1 });
+        log.push(`drag ${x1},${y1} -> ${x2},${y2}`);
+        continue;
+      }
       if (step.startsWith('keys:')) { // real key presses, typed at a human pace ("\n" = Enter)
         win.webContents.focus();
         for (const ch of step.slice(5).replace(/\\n/g, '\n')) {
