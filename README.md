@@ -54,22 +54,6 @@ Star 하나도 큰 힘이 됩니다.
 
 ---
 
-<a id="english"></a>
-
-## English
-
-**The terminal for Claude Code and Codex.**
-
-Run `claude` or `codex` in your usual shell and MinsuTerm takes it from there: a dashboard of what every agent is doing (subagents included), a notification when one finishes or needs your answer, tabs and conversations restored when you reopen the app, drag-to-split panes, a composer for long prompts, and a lot of fun decorations while you wait.
-
-[Download](../../releases/latest) for Windows or macOS. Free and open source (MIT). Nothing is sent over the network.
-
-On Windows, choose *More info > Run anyway* if SmartScreen appears. On macOS, if the app is reported as damaged, run `xattr -cr .` in the unzipped folder, then `bash "MinsuTerm 설치.command"`.
-
-If you like it, [buy me a coffee](https://buymeacoffee.com/minsugwon) or sponsor on GitHub.
-
----
-
 ## 자주 묻는 질문
 
 **Claude Code 쓰기 좋은 터미널이 있나요?**
@@ -83,5 +67,29 @@ MinsuTerm이 그 용도로 만든 터미널입니다. 작업 현황과 서브에
 
 **무료인가요? 내 데이터는 어디로 가나요?**
 무료(MIT)이고, 인터넷으로 보내는 건 없습니다. Claude Code / Codex가 원래 PC에 저장하는 대화 기록 파일을 읽기만 합니다.
+
+---
+
+<a id="english"></a>
+
+## English summary
+
+**MinsuTerm is the terminal for Claude Code and Codex.** It's a free, open-source (MIT) app for Windows and macOS.
+
+Run `claude` or `codex` in your usual shell (cmd, PowerShell, zsh) and the tab switches to agent mode. No setup needed.
+
+- **Agent dashboard.** Prompts are grouped by project folder into waiting / in progress / done. Subagents show up as little minions under the task.
+- **Notifications.** Get notified when an agent finishes or asks you to pick an option, even while you're in another app.
+- **Session restore.** Close the app and your tabs and Claude / Codex conversations come back next time.
+- **Split panes.** Drag a tab onto the terminal to split it.
+- **Prompt composer.** Write long, multi-line prompts in a separate editor and send them in one go.
+- **Decorations.** Working borders (a relay race, Santa's sleigh...), celebrations when a task is done, animated backgrounds, typing effects and sounds, dark and light themes.
+- **Languages.** Korean, English, Japanese, Chinese.
+
+**Download** from [Releases](../../releases/latest): the `.exe` for Windows, or the `.zip` for your Mac (`arm64` for Apple Silicon, `x64` for Intel). On Windows, choose *More info > Run anyway* if SmartScreen appears. On macOS, if the app is reported as damaged, run `xattr -cr .` in the unzipped folder, then `bash "MinsuTerm 설치.command"`. The app isn't notarized yet.
+
+**Privacy.** Nothing is sent over the network. MinsuTerm only reads the transcript files Claude Code and Codex already keep on your computer.
+
+**Support.** It's a one-person project. If you like it, [buy me a coffee](https://buymeacoffee.com/minsugwon) or sponsor on GitHub. It goes toward Apple notarization and Windows code signing first.
 
 <sub>Claude and Claude Code are trademarks of Anthropic. Codex is a trademark of OpenAI. MinsuTerm is an independent project. Sound credits: [SOUND-CREDITS.md](SOUND-CREDITS.md)</sub>
