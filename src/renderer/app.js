@@ -394,6 +394,21 @@ function applyAppearance() {
 /* · task-complete celebration. One effect engine, reused by previews.  */
 /* ------------------------------------------------------------------ */
 
+/*
+ * Sound words the effects draw on canvas: real onomatopoeia per language, not a translation
+ * (canvas text never passes through the page translator).
+ */
+const FX_WORDS = {
+  keys: { ko: ['톡', '탁', '딱', '팍', '콕', '틱', '똑', '착'], en: ['tap', 'tik', 'tok', 'pak', 'klik', 'tick', 'plink', 'tak'], ja: ['トン', 'タッ', 'カッ', 'パッ', 'コツ', 'チッ', 'ポン', 'タン'], zh: ['咚', '嗒', '啪', '叭', '嘀', '滴', '叮', '哒'] },
+  '쾅!': { en: 'BOOM!', ja: 'ドーン!', zh: '轰!' },
+  '펑!': { en: 'POP!', ja: 'パン!', zh: '砰!' },
+  '짠!': { en: 'TA-DA!', ja: 'ジャーン!', zh: '铛铛!' },
+  '짝짝짝!': { en: 'CLAP CLAP!', ja: 'パチパチ!', zh: '啪啪啪!' },
+};
+const fxLang = () => (window.I18N && window.I18N.lang) || 'ko';
+const fxWord = (w) => (fxLang() === 'ko' ? w : (FX_WORDS[w] && FX_WORDS[w][fxLang()]) || w);
+const fxKeyWords = () => FX_WORDS.keys[fxLang()] || FX_WORDS.keys.ko;
+
 const FX_KINDS = [
   ['none', '없음', '효과 없이 깔끔하게'],
   ['glow', '글로우', '커서 주변이 은은하게 빛남'],
@@ -673,9 +688,9 @@ function addBurst(fx, kind, x, y, o) {
       break;
     }
     case 'ono': { // 의성어: a comic sound word for every key
-      const WORDS = ['톡', '탁', '딱', '팍', '콕', '틱', '똑', '착'];
+      const WORDS = fxKeyWords();
       const COLS = [[255, 214, 61], [255, 107, 129], [96, 220, 255], [140, 255, 140], [200, 150, 255]];
-      P.push({ t: 'ono', g: enter ? '쾅!' : WORDS[(Math.random() * WORDS.length) | 0], x: x + rnd(-0.3, 0.3) * cw, y: y - ch * 0.4, vy: -0.5, s: ch * (enter ? 1.9 : 1.1) * sz, rot: rnd(-0.35, 0.35), age: 0, a: 1, life: 1, decay: enter ? 0.018 : 0.03, c: enter ? [255, 82, 82] : COLS[(Math.random() * COLS.length) | 0] });
+      P.push({ t: 'ono', g: enter ? fxWord('쾅!') : WORDS[(Math.random() * WORDS.length) | 0], x: x + rnd(-0.3, 0.3) * cw, y: y - ch * 0.4, vy: -0.5, s: ch * (enter ? 1.9 : 1.1) * sz, rot: rnd(-0.35, 0.35), age: 0, a: 1, life: 1, decay: enter ? 0.018 : 0.03, c: enter ? [255, 82, 82] : COLS[(Math.random() * COLS.length) | 0] });
       break;
     }
     case 'popcorn':
@@ -1032,7 +1047,7 @@ function drawFx(fx) {
         if (p.age === (p.enter ? 26 : 18)) {
           p.life = 0;
           for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; fx.parts.push({ t: 'p', x: p.x + Math.cos(a) * p.r, y: p.y + Math.sin(a) * p.r, vx: Math.cos(a) * 2.2, vy: Math.sin(a) * 2.2, s: 1.4, a: 1, life: 0.8, decay: 0.05, c: p.c }); }
-          fx.parts.push({ t: 'ono', g: '펑!', x: p.x, y: p.y, vy: -0.6, s: p.max * 1.4, rot: (Math.random() - 0.5) * 0.4, age: 0, a: 1, life: 1, decay: 0.05, c: [255, 240, 120] });
+          fx.parts.push({ t: 'ono', g: fxWord('펑!'), x: p.x, y: p.y, vy: -0.6, s: p.max * 1.4, rot: (Math.random() - 0.5) * 0.4, age: 0, a: 1, life: 1, decay: 0.05, c: [255, 240, 120] });
           break;
         }
         const wob = 1 + Math.sin(p.age * 0.9) * 0.04;
@@ -1326,7 +1341,7 @@ function drawFx(fx) {
           fx.burst('confetti', p.x, gy - s * 0.5, { enter: true, k: 2, cw: 8, ch: 16 });
           fx.burst('stars', p.x, gy - s * 0.6, { enter: true, k: 1.8, cw: 8, ch: 16 });
           fx.parts.push({ t: 'flash', x: p.x, y: gy - s * 0.5, r: s * 2, a: 1, life: 1, decay: 0.08, c: [255, 240, 200] });
-          fx.parts.push({ t: 'ono', g: '짠!', x: p.x, y: gy - s * 1.6, vy: -0.6, s: s * 0.7, rot: -0.1, age: 0, a: 1, life: 1, decay: 0.014, c: [255, 214, 61] });
+          fx.parts.push({ t: 'ono', g: fxWord('짠!'), x: p.x, y: gy - s * 1.6, vy: -0.6, s: s * 0.7, rot: -0.1, age: 0, a: 1, life: 1, decay: 0.014, c: [255, 214, 61] });
         }
         ctx.save();
         ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = al;
@@ -1997,7 +2012,7 @@ function runCelebration(fx, kind, x, y, w, scale = 1) {
       for (let i = 0; i < 12; i++) {
         later(i * 90, () => fx.parts.push({ t: 'emo', g: '👏', x: x + (Math.random() - 0.5) * w * 0.8, y: y + (Math.random() - 0.3) * 120 * scale, vx: 0, vy: -0.6, s: (26 + Math.random() * 16) * scale, age: 0, a: 1, life: 1, decay: 0.012, c: [255, 255, 255] }));
       }
-      [0, 300, 600].forEach((ms, i) => later(ms, () => fx.parts.push({ t: 'ono', g: '짝짝짝!', x: x + (i - 1) * w * 0.22, y: y - 30 * scale + i * 25 * scale, vy: -0.4, s: 30 * scale, rot: (i - 1) * 0.15, age: 0, a: 1, life: 1, decay: 0.012, c: [255, 214, 61] })));
+      [0, 300, 600].forEach((ms, i) => later(ms, () => fx.parts.push({ t: 'ono', g: fxWord('짝짝짝!'), x: x + (i - 1) * w * 0.22, y: y - 30 * scale + i * 25 * scale, vy: -0.4, s: 30 * scale, rot: (i - 1) * 0.15, age: 0, a: 1, life: 1, decay: 0.012, c: [255, 214, 61] })));
       fx.kick();
       break;
     }
@@ -2398,14 +2413,14 @@ function createBg(canvas) {
     }
     else if (k === 'bounce') { bg.items = [{ x: R() * w * 0.6, y: R() * h * 0.6, vx: 1.1 * Math.max(0.5, sc), vy: 0.8 * Math.max(0.5, sc), c: 0, flash: 0 }]; }
     else if (k === 'pong') { bg.items = [{ x: w / 2, y: h / 2, vx: 3.2 * Math.max(0.4, sc), vy: 1.7 * Math.max(0.4, sc), l: h / 2, r: h / 2, sl: 0, sr: 0 }]; }
-    else if (k === 'balloonsky') bg.items = Array.from({ length: Math.round(2.5 * area) + 5 }, () => ({ x: R() * w, y: R() * h + h * 0.2, v: (0.25 + R() * 0.45) * Math.max(0.4, sc), r: (9 + R() * 9) * sc, ph: R() * 6, c: (R() * 6) | 0 }));
+    else if (k === 'balloonsky') bg.items = Array.from({ length: Math.round(2.6 * area) + 6 }, () => { const z = 0.25 + R() * 0.75; return { z, x: R() * w, y: R() * h * 1.1, v: (0.18 + z * 0.55) * Math.max(0.4, sc), r: (4 + z * 10) * sc, ph: R() * 6, c: (R() * BALLOON_COLS.length) | 0 }; }).sort((a, b) => a.z - b.z);
     else if (k === 'nightfire') { bg.items = Array.from({ length: Math.round(20 * area) }, () => ({ x: R() * w, y: R() * h, z: R(), ph: R() * 6 })); bg.sparks = []; }
     else bg.items = [];
   };
   bg.set = (kind) => {
     bg.kind = kind || 'none';
     // 뇌우 draws its own light-mode colours (a lightning flash must stay a flash, not get inverted into a dark flicker)
-    bg.canvas.classList.toggle('bg-own-light', bg.kind === 'thunder');
+    bg.canvas.classList.toggle('bg-own-light', bg.kind === 'thunder' || bg.kind === 'balloonsky');
     bg.seed();
     cancelAnimationFrame(bg.raf);
     bg.raf = 0;
@@ -3028,23 +3043,95 @@ function drawBg(bg) {
       ctx.textAlign = 'start';
       break;
     }
-    case 'balloonsky': { // balloons drifting up on their strings
-      const COLS = [[255, 107, 129], [255, 196, 87], [99, 202, 255], [176, 132, 255], [96, 220, 160], [255, 150, 200]];
+    case 'balloonsky': { // latex balloons drifting up on curly strings, near ones big and crisp, far ones small and hazy
+      const L = isLight();
+      const spr = bg.balloonSprites || (bg.balloonSprites = BALLOON_COLS.map((c) => balloonSprite(c)));
+      const str = L ? 'rgba(80,84,104,' : 'rgba(225,228,240,';
       for (const b of bg.items) {
-        b.ph += 0.02; b.y -= b.v; const x = b.x + Math.sin(b.ph) * 6;
-        if (b.y < -b.r * 4) { b.y = h + b.r * 2; b.x = Math.random() * w; }
-        ctx.strokeStyle = 'rgba(220,220,235,0.18)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(x, b.y + b.r * 1.1); ctx.quadraticCurveTo(x + Math.sin(b.ph * 1.5) * 5, b.y + b.r * 2, x, b.y + b.r * 3); ctx.stroke();
-        ctx.fillStyle = A(COLS[b.c], 0.3);
-        ctx.beginPath(); ctx.ellipse(x, b.y, b.r * 0.85, b.r, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,0.18)';
-        ctx.beginPath(); ctx.ellipse(x - b.r * 0.3, b.y - b.r * 0.35, b.r * 0.16, b.r * 0.28, -0.5, 0, Math.PI * 2); ctx.fill();
+        b.ph += 0.012 + b.z * 0.01;
+        b.y -= b.v;
+        const sway = Math.sin(b.ph) * (4 + b.z * 6);
+        const x = b.x + sway;
+        if (b.y < -b.r * 5) { b.y = h + b.r * 2; b.x = Math.random() * w; }
+        const tilt = Math.cos(b.ph) * 0.09; // leans with the drift
+        const a = 0.16 + b.z * 0.3; // soft: terminal text stays readable over even the nearest balloon
+        // string: from the knot, trailing behind the sway in two soft curves
+        const kx = x + Math.sin(tilt) * b.r * 1.15, ky = b.y + Math.cos(tilt) * b.r * 1.15;
+        const len = b.r * 3.4, lag = -Math.cos(b.ph) * b.r * 0.45;
+        ctx.strokeStyle = str + (0.08 + b.z * 0.14) + ')';
+        ctx.lineWidth = Math.max(0.5, 0.4 + b.z * 0.5);
+        ctx.beginPath(); ctx.moveTo(kx, ky);
+        ctx.bezierCurveTo(kx + lag, ky + len * 0.3, kx - lag * 0.8, ky + len * 0.62, kx + lag * 0.5, ky + len);
+        ctx.stroke();
+        // the balloon (pre-rendered sprite per colour, scaled)
+        const im = spr[b.c];
+        const scl = b.r / BALLOON_R;
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.translate(x, b.y); ctx.rotate(tilt); ctx.scale(scl, scl);
+        ctx.drawImage(im, -im.width / 2, -im.height * BALLOON_CY);
+        ctx.restore();
       }
       break;
     }
     default:
       break;
   }
+}
+
+/* 풍선 하늘: one detailed latex balloon per colour, drawn once and reused at every size */
+const BALLOON_R = 40; // sprite radius (px)
+const BALLOON_CY = 0.42; // balloon centre as a fraction of the sprite height
+const BALLOON_COLS = [[244, 67, 98], [255, 176, 46], [41, 168, 255], [150, 104, 255], [38, 196, 134], [255, 112, 180], [255, 222, 64]];
+function balloonSprite(col) {
+  const r = BALLOON_R;
+  const cv = document.createElement('canvas');
+  cv.width = Math.ceil(r * 2.3); cv.height = Math.ceil(r * 2.6);
+  const c = cv.getContext('2d');
+  const cx = cv.width / 2, cy = cv.height * BALLOON_CY;
+  const mix = (k, t) => col.map((v) => Math.round(v + (k - v) * t));
+  const rgb = (a) => 'rgb(' + a.join(',') + ')';
+  const top = cy - r, bot = cy + r * 1.12;
+  const shape = () => {
+    c.beginPath();
+    c.moveTo(cx, top);
+    c.bezierCurveTo(cx + r * 1.08, top, cx + r * 1.02, cy + r * 0.62, cx + r * 0.1, bot);
+    c.lineTo(cx - r * 0.1, bot);
+    c.bezierCurveTo(cx - r * 1.02, cy + r * 0.62, cx - r * 1.08, top, cx, top);
+    c.closePath();
+  };
+  // body: lit from the upper left, deep colour at the rim
+  shape();
+  const g = c.createRadialGradient(cx - r * 0.38, cy - r * 0.42, r * 0.05, cx, cy + r * 0.1, r * 1.35);
+  g.addColorStop(0, rgb(mix(255, 0.55)));
+  g.addColorStop(0.32, rgb(mix(255, 0.12)));
+  g.addColorStop(0.7, rgb(col));
+  g.addColorStop(1, rgb(mix(0, 0.45)));
+  c.fillStyle = g; c.fill();
+  // rim light on the lower right: light passing through thin latex
+  c.save(); shape(); c.clip();
+  const rim = c.createRadialGradient(cx + r * 0.55, cy + r * 0.6, r * 0.05, cx + r * 0.55, cy + r * 0.6, r * 0.8);
+  rim.addColorStop(0, 'rgba(' + mix(255, 0.4).join(',') + ',0.55)'); rim.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = rim; c.fillRect(0, 0, cv.width, cv.height);
+  c.restore();
+  // gloss: a soft window reflection + a sharp glint
+  c.save();
+  c.translate(cx - r * 0.36, cy - r * 0.4); c.rotate(-0.55);
+  const gl = c.createRadialGradient(0, 0, 0, 0, 0, r * 0.42);
+  gl.addColorStop(0, 'rgba(255,255,255,0.85)'); gl.addColorStop(0.45, 'rgba(255,255,255,0.35)'); gl.addColorStop(1, 'rgba(255,255,255,0)');
+  c.scale(0.55, 1); c.fillStyle = gl; c.beginPath(); c.arc(0, 0, r * 0.42, 0, Math.PI * 2); c.fill();
+  c.restore();
+  c.fillStyle = 'rgba(255,255,255,0.9)';
+  c.beginPath(); c.ellipse(cx - r * 0.5, cy - r * 0.18, r * 0.05, r * 0.09, -0.4, 0, Math.PI * 2); c.fill();
+  // edge: a faint darker outline keeps the shape crisp on any background
+  shape(); c.strokeStyle = 'rgba(' + mix(0, 0.55).join(',') + ',0.45)'; c.lineWidth = 1.2; c.stroke();
+  // knot: a little tied triangle
+  c.fillStyle = rgb(mix(0, 0.25));
+  c.beginPath();
+  c.moveTo(cx - r * 0.1, bot - 1); c.lineTo(cx + r * 0.1, bot - 1);
+  c.lineTo(cx + r * 0.13, bot + r * 0.14); c.quadraticCurveTo(cx, bot + r * 0.09, cx - r * 0.13, bot + r * 0.14);
+  c.closePath(); c.fill();
+  return cv;
 }
 
 let BG = null;
@@ -7090,7 +7177,7 @@ function renderProjects() {
 
   let html;
   if (!groups.length) {
-    html = `<div class="sb-empty">터미널에서 <b>claude</b> 나 <b>codex</b> 를 실행하면<br>그 폴더와 에이전트가 여기에 나타나요.<br><br><button data-action="add-project">+ 프로젝트 폴더 추가</button></div>`;
+    html = `<div class="sb-empty"><span data-i18n-html="sbEmpty">터미널에서 <b>claude</b> 나 <b>codex</b> 를 실행하면<br>그 폴더와 에이전트가 여기에 나타나요.</span><br><br><button data-action="add-project">+ 프로젝트 폴더 추가</button></div>`;
   } else {
     html = groups.map((p) => folderHtml(p, agents)).join('');
   }
@@ -7203,7 +7290,7 @@ function folderHtml(p, agents) {
     if (wait.open) {
       inner += `<div class="children">${waiting.length
         ? waiting.map(sessionRowHtml).join('')
-        : `<div class="child-note slim">${sessions.length ? '모든 세션이 작업 중입니다' : '이 폴더에서 <b>claude</b> / <b>codex</b> 를 실행하면 여기에 나타납니다'}</div>`}</div>`;
+        : `<div class="child-note slim">${sessions.length ? '모든 세션이 작업 중입니다' : '<span data-i18n-html="folderEmpty">이 폴더에서 <b>claude</b> / <b>codex</b> 를 실행하면 여기에 나타납니다</span>'}</div>`}</div>`;
     }
     const run = sectionToggle('run', p.id, '진행 중', runCount, true);
     inner += run.html;
@@ -7454,7 +7541,7 @@ function renderStatus() {
   }
   st.innerHTML = t.agent || t.status === 'exited'
     ? `<span class="st-pill ${t.status}"></span>${statusHtml(t)}`
-    : `<span class="st-hint"><kbd>claude</kbd> 또는 <kbd>codex</kbd> 를 실행하면 에이전트 모드로 전환됩니다</span>`;
+    : `<span class="st-hint" data-i18n-html="statusHint"><kbd>claude</kbd> 또는 <kbd>codex</kbd> 를 실행하면 에이전트 모드로 전환됩니다</span>`;
 }
 
 function updateEmpty() {

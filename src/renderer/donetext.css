@@ -201,7 +201,7 @@
   background: #f6f3ea; box-shadow: 0 0.3em 0.8em rgba(0, 0, 0, .4);
   animation: dtPrint .9s steps(9) both;
 }
-.dt-receipt .dt-inner::before { content: '— 작업 완료 —'; display: block; font-size: .5em; letter-spacing: .2em; color: #777; margin-bottom: .35em; text-align: center; }
+.dt-receipt .dt-inner::before { content: var(--i18n-receipt, '— 작업 완료 —'); display: block; font-size: .5em; letter-spacing: .2em; color: #777; margin-bottom: .35em; text-align: center; }
 .dt-receipt .dt-inner::after {
   content: ''; position: absolute; left: 0; right: 0; bottom: -0.38em; height: 0.4em;
   background: linear-gradient(135deg, #f6f3ea 33%, transparent 33%) 0 0 / 0.6em 0.4em repeat-x, linear-gradient(225deg, #f6f3ea 33%, transparent 33%) 0 0 / 0.6em 0.4em repeat-x;
@@ -229,7 +229,7 @@
   font-weight: 800; animation: dtNews .5s cubic-bezier(.2, .9, .3, 1) both;
 }
 .dt-news .dt-inner::before {
-  content: '속보'; align-self: stretch; display: flex; align-items: center; padding: 0 0.45em; margin-right: 0.5em;
+  content: var(--i18n-breaking, '속보'); align-self: stretch; display: flex; align-items: center; padding: 0 0.45em; margin-right: 0.5em;
   background: #d7263d; color: #fff; font-size: 0.75em; letter-spacing: .05em;
   animation: dtNewsTag 1s steps(1) .5s 3;
 }
@@ -249,7 +249,7 @@
   font-size: 1.05em;
 }
 .dt-achieve .dt-inner::after {
-  content: '업적 달성'; position: absolute; left: 2.6em; top: 0.35em; font-size: 0.42em; font-weight: 700; letter-spacing: .12em; color: #f5c451;
+  content: var(--i18n-achievement, '업적 달성'); position: absolute; left: 6.15em; top: 0.4em; font-size: 0.42em; white-space: nowrap; /* em here = the small label size: 6.15 × .42 ≈ where the title text starts, right of the trophy */ font-weight: 700; letter-spacing: .12em; color: #f5c451;
 }
 @keyframes dtToast { from { transform: translateY(1.5em) scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
 
@@ -390,7 +390,7 @@
 .dt-ink .dt-inner { padding: .5em .9em; background: #f3ead6; color: #1a1a1a; text-shadow: none; border-radius: .1em;
   font-family: 'Batang', 'Gungsuh', 'Nanum Myeongjo', serif; font-weight: 900; box-shadow: 0 .3em .9em rgba(0, 0, 0, .35); animation: dtFade .4s ease-out both; }
 .dt-ink .dt-ch { animation: dtBleed .9s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(.25s + var(--i) * .22s); }
-.dt-ink .dt-inner::after { content: '완'; position: absolute; right: -.35em; bottom: -.3em; width: 1.25em; height: 1.25em; display: grid; place-items: center;
+.dt-ink .dt-inner::after { content: var(--i18n-seal, '완'); position: absolute; right: -.35em; bottom: -.3em; width: 1.25em; height: 1.25em; display: grid; place-items: center;
   font-size: .5em; color: #fff; background: #c92a2a; border-radius: .15em; transform: rotate(-8deg); font-family: 'Batang', serif;
   animation: dtSeal .35s cubic-bezier(.2, 1.6, .4, 1) both; animation-delay: calc(.6s + var(--n, 3) * .22s); }
 @keyframes dtBleed { 0% { opacity: 0; filter: blur(.25em); transform: scale(1.5); } 60% { opacity: 1; filter: blur(.04em); } 100% { opacity: 1; filter: none; transform: none; } }
@@ -419,3 +419,6 @@
 /* the decorations (seal, chalk, bulbs, clapper, balloon strings) belong to the card, not to the whole screen */
 .dt-ink .dt-inner, .dt-chalk .dt-inner, .dt-bulbs .dt-inner, .dt-clapper .dt-inner, .dt-balloons .dt-inner { position: relative; }
 .dt-ink .dt-inner::after { right: -.45em; bottom: -.4em; width: 1.5em; height: 1.5em; font-size: .45em; }
+
+/* Latin seal text (OK) is wider than one CJK character */
+:root[lang="en"] .dt-ink .dt-inner::after { font-size: .38em; font-family: Georgia, serif; }
