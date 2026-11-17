@@ -446,6 +446,10 @@ const FX_KINDS = [
   ['balloonpop', '풍선 펑', '작은 풍선이 부풀다가 "펑!" (재미있는)'],
   ['raindrop', '빗방울', '위에서 빗방울이 똑 떨어져 물결이 퍼짐'],
   ['meteors', '별똥별', '작은 별똥별이 사선으로 쏟아져 반짝'],
+  ['movable', '금속활자', '청동 활자가 탁 찍히고 붉은 인주 자국이 번졌다 사라짐'],
+  ['holy', '천상의 빛', '금빛 빛줄기가 퍼지고 깃털이 내려앉음'],
+  ['hellfire', '지옥불', '검붉은 불길이 솟고 불씨가 흩날림'],
+  ['blood', '핏자국', '피가 튀어 흘러내림 · Enter는 할퀸 자국'],
   ['magiccircle', '마법진', '커서 아래 빛나는 마법진이 돌며 피어남'],
 ];
 
@@ -469,6 +473,12 @@ const BG_KINDS = [
   ['jellyfish', '해파리', '빛나는 해파리가 촉수를 흔들며 유영'],
   ['lanterns', '풍등', '따뜻한 등불이 일렁이며 밤하늘로 떠오름'],
   ['campfire', '캠프파이어', '타닥타닥 타는 모닥불과 하늘로 튀어 오르는 불씨'],
+  ['haunted', '으스스한 숲', '안개 낀 죽은 숲, 어둠 속에서 붉은 눈이 깜빡인다'],
+  ['heaven', '천상', '쏟아지는 빛 아래 천사들이 보좌하는 하늘'],
+  ['castle', '마왕성', '핏빛 달 아래 번개 치는 마왕의 성과 박쥐 떼'],
+  ['hell', '지옥', '끓어오르는 용암과 타오르는 불씨, 자욱한 연기'],
+  ['cyberpunk', '사이버펑크', '비 내리는 네온 도시와 날아다니는 차들'],
+  ['korea', '한국의 밤', '보름달 아래 수묵 산수, 소나무와 처마, 날아가는 학'],
   ['constellation', '별자리', '별들이 하나씩 이어져 별자리를 그렸다 사라짐'],
   ['lavalamp', '라바 램프', '말랑한 빛 덩어리가 천천히 오르내림'],
   ['dna', 'DNA 나선', '이중 나선이 천천히 회전'],
@@ -585,6 +595,30 @@ function addBurst(fx, kind, x, y, o) {
         P.push({ t: 'px', x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1, s: Math.round(rnd(2, 4) * sz), a: 1, life: 1, decay: rnd(0.025, 0.055), c: pick() });
       }
       break;
+    case 'movable': { // 금속활자: a bronze type block stamps the character, leaving a vermilion print
+      const g = typedGlyphs(o.text)[0] || '字';
+      P.push({ t: 'mtype', x, y: y - ch * 0.45, g, s: ch * (enter ? 1.9 : 1.25) * sz, age: 0, a: 1, life: 1, decay: enter ? 0.009 : 0.013, c: [200, 55, 45] });
+      break;
+    }
+    case 'holy': { // 천상의 빛
+      const gold = [[255, 226, 140], [255, 244, 200], [255, 200, 90]];
+      for (let i = 0, m = n(7, 14); i < m; i++) P.push({ t: 'hray', x, y: y - ch * 0.4, ang: (i / m) * Math.PI * 2 + rnd(-0.1, 0.1), len: ch * rnd(0.9, enter ? 3.2 : 1.8) * sz, a: alpha, life: 1, decay: rnd(0.035, 0.06), c: gold[i % 3] });
+      for (let i = 0, m = n(1, 4); i < m; i++) P.push({ t: 'feather', x: x + rnd(-0.5, 0.5) * cw, y: y - ch * 0.6, vx: rnd(-0.6, 0.6), vy: rnd(-1.2, -0.3) * sz, rot: rnd(-1, 1), ph: Math.random() * 6, s: ch * rnd(0.35, 0.55) * sz, a: 1, life: 1, decay: rnd(0.008, 0.014), c: [255, 250, 235] });
+      for (let i = 0, m = n(3, 8); i < m; i++) P.push({ t: 'hspark', x: x + rnd(-1.5, 1.5) * cw, y: y - ch * rnd(0, 1.5), s: rnd(1.5, 3.5) * sz, a: 1, life: 1, decay: rnd(0.03, 0.05), c: gold[(Math.random() * 3) | 0] });
+      break;
+    }
+    case 'hellfire': { // 지옥불
+      for (let i = 0, m = n(6, 16); i < m; i++) P.push({ t: 'hflame', x: x + rnd(-0.6, 0.6) * cw, y: y - ch * 0.1, vx: rnd(-0.3, 0.3), vy: -rnd(0.8, enter ? 3 : 2) * sz, s: ch * rnd(0.25, 0.5) * sz, ph: Math.random() * 6, a: 1, life: 1, decay: rnd(0.025, 0.045), c: [255, 90, 20] });
+      for (let i = 0, m = n(3, 9); i < m; i++) P.push({ t: 'ember', x: x + rnd(-0.5, 0.5) * cw, y, vx: rnd(-0.6, 0.6), vy: -rnd(1, enter ? 3.4 : 2.4) * sz, s: rnd(0.8, 2) * sz, ph: Math.random() * 6, a: 1, life: 1, decay: rnd(0.02, 0.035), c: [255, 60 + ((Math.random() * 60) | 0), 20] });
+      if (enter) P.push({ t: 'ring', x, y, r: 2, grow: 2.2 * sz, w: 2.4, a: 0.9, life: 1, decay: 0.03, c: [190, 20, 10] });
+      break;
+    }
+    case 'blood': { // 핏자국
+      for (let i = 0, m = n(4, 12); i < m; i++) { const ang = -Math.PI / 2 + rnd(-1.4, 1.4); const sp = rnd(1, enter ? 4 : 2.6) * sz; P.push({ t: 'bdrop', x, y: y - ch * 0.3, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, s: rnd(1, 2.6) * sz, a: 1, life: 1, decay: rnd(0.012, 0.022), c: [150, 8, 8] }); }
+      P.push({ t: 'bdrip', x: x + rnd(-0.3, 0.3) * cw, y: y + ch * 0.1, len: 0, sp: rnd(0.25, 0.6) * sz, w: rnd(1.4, 2.4) * sz, a: 1, life: 1, decay: 0.008, c: [140, 6, 6] });
+      if (enter) P.push({ t: 'claw', x, y: y - ch * 0.4, s: ch * 2.4 * sz, a: 1, life: 1, decay: 0.012, c: [120, 4, 4] });
+      break;
+    }
     case 'ember': {
       const warm = [[255, 168, 76], [255, 104, 56], [255, 214, 102]];
       for (let i = 0, m = n(6, 16); i < m; i++) {
@@ -817,6 +851,108 @@ function drawFx(fx) {
         ctx.fillStyle = A(p.life);
         ctx.fillRect(Math.round(p.x), Math.round(p.y), p.s, p.s);
         break;
+      case 'mtype': { // 금속활자
+        p.age++;
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        const k = Math.min(1, p.age / 7);
+        // the print, left once the block has struck
+        if (p.age >= 7) {
+          ctx.globalAlpha = Math.min(1, p.life * 1.4);
+          ctx.fillStyle = 'rgba(' + p.c.join(',') + ',0.9)';
+          ctx.font = '700 ' + Math.round(p.s * 0.78) + 'px "Batang", "Gungsuh", serif';
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.shadowColor = 'rgba(' + p.c.join(',') + ',0.6)'; ctx.shadowBlur = 2;
+          ctx.fillText(p.g, p.x, p.y); ctx.fillText(p.g, p.x + 0.6, p.y + 0.4); // a slightly uneven impression
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = 'rgba(' + p.c.join(',') + ',0.75)'; ctx.lineWidth = Math.max(1, p.s * 0.05);
+          ctx.strokeRect(p.x - p.s * 0.55, p.y - p.s * 0.55, p.s * 1.1, p.s * 1.1);
+        }
+        // the bronze block: comes down, strikes, lifts away
+        if (p.age < 16) {
+          const lift = p.age < 7 ? 0 : (p.age - 7) / 9;
+          const sc2 = p.age < 7 ? 1.6 - k * 0.6 : 1 + lift * 0.15;
+          const S = p.s * sc2, bx = p.x, by = p.y - lift * p.s * 0.8;
+          ctx.globalAlpha = 1 - lift;
+          const gr = ctx.createLinearGradient(bx - S / 2, by - S / 2, bx + S / 2, by + S / 2);
+          gr.addColorStop(0, '#d7b26a'); gr.addColorStop(0.5, '#a07b3c'); gr.addColorStop(1, '#5e4220');
+          ctx.fillStyle = gr; ctx.fillRect(bx - S / 2, by - S / 2, S, S);
+          ctx.strokeStyle = 'rgba(255,235,180,0.6)'; ctx.lineWidth = 1; ctx.strokeRect(bx - S / 2 + 1, by - S / 2 + 1, S - 2, S - 2);
+          ctx.save(); ctx.translate(bx, by); ctx.scale(-1, 1); // type is cast in mirror image
+          ctx.fillStyle = '#3a2810'; ctx.font = '700 ' + Math.round(S * 0.72) + 'px "Batang", "Gungsuh", serif';
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.g, 0, 0);
+          ctx.restore();
+        }
+        ctx.restore();
+        break;
+      }
+      case 'hray': {
+        const d = p.len * (1 - p.life * 0.6);
+        const g2 = ctx.createLinearGradient(p.x, p.y, p.x + Math.cos(p.ang) * d, p.y + Math.sin(p.ang) * d);
+        g2.addColorStop(0, A(p.a * p.life)); g2.addColorStop(1, A(0));
+        ctx.strokeStyle = g2; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(p.ang) * d, p.y + Math.sin(p.ang) * d); ctx.stroke();
+        break;
+      }
+      case 'feather': {
+        p.ph += 0.06; p.vy = Math.min(p.vy + 0.03, 0.7); p.x += p.vx + Math.sin(p.ph) * 0.5; p.y += p.vy; p.rot = Math.sin(p.ph) * 0.7;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = A(0.85 * p.life);
+        ctx.beginPath(); ctx.moveTo(0, -p.s); ctx.quadraticCurveTo(p.s * 0.45, -p.s * 0.2, 0, p.s); ctx.quadraticCurveTo(-p.s * 0.45, -p.s * 0.2, 0, -p.s); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,215,130,' + 0.7 * p.life + ')'; ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.moveTo(0, -p.s); ctx.lineTo(0, p.s * 1.15); ctx.stroke();
+        ctx.restore();
+        break;
+      }
+      case 'hspark': {
+        const r2 = p.s * (0.6 + p.life);
+        ctx.fillStyle = A(p.life);
+        ctx.beginPath(); ctx.moveTo(p.x, p.y - r2); ctx.lineTo(p.x + r2 * 0.25, p.y); ctx.lineTo(p.x, p.y + r2); ctx.lineTo(p.x - r2 * 0.25, p.y); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(p.x - r2, p.y); ctx.lineTo(p.x, p.y + r2 * 0.25); ctx.lineTo(p.x + r2, p.y); ctx.lineTo(p.x, p.y - r2 * 0.25); ctx.closePath(); ctx.fill();
+        break;
+      }
+      case 'hflame': {
+        p.ph += 0.2; p.x += p.vx + Math.sin(p.ph) * 0.4; p.y += p.vy; p.vy *= 0.97;
+        const k2 = p.life;
+        const r3 = p.s * (0.5 + (1 - k2) * 0.8);
+        const g3 = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r3);
+        g3.addColorStop(0, k2 > 0.6 ? 'rgba(255,200,90,' + k2 + ')' : 'rgba(230,50,15,' + k2 + ')');
+        g3.addColorStop(0.5, 'rgba(170,15,5,' + 0.6 * k2 + ')'); g3.addColorStop(1, 'rgba(60,0,0,0)');
+        ctx.fillStyle = g3; ctx.beginPath(); ctx.ellipse(p.x, p.y, r3 * 0.7, r3 * 1.3, 0, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case 'bdrop': {
+        ctx.save(); ctx.globalCompositeOperation = 'source-over';
+        p.vy += 0.18; p.x += p.vx; p.y += p.vy; p.vx *= 0.97;
+        ctx.fillStyle = 'rgba(' + p.c.join(',') + ',' + Math.min(1, p.life * 1.5) + ')';
+        ctx.beginPath(); ctx.ellipse(p.x, p.y, p.s * 0.8, p.s * (1 + Math.min(1.5, Math.abs(p.vy) * 0.15)), Math.atan2(p.vy, p.vx) - Math.PI / 2, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        break;
+      }
+      case 'bdrip': {
+        ctx.save(); ctx.globalCompositeOperation = 'source-over';
+        p.len = Math.min(p.len + p.sp, 40);
+        const al = Math.min(1, p.life * 1.4);
+        ctx.strokeStyle = 'rgba(' + p.c.join(',') + ',' + 0.85 * al + ')'; ctx.lineWidth = p.w; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, p.y + p.len); ctx.stroke();
+        ctx.fillStyle = 'rgba(' + p.c.join(',') + ',' + al + ')';
+        ctx.beginPath(); ctx.ellipse(p.x, p.y + p.len + p.w * 0.4, p.w * 0.9, p.w * 1.2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        break;
+      }
+      case 'claw': { // three scratches torn across, slowly fading
+        ctx.save(); ctx.globalCompositeOperation = 'source-over';
+        const prog = Math.min(1, (1 - p.life) * 6);
+        ctx.strokeStyle = 'rgba(' + p.c.join(',') + ',' + 0.8 * Math.min(1, p.life * 1.3) + ')'; ctx.lineCap = 'round';
+        for (let i = -1; i <= 1; i++) {
+          ctx.lineWidth = Math.max(1.5, p.s * 0.035) * (1 - Math.abs(i) * 0.25);
+          const x0 = p.x - p.s * 0.45 + i * p.s * 0.16, y0 = p.y - p.s * 0.35 - i * p.s * 0.05;
+          ctx.beginPath(); ctx.moveTo(x0, y0);
+          ctx.quadraticCurveTo(x0 + p.s * 0.4 * prog, y0 + p.s * 0.2 * prog, x0 + p.s * 0.85 * prog, y0 + p.s * 0.7 * prog); ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
       case 'ember': {
         p.ph += 0.15; p.x += p.vx + Math.sin(p.ph) * 0.35; p.y += p.vy; p.vy *= 0.985;
         const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.s * 3);
@@ -2288,6 +2424,10 @@ const CURSOR_KINDS = [
   ['ibeam', 'I-빔', '위아래 세리프가 있는 텍스트 커서'],
   ['saber', '광선검', '하얀 심지에 웅웅 떨리는 빛의 칼날'],
   ['candle', '촛불', '작은 초 위에서 일렁이는 불꽃'],
+  ['brush', '붓', '먹을 머금은 대나무 붓'],
+  ['halo', '후광', '금빛 후광이 도는 빛의 막대'],
+  ['hellfire', '지옥불', '검붉은 불길에 휩싸인 막대'],
+  ['blood', '핏방울', '피가 맺혀 뚝뚝 떨어지는 막대'],
   ['equalizer', '이퀄라이저', '음악에 맞춰 춤추는 막대 세 개'],
   ['hologram', '홀로그램', '주사선이 흐르며 지직거리는 투명 블록'],
   ['cat', '고양이', '뾰족 귀 고양이 얼굴 · 눈을 깜빡이고 움직이면 폴짝'],
@@ -2310,7 +2450,7 @@ const CURSOR_KINDS = [
   ['bubble', '비눗방울', '무지갯빛 비눗방울이 몽글몽글 흔들림'],
 ];
 // cursors that already animate on their own: no extra blink
-const SELF_ANIMATED_CURSORS = ['pulse', 'rainbow', 'flame', 'glitch', 'orbit', 'heart', 'spotlight', 'crosshair', 'saber', 'candle', 'equalizer', 'hologram', 'gem', 'wand', 'hourglass', 'cat', 'eye', 'planet', 'rocket', 'drip', 'firefly', 'plasma', 'meteor', 'sakura', 'moon', 'chick', 'slime', 'ecg', 'clock', 'bubble'];
+const SELF_ANIMATED_CURSORS = ['brush', 'halo', 'hellfire', 'blood', 'pulse', 'rainbow', 'flame', 'glitch', 'orbit', 'heart', 'spotlight', 'crosshair', 'saber', 'candle', 'equalizer', 'hologram', 'gem', 'wand', 'hourglass', 'cat', 'eye', 'planet', 'rocket', 'drip', 'firefly', 'plasma', 'meteor', 'sakura', 'moon', 'chick', 'slime', 'ecg', 'clock', 'bubble'];
 const NATIVE_CURSORS = { 'bar-thin': ['bar', 1], bar: ['bar', 2], 'bar-thick': ['bar', 3], block: ['block', 1], underline: ['underline', 1] };
 const cursorPreset = () => {
   const n = NATIVE_CURSORS[S.settings.cursorStyle];
@@ -2389,6 +2529,7 @@ function createBg(canvas) {
     else if (k === 'warp') bg.items = Array.from({ length: 160 }, () => ({ x: (R() - 0.5) * 2, y: (R() - 0.5) * 2, z: R(), pz: 0 }));
     else if (k === 'jellyfish') bg.items = Array.from({ length: Math.min(9, Math.round(0.25 * area) + 4) }, () => ({ x: R() * w, y: R() * h, s: (16 + R() * 26) * sc, ph: R() * 6, v: 0.15 + R() * 0.25, c: (R() * 3) | 0 }));
     else if (k === 'campfire') { bg.items = []; campfireVideo(); }
+    else if (['haunted', 'heaven', 'castle', 'hell', 'cyberpunk', 'korea'].includes(k)) { bg.items = []; bg.eyes = []; bg.ghost = null; bg.flick = 0; bg.scene = null; bg.petals = []; }
     else if (k === 'lanterns') bg.items = Array.from({ length: Math.min(26, Math.round(0.6 * area) + 10) }, () => { const z = 0.25 + R() * 0.75; return { z, x: R() * w, y: R() * h * 1.1, v: (0.1 + z * 0.32) * Math.max(0.5, sc), s: (5 + z * 13) * sc, ph: R() * 6, sw: R() * 6 }; }).sort((a, b) => a.z - b.z);
     else if (k === 'constellation') { bg.items = Array.from({ length: Math.round(30 * area) }, () => ({ x: R() * w, y: R() * h, z: R(), ph: R() * 6 })); bg.cons = []; }
     else if (k === 'lavalamp') bg.items = Array.from({ length: 7 }, (_, i) => ({ x: (0.15 + R() * 0.7) * w, y: R() * h, r: (50 + R() * 70) * sc, vy: (R() < 0.5 ? -1 : 1) * (0.15 + R() * 0.25) * Math.max(0.4, sc), ph: R() * 6, c: i % 3 }));
@@ -2414,7 +2555,7 @@ function createBg(canvas) {
       const cs = Math.max(6, Math.round(13 * sc)); bg.cs = cs; bg.gw = Math.ceil(w / cs); bg.gh = Math.ceil(h / cs);
       bg.grid = new Uint8Array(bg.gw * bg.gh).map(() => (R() < 0.22 ? 1 : 0)); bg.age = new Float32Array(bg.gw * bg.gh); bg.gen = 0;
     }
-    else if (k === 'bounce') { bg.items = [{ x: R() * w * 0.6, y: R() * h * 0.6, vx: 1.1 * Math.max(0.5, sc), vy: 0.8 * Math.max(0.5, sc), c: 0, flash: 0 }]; }
+    else if (k === 'bounce') { bg.items = [{ x: R() * w * 0.6, y: R() * h * 0.6, vx: 2 * Math.max(0.5, sc), vy: 1.45 * Math.max(0.5, sc), c: 0, flash: 0 }]; }
     else if (k === 'pong') { bg.items = [{ x: w / 2, y: h / 2, vx: 3.2 * Math.max(0.4, sc), vy: 1.7 * Math.max(0.4, sc), l: h / 2, r: h / 2, sl: 0, sr: 0 }]; }
     else if (k === 'balloonsky') bg.items = Array.from({ length: Math.round(2.6 * area) + 6 }, () => { const z = 0.25 + R() * 0.75; return { z, x: R() * w, y: R() * h * 1.1, v: (0.18 + z * 0.55) * Math.max(0.4, sc), r: (4 + z * 10) * sc, ph: R() * 6, c: (R() * BALLOON_COLS.length) | 0 }; }).sort((a, b) => a.z - b.z);
     else if (k === 'nightfire') { bg.items = Array.from({ length: Math.round(20 * area) }, () => ({ x: R() * w, y: R() * h, z: R(), ph: R() * 6 })); bg.sparks = []; }
@@ -2423,7 +2564,7 @@ function createBg(canvas) {
   bg.set = (kind) => {
     bg.kind = kind || 'none';
     // 뇌우 draws its own light-mode colours (a lightning flash must stay a flash, not get inverted into a dark flicker)
-    bg.canvas.classList.toggle('bg-own-light', bg.kind === 'thunder' || bg.kind === 'balloonsky' || bg.kind === 'campfire' || bg.kind === 'lanterns');
+    bg.canvas.classList.toggle('bg-own-light', ['thunder', 'balloonsky', 'campfire', 'lanterns', 'haunted', 'heaven', 'castle', 'hell', 'cyberpunk', 'korea'].includes(bg.kind));
     bg.seed();
     cancelAnimationFrame(bg.raf);
     bg.raf = 0;
@@ -3072,6 +3213,12 @@ function drawBg(bg) {
       if (isLight()) { ctx.fillStyle = 'rgba(250,248,245,0.58)'; ctx.fillRect(0, 0, w, h); } // light mode: a strong light wash so dark text reads
       break;
     }
+    case 'haunted': drawHaunted(bg, ctx, w, h, t); break;
+    case 'heaven': drawHeaven(bg, ctx, w, h, t); break;
+    case 'castle': drawCastle(bg, ctx, w, h, t); break;
+    case 'hell': drawHell(bg, ctx, w, h, t); break;
+    case 'cyberpunk': drawCyber(bg, ctx, w, h, t); break;
+    case 'korea': drawKorea(bg, ctx, w, h, t); break;
     case 'balloonsky': { // latex balloons drifting up on curly strings, near ones big and crisp, far ones small and hazy
       const L = isLight();
       const spr = bg.balloonSprites || (bg.balloonSprites = BALLOON_COLS.map((c) => balloonSprite(c)));
@@ -3106,6 +3253,523 @@ function drawBg(bg) {
     default:
       break;
   }
+}
+
+/* ---------- scene backgrounds (으스스한 숲 · 천상 · 마왕성 · 지옥 · 사이버펑크 · 한국의 밤) ---------- */
+/* Built from silhouettes, light and soft noise: the still scenery is painted once into an offscreen canvas,
+   fog / clouds come from pre-made noise textures, and only light, particles and creatures move. */
+const SCENE_CACHE = {};
+function noiseTexture(key, W, H, cell, oct, lo = 0.32, hi = 0.85) {
+  if (SCENE_CACHE[key]) return SCENE_CACHE[key];
+  const gw = Math.ceil(W / cell) + 2, gh = Math.ceil(H / cell) + 2;
+  const grids = Array.from({ length: oct }, (_, o) => { const m = 1 << o; return Array.from({ length: (gw * m + 1) * (gh * m + 1) }, () => Math.random()); });
+  const sm = (t) => t * t * (3 - 2 * t);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  const img = x.createImageData(W, H);
+  for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+    let v = 0, amp = 0.5, tot = 0;
+    for (let o = 0; o < oct; o++) {
+      const m = 1 << o, cw = cell / m, gx = px / cw, gy = py / cw, ix = Math.floor(gx), iy = Math.floor(gy), fx = sm(gx - ix), fy = sm(gy - iy);
+      const row = gw * m + 1, gr = grids[o];
+      // wrap horizontally so the texture tiles when it scrolls
+      const wx = (ix % (gw * m - 2)), wx1 = ((ix + 1) % (gw * m - 2));
+      const a = gr[iy * row + wx], b = gr[iy * row + wx1], cc = gr[(iy + 1) * row + wx], d = gr[(iy + 1) * row + wx1];
+      v += amp * (a + (b - a) * fx + (cc - a) * fy + (a - b - cc + d) * fx * fy); tot += amp; amp *= 0.5;
+    }
+    v /= tot;
+    const env = Math.pow(Math.sin(Math.PI * (py + 0.5) / H), 0.9); // soft top and bottom: the band has no visible edge
+    const al = Math.max(0, Math.min(1, (v - lo) / (hi - lo))) * env;
+    const i = (py * W + px) * 4;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = 255; img.data[i + 3] = Math.round(al * 255);
+  }
+  x.putImageData(img, 0, 0);
+  return (SCENE_CACHE[key] = c);
+}
+function tinted(tex, color, key) {
+  const k = key + '|' + color;
+  if (SCENE_CACHE[k]) return SCENE_CACHE[k];
+  const c = document.createElement('canvas'); c.width = tex.width; c.height = tex.height;
+  const x = c.getContext('2d'); x.drawImage(tex, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = color; x.fillRect(0, 0, c.width, c.height);
+  return (SCENE_CACHE[k] = c);
+}
+/** A horizontally scrolling band of fog / cloud. */
+function fogBand(ctx, tex, w, y, hh, off, alpha) {
+  const tw = w * 1.4;
+  const o = ((off % tw) + tw) % tw;
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(tex, -o, y, tw, hh); ctx.drawImage(tex, tw - o, y, tw, hh);
+  ctx.globalAlpha = 1;
+}
+/** A gnarled, branching tree (silhouette). */
+function sceneTree(c, x, y, len, ang, wid, depth, spread = 0.55) {
+  const x2 = x + Math.cos(ang) * len, y2 = y + Math.sin(ang) * len;
+  const bend = (Math.random() - 0.5) * len * 0.25;
+  c.lineWidth = Math.max(0.6, wid);
+  c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo((x + x2) / 2 + bend, (y + y2) / 2 + bend * 0.3, x2, y2); c.stroke();
+  if (depth <= 0) return;
+  const n = Math.random() < 0.35 ? 3 : 2;
+  for (let i = 0; i < n; i++) sceneTree(c, x2, y2, len * (0.62 + Math.random() * 0.18), ang + (i - (n - 1) / 2) * spread + (Math.random() - 0.5) * 0.45, wid * 0.66, depth - 1, spread);
+}
+function sceneCanvas(w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; }
+const lightWash = (ctx, w, h, a = 0.55) => { if (isLight()) { ctx.fillStyle = 'rgba(250,248,245,' + a + ')'; ctx.fillRect(0, 0, w, h); } };
+
+/* 으스스한 숲 */
+function hauntedScene(w, h) {
+  const L = isLight(), c = sceneCanvas(w, h), x = c.getContext('2d'), sc = Math.min(w, h);
+  const sky = x.createLinearGradient(0, 0, 0, h);
+  if (L) { sky.addColorStop(0, '#c9ccce'); sky.addColorStop(1, '#e6e7e6'); } else { sky.addColorStop(0, '#03050a'); sky.addColorStop(0.6, '#0a1214'); sky.addColorStop(1, '#0d1612'); }
+  x.fillStyle = sky; x.fillRect(0, 0, w, h);
+  // the moon
+  const mx = w * 0.72, my = h * 0.2, mr = sc * 0.06;
+  const halo = x.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * 5);
+  halo.addColorStop(0, L ? 'rgba(255,255,255,0.55)' : 'rgba(200,215,210,0.22)'); halo.addColorStop(1, 'rgba(200,215,210,0)');
+  x.fillStyle = halo; x.fillRect(0, 0, w, h);
+  x.fillStyle = L ? '#f7f7f4' : '#cdd8d2'; x.beginPath(); x.arc(mx, my, mr, 0, Math.PI * 2); x.fill();
+  x.fillStyle = L ? 'rgba(150,155,150,0.25)' : 'rgba(90,105,100,0.35)';
+  for (const [dx, dy, r] of [[-0.3, -0.2, 0.22], [0.25, 0.15, 0.16], [-0.05, 0.38, 0.12]]) { x.beginPath(); x.arc(mx + dx * mr, my + dy * mr, r * mr, 0, Math.PI * 2); x.fill(); }
+  // far tree line, then near dead trees
+  x.lineCap = 'round';
+  for (let i = 0; i < Math.ceil(w / (sc * 0.07)); i++) {
+    x.strokeStyle = L ? 'rgba(120,125,125,0.55)' : 'rgba(18,28,26,0.95)';
+    sceneTree(x, (i + Math.random()) * sc * 0.07, h * 0.78, sc * (0.07 + Math.random() * 0.06), -Math.PI / 2, sc * 0.008, 5, 0.5);
+  }
+  x.fillStyle = L ? 'rgba(120,125,125,0.55)' : '#0a120f'; x.fillRect(0, h * 0.78, w, h * 0.22);
+  for (const [px, s] of [[0.04, 1.2], [0.16, 0.9], [0.86, 1.1], [0.97, 0.85], [0.6, 0.7]]) {
+    x.strokeStyle = L ? 'rgba(40,42,44,0.92)' : '#020303';
+    sceneTree(x, px * w, h * 1.02, sc * 0.2 * s, -Math.PI / 2 + (Math.random() - 0.5) * 0.15, sc * 0.028 * s, 7, 0.62);
+  }
+  return c;
+}
+function drawHaunted(bg, ctx, w, h, t) {
+  const L = isLight();
+  if (!bg.scene || bg.sceneLight !== L) { bg.scene = hauntedScene(w, h); bg.sceneLight = L; }
+  ctx.drawImage(bg.scene, 0, 0);
+  const sc = Math.min(w, h);
+  const cloud = tinted(noiseTexture('cloud', 256, 96, 40, 4, 0.4, 0.9), L ? '#8a8f92' : '#05080a', 'cloud');
+  fogBand(ctx, cloud, w, h * 0.06, h * 0.32, t * 0.25, L ? 0.55 : 0.85); // clouds drifting over the moon
+  // eyes in the dark between the trees
+  if (Math.random() < 0.006 && bg.eyes.length < 3) bg.eyes.push({ x: w * (0.08 + Math.random() * 0.84), y: h * (0.68 + Math.random() * 0.2), s: sc * (0.004 + Math.random() * 0.004), life: 0, dur: 300 + Math.random() * 300 });
+  for (const e of bg.eyes) {
+    e.life++;
+    const k = e.life / e.dur, a = Math.min(1, k * 6, (1 - k) * 6);
+    const blink = (e.life % 170) < 7 ? 0.1 : 1;
+    ctx.fillStyle = 'rgba(255,40,30,' + 0.85 * a * blink + ')';
+    ctx.shadowColor = 'rgba(255,20,10,0.9)'; ctx.shadowBlur = e.s * 4;
+    for (const d of [-1, 1]) { ctx.beginPath(); ctx.ellipse(e.x + d * e.s * 2.4, e.y, e.s, e.s * 0.6, 0, 0, Math.PI * 2); ctx.fill(); }
+    ctx.shadowBlur = 0;
+  }
+  bg.eyes = bg.eyes.filter((e) => e.life < e.dur);
+  // a figure standing far off in the fog, now and then
+  if (!bg.ghost && Math.random() < 0.0012) bg.ghost = { x: w * (0.25 + Math.random() * 0.5), life: 0, dur: 520 };
+  if (bg.ghost) {
+    const g = bg.ghost; g.life++;
+    const k = g.life / g.dur, a = Math.min(1, k * 4, (1 - k) * 4) * (L ? 0.55 : 0.5);
+    const fh = sc * 0.14, fx = g.x, fy = h * 0.79;
+    ctx.fillStyle = L ? 'rgba(40,40,44,' + a + ')' : 'rgba(0,0,0,' + a * 1.6 + ')';
+    ctx.beginPath(); ctx.arc(fx, fy - fh, fh * 0.09, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(fx - fh * 0.09, fy - fh * 0.9); ctx.quadraticCurveTo(fx - fh * 0.16, fy - fh * 0.3, fx - fh * 0.12, fy); ctx.lineTo(fx + fh * 0.12, fy); ctx.quadraticCurveTo(fx + fh * 0.16, fy - fh * 0.3, fx + fh * 0.09, fy - fh * 0.9); ctx.closePath(); ctx.fill();
+    if (g.life >= g.dur) bg.ghost = null;
+  }
+  // ground fog in three drifting layers
+  const fog = tinted(noiseTexture('fog', 256, 80, 32, 4, 0.3, 0.85), L ? '#ffffff' : '#9fb0aa', 'fog');
+  fogBand(ctx, fog, w, h * 0.6, h * 0.3, t * 0.35, L ? 0.55 : 0.16);
+  fogBand(ctx, fog, w, h * 0.72, h * 0.3, -t * 0.55 + 400, L ? 0.6 : 0.2);
+  fogBand(ctx, fog, w, h * 0.82, h * 0.22, t * 0.8 + 900, L ? 0.65 : 0.24);
+  // a flicker now and then, like a dying light
+  if (bg.flick > 0) { ctx.fillStyle = L ? 'rgba(30,30,32,' + 0.25 * bg.flick + ')' : 'rgba(0,0,0,' + 0.5 * bg.flick + ')'; ctx.fillRect(0, 0, w, h); bg.flick -= 0.12; }
+  else if (Math.random() < 0.0025) bg.flick = 1;
+  // vignette
+  const v = ctx.createRadialGradient(w / 2, h / 2, sc * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, L ? 'rgba(40,40,44,0.35)' : 'rgba(0,0,0,0.7)');
+  ctx.fillStyle = v; ctx.fillRect(0, 0, w, h);
+}
+
+/* 천상 */
+function angelSprite(L) {
+  const key = 'angel' + L;
+  if (SCENE_CACHE[key]) return SCENE_CACHE[key];
+  const W = 220, H = 200, c = sceneCanvas(W, H), x = c.getContext('2d'), cx = W / 2;
+  const body = L ? 'rgba(255,252,240,0.98)' : 'rgba(255,250,235,0.95)';
+  x.shadowColor = L ? 'rgba(220,170,60,0.8)' : 'rgba(255,230,160,0.9)'; x.shadowBlur = 14;
+  // wings: layered feathers fanning out
+  x.strokeStyle = body; x.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    for (let r = 0; r < 3; r++) {
+      for (let i = 0; i < 9; i++) {
+        const a = -0.15 - i * 0.13 - r * 0.05, len = 70 - r * 16 - i * 2.4;
+        const bx = cx + side * 10, by = 92 + r * 8;
+        x.lineWidth = 7 - r * 1.6;
+        x.beginPath(); x.moveTo(bx, by);
+        x.quadraticCurveTo(bx + side * Math.cos(a) * len * 0.6, by + Math.sin(a) * len * 0.3 - 8, bx + side * Math.cos(a) * len, by + Math.sin(a) * len * 0.55 + 18);
+        x.stroke();
+      }
+    }
+  }
+  // robe and head
+  x.fillStyle = body;
+  x.beginPath(); x.moveTo(cx - 9, 86); x.quadraticCurveTo(cx - 26, 150, cx - 22, 190); x.quadraticCurveTo(cx, 182, cx + 22, 190); x.quadraticCurveTo(cx + 26, 150, cx + 9, 86); x.closePath(); x.fill();
+  x.beginPath(); x.arc(cx, 72, 11, 0, Math.PI * 2); x.fill();
+  // halo
+  x.shadowColor = 'rgba(255,200,80,1)'; x.shadowBlur = 10;
+  x.strokeStyle = 'rgba(255,214,120,0.95)'; x.lineWidth = 3;
+  x.beginPath(); x.ellipse(cx, 56, 15, 4.5, 0, 0, Math.PI * 2); x.stroke();
+  // soften the whole figure: an angel should read as light, not as a shape
+  const s = sceneCanvas(W, H), sx = s.getContext('2d');
+  sx.filter = 'blur(1.4px)'; sx.drawImage(c, 0, 0);
+  return (SCENE_CACHE[key] = s);
+}
+function drawHeaven(bg, ctx, w, h, t) {
+  const L = isLight(), sc = Math.min(w, h), cx = w / 2, cy = h * 0.2;
+  const sky = ctx.createLinearGradient(0, 0, 0, h);
+  if (L) { sky.addColorStop(0, '#fff7e0'); sky.addColorStop(1, '#fbf3e6'); } else { sky.addColorStop(0, '#120f22'); sky.addColorStop(0.55, '#1d1730'); sky.addColorStop(1, '#2a2132'); }
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = L ? 'source-over' : 'lighter';
+  // light pouring down: slow-turning rays from the throne of light
+  for (let i = 0; i < 14; i++) {
+    const a = Math.PI / 2 + (i - 6.5) * 0.13 + Math.sin(t * 0.003 + i) * 0.03;
+    const len = Math.max(w, h) * 1.3, wd = 0.035 + (i % 3) * 0.015;
+    const g = ctx.createLinearGradient(cx, cy, cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+    const al = (L ? 0.16 : 0.1) * (0.6 + 0.4 * Math.sin(t * 0.01 + i * 1.7));
+    g.addColorStop(0, 'rgba(255,236,170,' + al + ')'); g.addColorStop(1, 'rgba(255,236,170,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(a - wd) * len, cy + Math.sin(a - wd) * len); ctx.lineTo(cx + Math.cos(a + wd) * len, cy + Math.sin(a + wd) * len); ctx.closePath(); ctx.fill();
+  }
+  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, sc * 0.5);
+  core.addColorStop(0, L ? 'rgba(255,250,225,1)' : 'rgba(255,245,210,0.8)'); core.addColorStop(0.18, L ? 'rgba(255,225,150,0.55)' : 'rgba(255,215,130,0.35)'); core.addColorStop(1, 'rgba(255,200,120,0)');
+  ctx.fillStyle = core; ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(255,215,130,' + (L ? 0.5 : 0.35) * (0.8 + 0.2 * Math.sin(t * 0.02)) + ')'; ctx.lineWidth = Math.max(1, sc * 0.004);
+  ctx.beginPath(); ctx.ellipse(cx, cy, sc * 0.11, sc * 0.11, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over';
+  // angels attending on both sides
+  const spr = angelSprite(L);
+  for (let i = 0; i < 6; i++) {
+    const side = i < 3 ? -1 : 1, k = i % 3;
+    const ax = cx + side * sc * (0.28 + k * 0.22), ay = cy + sc * (0.12 + k * 0.12) + Math.sin(t * 0.02 + i) * sc * 0.012;
+    const s = sc * (0.24 - k * 0.04) / spr.height;
+    ctx.save(); ctx.translate(ax, ay); ctx.scale(-side * s, s); // facing the light
+    ctx.globalAlpha = (L ? 0.85 : 0.7) - k * 0.12;
+    ctx.drawImage(spr, -spr.width / 2, -spr.height / 2);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  // a floor of golden clouds
+  const cloud = tinted(noiseTexture('hcloud', 256, 96, 36, 4, 0.28, 0.8), L ? '#fff4d8' : '#e8d6a8', 'hcloud');
+  fogBand(ctx, cloud, w, h * 0.66, h * 0.36, t * 0.18, L ? 0.85 : 0.32);
+  fogBand(ctx, cloud, w, h * 0.78, h * 0.3, -t * 0.28 + 500, L ? 0.95 : 0.42);
+  // feathers drifting down, and glints
+  if (Math.random() < 0.05) bg.items.push({ x: Math.random() * w, y: -10, vx: (Math.random() - 0.5) * 0.3, vy: 0.3 + Math.random() * 0.4, r: Math.random() * 6, life: 1 });
+  for (const f of bg.items) {
+    f.r += 0.03; f.x += f.vx + Math.sin(f.r) * 0.6; f.y += f.vy;
+    ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(Math.sin(f.r) * 0.8);
+    ctx.fillStyle = L ? 'rgba(210,180,110,0.55)' : 'rgba(255,248,230,0.55)';
+    ctx.beginPath(); ctx.ellipse(0, 0, sc * 0.004, sc * 0.012, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  bg.items = bg.items.filter((f) => f.y < h + 20);
+}
+
+/* 마왕성 */
+function castleScene(w, h) {
+  const c = sceneCanvas(w, h), x = c.getContext('2d'), sc = Math.min(w, h);
+  const sky = x.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, '#0c0206'); sky.addColorStop(0.55, '#3a070b'); sky.addColorStop(1, '#5a0f0c');
+  x.fillStyle = sky; x.fillRect(0, 0, w, h);
+  // a blood moon behind the keep
+  const mx = w * 0.58, my = h * 0.3, mr = sc * 0.13;
+  const halo = x.createRadialGradient(mx, my, mr, mx, my, mr * 3.2);
+  halo.addColorStop(0, 'rgba(255,80,40,0.35)'); halo.addColorStop(1, 'rgba(255,60,30,0)');
+  x.fillStyle = halo; x.fillRect(0, 0, w, h);
+  const mg = x.createRadialGradient(mx - mr * 0.3, my - mr * 0.3, mr * 0.1, mx, my, mr);
+  mg.addColorStop(0, '#ff9a60'); mg.addColorStop(1, '#a8241a');
+  x.fillStyle = mg; x.beginPath(); x.arc(mx, my, mr, 0, Math.PI * 2); x.fill();
+  // jagged mountains
+  x.fillStyle = '#16050a';
+  x.beginPath(); x.moveTo(0, h);
+  for (let px = 0; px <= w; px += sc * 0.03) x.lineTo(px, h * 0.7 - Math.abs(Math.sin(px * 0.013)) * h * 0.12 - Math.random() * h * 0.04);
+  x.lineTo(w, h); x.closePath(); x.fill();
+  // the castle on its crag
+  const base = h * 0.78, cx = mx;
+  x.fillStyle = '#050104';
+  x.beginPath(); x.moveTo(cx - sc * 0.42, h); x.lineTo(cx - sc * 0.28, base); x.lineTo(cx + sc * 0.3, base); x.lineTo(cx + sc * 0.46, h); x.closePath(); x.fill();
+  const tower = (tx, tw, th, spire) => {
+    x.fillRect(tx - tw / 2, base - th, tw, th + 2);
+    for (let i = 0; i < 3; i++) x.fillRect(tx - tw / 2 + i * tw / 2.5, base - th - tw * 0.12, tw / 5, tw * 0.13); // battlements
+    x.beginPath(); x.moveTo(tx - tw * 0.6, base - th); x.lineTo(tx, base - th - spire); x.lineTo(tx + tw * 0.6, base - th); x.closePath(); x.fill();
+    x.fillRect(tx - 0.6, base - th - spire - sc * 0.03, 1.2, sc * 0.03); // flagpole
+  };
+  x.fillRect(cx - sc * 0.22, base - sc * 0.16, sc * 0.44, sc * 0.17); // the hall
+  tower(cx, sc * 0.07, sc * 0.36, sc * 0.16); // the keep
+  tower(cx - sc * 0.13, sc * 0.05, sc * 0.25, sc * 0.11); tower(cx + sc * 0.14, sc * 0.05, sc * 0.27, sc * 0.12);
+  tower(cx - sc * 0.24, sc * 0.04, sc * 0.17, sc * 0.08); tower(cx + sc * 0.25, sc * 0.04, sc * 0.19, sc * 0.09);
+  // windows (lit later, flickering) – remember where they are
+  c.windows = Array.from({ length: 22 }, () => ({ x: cx + (Math.random() - 0.5) * sc * 0.48, y: base - Math.random() * sc * 0.3, s: sc * 0.006 }));
+  return c;
+}
+function drawCastle(bg, ctx, w, h, t) {
+  if (!bg.scene) bg.scene = castleScene(w, h);
+  ctx.drawImage(bg.scene, 0, 0);
+  const sc = Math.min(w, h);
+  const cloud = tinted(noiseTexture('ccloud', 256, 96, 36, 4, 0.35, 0.9), '#2a0508', 'ccloud');
+  fogBand(ctx, cloud, w, h * 0.02, h * 0.34, t * 0.4, 0.75);
+  fogBand(ctx, cloud, w, h * 0.2, h * 0.3, -t * 0.25 + 300, 0.45);
+  for (const wn of bg.scene.windows) {
+    const f = 0.6 + 0.4 * Math.sin(t * 0.07 + wn.x);
+    ctx.fillStyle = 'rgba(255,' + Math.round(170 + 40 * f) + ',60,' + 0.85 * f + ')';
+    ctx.fillRect(wn.x, wn.y, wn.s, wn.s * 1.6);
+  }
+  // lightning onto the spires
+  if (t >= (bg.next || 0)) { bg.next = t + 300 + Math.random() * 500; bg.flash = t; bg.boltX = w * (0.45 + Math.random() * 0.25); }
+  const age = t - (bg.flash ?? -999);
+  if (age >= 0 && age < 20) {
+    ctx.fillStyle = 'rgba(200,150,255,' + (age < 4 ? 0.22 : 0.08) + ')'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(235,215,255,' + (1 - age / 20) + ')'; ctx.lineWidth = Math.max(1.2, sc * 0.003);
+    ctx.shadowColor = 'rgba(190,140,255,0.9)'; ctx.shadowBlur = sc * 0.02;
+    ctx.beginPath(); let lx = bg.boltX, ly = 0; ctx.moveTo(lx, ly);
+    const rnd = (n) => Math.sin(bg.flash * 13.1 + n * 7.7) * 0.5;
+    for (let i = 0; i < 12; i++) { lx += rnd(i) * sc * 0.06; ly += h * 0.04; ctx.lineTo(lx, ly); }
+    ctx.stroke(); ctx.shadowBlur = 0;
+  }
+  // bats
+  if (Math.random() < 0.02) bg.items.push({ x: -20, y: h * (0.1 + Math.random() * 0.4), v: 1.4 + Math.random() * 1.6, ph: Math.random() * 6, s: sc * (0.008 + Math.random() * 0.008) });
+  ctx.fillStyle = '#050104';
+  for (const b of bg.items) {
+    b.x += b.v; b.ph += 0.45; b.y += Math.sin(b.ph * 0.3) * 0.6;
+    const fl = Math.sin(b.ph) * b.s;
+    ctx.beginPath(); ctx.moveTo(b.x, b.y);
+    ctx.quadraticCurveTo(b.x - b.s * 1.2, b.y - fl - b.s * 0.3, b.x - b.s * 2.2, b.y - fl * 0.4);
+    ctx.quadraticCurveTo(b.x - b.s * 1.1, b.y + b.s * 0.2, b.x, b.y + b.s * 0.3);
+    ctx.quadraticCurveTo(b.x + b.s * 1.1, b.y + b.s * 0.2, b.x + b.s * 2.2, b.y - fl * 0.4);
+    ctx.quadraticCurveTo(b.x + b.s * 1.2, b.y - fl - b.s * 0.3, b.x, b.y); ctx.fill();
+  }
+  bg.items = bg.items.filter((b) => b.x < w + 40);
+  lightWash(ctx, w, h);
+}
+
+/* 지옥 */
+function hellScene(w, h) {
+  const c = sceneCanvas(w, h), x = c.getContext('2d'), sc = Math.min(w, h);
+  const sky = x.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, '#070101'); sky.addColorStop(0.5, '#2c0603'); sky.addColorStop(0.85, '#8a1d05'); sky.addColorStop(1, '#ff6a10');
+  x.fillStyle = sky; x.fillRect(0, 0, w, h);
+  const spires = (col, baseY, hmax, n) => {
+    x.fillStyle = col;
+    x.beginPath(); x.moveTo(0, h);
+    for (let i = 0; i <= n; i++) {
+      const px = (i / n) * w, hh = hmax * (0.3 + Math.random() * 0.7) * (0.6 + 0.4 * Math.abs(Math.sin(i * 1.7)));
+      const tipX = px + (Math.random() - 0.5) * w / n * 0.3, l0 = px - w / n * 0.35, r0 = px + w / n * 0.35;
+      x.lineTo(l0, baseY);
+      for (let k = 1; k < 7; k++) { const f = k / 7; x.lineTo(l0 + (tipX - l0) * f + (Math.random() - 0.5) * w / n * 0.12 * (1 - f), baseY - hh * f + (Math.random() - 0.5) * hh * 0.05); }
+      x.lineTo(tipX, baseY - hh);
+      for (let k = 6; k > 0; k--) { const f = k / 7; x.lineTo(r0 + (tipX - r0) * f + (Math.random() - 0.5) * w / n * 0.12 * (1 - f), baseY - hh * f + (Math.random() - 0.5) * hh * 0.05); }
+      x.lineTo(r0, baseY);
+    }
+    x.lineTo(w, h); x.closePath(); x.fill();
+  };
+  spires('#3a0904', h * 0.82, h * 0.3, 9);
+  spires('#170302', h * 0.9, h * 0.4, 6);
+  // two great horns of rock framing the view
+  x.fillStyle = '#060000';
+  x.beginPath(); x.moveTo(0, h); x.lineTo(0, h * 0.25); x.quadraticCurveTo(sc * 0.18, h * 0.45, sc * 0.26, h); x.closePath(); x.fill();
+  x.beginPath(); x.moveTo(w, h); x.lineTo(w, h * 0.3); x.quadraticCurveTo(w - sc * 0.2, h * 0.5, w - sc * 0.28, h); x.closePath(); x.fill();
+  return c;
+}
+function drawHell(bg, ctx, w, h, t) {
+  if (!bg.scene) bg.scene = hellScene(w, h);
+  ctx.drawImage(bg.scene, 0, 0);
+  const sc = Math.min(w, h);
+  // a river of lava below, flowing and pulsing
+  ctx.globalCompositeOperation = 'lighter';
+  const lava = tinted(noiseTexture('lava', 256, 64, 18, 4, 0.25, 0.8), '#ff7a18', 'lava');
+  fogBand(ctx, lava, w, h * 0.9, h * 0.12, t * 0.6, 0.55 + 0.15 * Math.sin(t * 0.03));
+  const lava2 = tinted(noiseTexture('lava2', 256, 64, 12, 3, 0.45, 0.9), '#ffd060', 'lava2');
+  fogBand(ctx, lava2, w, h * 0.93, h * 0.08, -t * 0.9, 0.4);
+  // embers rising in the heat
+  if (Math.random() < 0.6) bg.items.push({ x: Math.random() * w, y: h * (0.88 + Math.random() * 0.1), vx: (Math.random() - 0.5) * 0.4, vy: -(0.6 + Math.random() * 1.6), life: 1, s: 0.8 + Math.random() * 1.8, ph: Math.random() * 6 });
+  for (const e of bg.items) {
+    e.ph += 0.06; e.x += e.vx + Math.sin(e.ph) * 0.5; e.y += e.vy; e.life -= 0.005;
+    ctx.fillStyle = 'rgba(255,' + Math.round(120 + 100 * e.life) + ',40,' + Math.max(0, e.life) + ')';
+    ctx.beginPath(); ctx.arc(e.x, e.y, e.s, 0, Math.PI * 2); ctx.fill();
+  }
+  bg.items = bg.items.filter((e) => e.life > 0 && e.y > -10);
+  ctx.globalCompositeOperation = 'source-over';
+  // smoke rolling overhead
+  const smoke = tinted(noiseTexture('smoke', 256, 96, 40, 4, 0.35, 0.9), '#0a0202', 'smoke');
+  fogBand(ctx, smoke, w, 0, h * 0.45, t * 0.3, 0.8);
+  fogBand(ctx, smoke, w, h * 0.15, h * 0.35, -t * 0.45 + 700, 0.5);
+  // the glow throbbing up from below
+  const glow = ctx.createLinearGradient(0, h, 0, h * 0.4);
+  glow.addColorStop(0, 'rgba(255,90,20,' + (0.18 + 0.08 * Math.sin(t * 0.025)) + ')'); glow.addColorStop(1, 'rgba(255,60,10,0)');
+  ctx.fillStyle = glow; ctx.fillRect(0, 0, w, h);
+  lightWash(ctx, w, h);
+}
+
+/* 사이버펑크 */
+function cyberScene(w, h) {
+  const c = sceneCanvas(w, h), x = c.getContext('2d'), sc = Math.min(w, h);
+  const sky = x.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, '#05030e'); sky.addColorStop(0.6, '#140726'); sky.addColorStop(1, '#3a0d3e');
+  x.fillStyle = sky; x.fillRect(0, 0, w, h);
+  const layer = (col, minH, maxH, bw, win, winCol) => {
+    let px = -bw;
+    while (px < w + bw) {
+      const bwi = bw * (0.6 + Math.random() * 0.9), bh = minH + Math.random() * (maxH - minH);
+      x.fillStyle = col; x.fillRect(px, h - bh, bwi, bh);
+      if (Math.random() < 0.3) x.fillRect(px + bwi * 0.45, h - bh - sc * 0.05, 1.5, sc * 0.05); // antenna
+      if (win) for (let wy = h - bh + 6; wy < h - 4; wy += win * 2.2) for (let wx = px + 4; wx < px + bwi - 4; wx += win * 1.8) {
+        if (Math.random() < 0.28) { x.fillStyle = winCol[(Math.random() * winCol.length) | 0]; x.fillRect(wx, wy, win, win); }
+      }
+      px += bwi + 2;
+    }
+  };
+  layer('#1a0c2c', h * 0.35, h * 0.7, sc * 0.08, Math.max(1, sc * 0.004), ['rgba(255,80,200,0.35)', 'rgba(80,220,255,0.35)', 'rgba(255,220,120,0.25)']);
+  layer('#0e0619', h * 0.25, h * 0.55, sc * 0.12, Math.max(1.5, sc * 0.006), ['rgba(255,60,190,0.6)', 'rgba(60,230,255,0.55)', 'rgba(255,210,120,0.45)']);
+  layer('#06030c', h * 0.12, h * 0.38, sc * 0.18, 0, null);
+  return c;
+}
+function drawCyber(bg, ctx, w, h, t) {
+  if (!bg.scene) { bg.scene = cyberScene(w, h); bg.signs = Array.from({ length: 7 }, () => ({ x: Math.random() * w, y: h * (0.55 + Math.random() * 0.3), w: Math.min(w, h) * (0.03 + Math.random() * 0.06), h: Math.min(w, h) * (0.012 + Math.random() * 0.03), c: ['#ff2fb4', '#2ff0ff', '#b44dff', '#ffe14a'][(Math.random() * 4) | 0], ph: Math.random() * 100 })); }
+  ctx.drawImage(bg.scene, 0, 0);
+  const sc = Math.min(w, h);
+  // neon signs, flickering
+  for (const s of bg.signs) {
+    s.ph++;
+    const off = (s.ph % 240) < 6 && ((s.ph >> 1) & 1);
+    if (off) continue;
+    ctx.shadowColor = s.c; ctx.shadowBlur = sc * 0.025;
+    ctx.strokeStyle = s.c; ctx.lineWidth = Math.max(1.2, sc * 0.003);
+    ctx.strokeRect(s.x, s.y, s.w, s.h);
+    ctx.globalAlpha = 0.25; ctx.fillStyle = s.c; ctx.fillRect(s.x, s.y, s.w, s.h); ctx.globalAlpha = 1;
+  }
+  ctx.shadowBlur = 0;
+  // flying cars: light pairs gliding between the towers
+  if (Math.random() < 0.03) { const dir = Math.random() < 0.5 ? 1 : -1; bg.items.push({ x: dir > 0 ? -20 : w + 20, y: h * (0.2 + Math.random() * 0.45), v: dir * (1.5 + Math.random() * 3), c: dir > 0 ? '255,70,70' : '255,240,200' }); }
+  for (const car of bg.items) {
+    car.x += car.v;
+    const g = ctx.createLinearGradient(car.x - car.v * 14, 0, car.x, 0);
+    g.addColorStop(0, 'rgba(' + car.c + ',0)'); g.addColorStop(1, 'rgba(' + car.c + ',0.7)');
+    ctx.strokeStyle = g; ctx.lineWidth = Math.max(1, sc * 0.003);
+    ctx.beginPath(); ctx.moveTo(car.x - car.v * 14, car.y); ctx.lineTo(car.x, car.y); ctx.stroke();
+  }
+  bg.items = bg.items.filter((car) => car.x > -60 && car.x < w + 60);
+  // rain and a pink haze over the streets
+  ctx.strokeStyle = 'rgba(150,220,255,0.18)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < 90; i++) { const rx = ((i * 97.13 + t * 6) % (w + 40)) - 20, ry = ((i * 53.7 + t * 14) % (h + 40)) - 20; ctx.moveTo(rx, ry); ctx.lineTo(rx - 3, ry + 14); }
+  ctx.stroke();
+  const haze = ctx.createLinearGradient(0, h, 0, h * 0.55);
+  haze.addColorStop(0, 'rgba(255,60,190,0.18)'); haze.addColorStop(1, 'rgba(255,60,190,0)');
+  ctx.fillStyle = haze; ctx.fillRect(0, 0, w, h);
+  lightWash(ctx, w, h);
+}
+
+/* 한국의 밤: 보름달 · 소나무 · 학, ink-wash mountains and a hanok eave (an old auspicious composition) */
+function craneSprite(L, up) {
+  const key = 'crane' + L + up;
+  if (SCENE_CACHE[key]) return SCENE_CACHE[key];
+  const W = 120, H = 70, c = sceneCanvas(W, H), x = c.getContext('2d');
+  const white = L ? '#fbfaf6' : '#e9ecef', ink = L ? '#1b1b1b' : '#0b0d10';
+  x.lineCap = 'round'; x.lineJoin = 'round';
+  const wy = up ? -22 : 14;
+  for (const side of [-1, 1]) { // wings, black-tipped
+    x.fillStyle = white;
+    x.beginPath(); x.moveTo(60, 36); x.quadraticCurveTo(60 + side * 22, 36 + wy, 60 + side * 50, 34 + wy * 1.2); x.quadraticCurveTo(60 + side * 30, 40, 60, 40); x.fill();
+    x.fillStyle = ink;
+    x.beginPath(); x.moveTo(60 + side * 36, 36 + wy * 0.9); x.quadraticCurveTo(60 + side * 44, 35 + wy * 1.1, 60 + side * 50, 34 + wy * 1.2); x.quadraticCurveTo(60 + side * 42, 38 + wy * 0.6, 60 + side * 34, 39); x.fill();
+  }
+  x.fillStyle = white; x.beginPath(); x.ellipse(60, 38, 14, 5, 0, 0, Math.PI * 2); x.fill(); // body
+  x.strokeStyle = ink; x.lineWidth = 2.4; x.beginPath(); x.moveTo(72, 36); x.quadraticCurveTo(86, 30, 98, 32); x.stroke(); // neck
+  x.fillStyle = '#d6322b'; x.beginPath(); x.arc(98, 31, 2.2, 0, Math.PI * 2); x.fill(); // red crown
+  x.strokeStyle = ink; x.lineWidth = 1.4; x.beginPath(); x.moveTo(100, 32); x.lineTo(109, 34); x.stroke(); // beak
+  x.strokeStyle = L ? '#555' : '#888'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(46, 39); x.lineTo(24, 44); x.stroke(); // legs trailing
+  return (SCENE_CACHE[key] = c);
+}
+function koreaScene(w, h) {
+  const L = isLight(), c = sceneCanvas(w, h), x = c.getContext('2d'), sc = Math.min(w, h);
+  const paper = x.createLinearGradient(0, 0, 0, h);
+  if (L) { paper.addColorStop(0, '#f3ecda'); paper.addColorStop(1, '#ebe2cc'); } else { paper.addColorStop(0, '#0b0e16'); paper.addColorStop(1, '#141824'); }
+  x.fillStyle = paper; x.fillRect(0, 0, w, h);
+  // the full moon
+  const mx = w * 0.74, my = h * 0.24, mr = sc * 0.1;
+  const halo = x.createRadialGradient(mx, my, mr * 0.9, mx, my, mr * 3);
+  halo.addColorStop(0, L ? 'rgba(220,120,70,0.18)' : 'rgba(240,230,200,0.18)'); halo.addColorStop(1, 'rgba(240,230,200,0)');
+  x.fillStyle = halo; x.fillRect(0, 0, w, h);
+  x.fillStyle = L ? '#e0623f' : '#efe6cc'; x.beginPath(); x.arc(mx, my, mr, 0, Math.PI * 2); x.fill();
+  // ink-wash ridges, paler far away, each fading into mist at its foot
+  const ridges = L ? ['rgba(60,60,60,0.18)', 'rgba(50,50,50,0.28)', 'rgba(40,40,40,0.4)', 'rgba(25,25,25,0.6)'] : ['rgba(120,135,160,0.18)', 'rgba(95,110,135,0.28)', 'rgba(60,72,95,0.45)', 'rgba(25,30,42,0.85)'];
+  ridges.forEach((col, i) => {
+    const baseY = h * (0.5 + i * 0.1), amp = h * (0.22 - i * 0.03), f1 = 0.004 + Math.random() * 0.003, ph = Math.random() * 10;
+    const g = x.createLinearGradient(0, baseY - amp, 0, baseY + h * 0.12);
+    g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = g;
+    x.beginPath(); x.moveTo(0, h);
+    for (let px = 0; px <= w; px += 4) {
+      const y = baseY - amp * (0.5 + 0.5 * Math.sin(px * f1 + ph)) * (0.6 + 0.4 * Math.sin(px * f1 * 2.7 + ph * 2)) - Math.random() * 2;
+      x.lineTo(px, y);
+    }
+    x.lineTo(w, h); x.closePath(); x.fill();
+  });
+  // a pine leaning in from the left: crooked trunk, layered needle clouds dabbed in ink
+  const ink = L ? 'rgba(20,20,20,' : 'rgba(5,7,10,';
+  x.strokeStyle = ink + '0.95)'; x.lineCap = 'round';
+  const tx = sc * 0.06, ty = h;
+  for (const [lw, off] of [[sc * 0.045, 0], [sc * 0.03, sc * 0.006], [sc * 0.018, -sc * 0.006]]) { // trunk, with a little bark texture
+    x.lineWidth = lw;
+    x.beginPath(); x.moveTo(tx + off, ty); x.bezierCurveTo(tx + sc * 0.05 + off, h * 0.75, tx - sc * 0.02 + off, h * 0.55, tx + sc * 0.14, h * 0.4); x.stroke();
+  }
+  x.lineWidth = sc * 0.012;
+  x.beginPath(); x.moveTo(tx + sc * 0.06, h * 0.6); x.quadraticCurveTo(tx + sc * 0.18, h * 0.55, tx + sc * 0.3, h * 0.5); x.stroke();
+  x.beginPath(); x.moveTo(tx + sc * 0.1, h * 0.46); x.quadraticCurveTo(tx + sc * 0.2, h * 0.38, tx + sc * 0.26, h * 0.3); x.stroke();
+  x.filter = 'blur(1.2px)';
+  for (const [nx, ny, nw] of [[0.3, 0.49, 0.13], [0.27, 0.29, 0.11], [0.14, 0.38, 0.12], [0.08, 0.56, 0.09], [0.2, 0.44, 0.08]]) {
+    for (let k = 0; k < 40; k++) { // many overlapping ink dabs, darker in the middle of each cloud
+      const ux = (Math.random() - 0.5), uy = (Math.random() - 0.5);
+      x.fillStyle = ink + (0.22 + 0.45 * (1 - Math.abs(ux) * 1.6) * Math.random()) + ')';
+      x.beginPath(); x.ellipse(tx + sc * nx + ux * sc * nw * 1.3, h * ny + uy * sc * nw * 0.32, sc * nw * (0.14 + Math.random() * 0.2), sc * nw * (0.05 + Math.random() * 0.04), (Math.random() - 0.5) * 0.5, 0, Math.PI * 2); x.fill();
+    }
+  }
+  x.filter = 'none';
+  // a hanok eave sweeping in from the bottom right, its corner turned up
+  const ex = w, ey = h * 0.86;
+  x.fillStyle = ink + '0.96)';
+  x.beginPath(); x.moveTo(ex, h); x.lineTo(ex, ey - sc * 0.02);
+  x.quadraticCurveTo(ex - sc * 0.25, ey + sc * 0.05, ex - sc * 0.42, ey - sc * 0.07); // the 처마 curve lifting at the tip
+  x.lineTo(ex - sc * 0.4, ey - sc * 0.035);
+  x.quadraticCurveTo(ex - sc * 0.24, ey + sc * 0.09, ex - sc * 0.05, ey + sc * 0.05);
+  x.lineTo(ex - sc * 0.05, h); x.closePath(); x.fill();
+  x.strokeStyle = L ? 'rgba(235,226,204,0.25)' : 'rgba(120,130,150,0.22)'; x.lineWidth = 1;
+  for (let i = 1; i < 14; i++) { const px = ex - i * sc * 0.025; x.beginPath(); x.moveTo(px, ey + sc * 0.035 - i * 0.6); x.lineTo(px + sc * 0.008, h); x.stroke(); } // roof tiles
+  return c;
+}
+function drawKorea(bg, ctx, w, h, t) {
+  const L = isLight();
+  if (!bg.scene || bg.sceneLight !== L) { bg.scene = koreaScene(w, h); bg.sceneLight = L; }
+  ctx.drawImage(bg.scene, 0, 0);
+  const sc = Math.min(w, h);
+  // mist drifting between the ridges
+  const mist = tinted(noiseTexture('mist', 256, 64, 32, 4, 0.3, 0.85), L ? '#f6f0e1' : '#8d99ad', 'mist');
+  fogBand(ctx, mist, w, h * 0.55, h * 0.16, t * 0.15, L ? 0.75 : 0.2);
+  fogBand(ctx, mist, w, h * 0.68, h * 0.16, -t * 0.22 + 600, L ? 0.8 : 0.22);
+  // cranes crossing in front of the moon now and then
+  if (Math.random() < 0.0035 && bg.items.length < 4) { const n = 1 + ((Math.random() * 3) | 0); for (let i = 0; i < n; i++) bg.items.push({ x: w + 40 + i * sc * 0.08, y: h * (0.18 + Math.random() * 0.2) + i * sc * 0.03, v: -(0.5 + Math.random() * 0.25), ph: Math.random() * 6, s: sc * (0.07 + Math.random() * 0.03) }); }
+  for (const cr of bg.items) {
+    cr.x += cr.v; cr.ph += 0.05; cr.y += Math.sin(cr.ph) * 0.15;
+    const spr = craneSprite(L, Math.sin(cr.ph * 2) > 0);
+    ctx.save(); ctx.translate(cr.x, cr.y); ctx.scale(-1, 1); // flying to the left
+    ctx.drawImage(spr, -cr.s / 2, -cr.s * 0.3, cr.s, cr.s * 0.58);
+    ctx.restore();
+  }
+  bg.items = bg.items.filter((cr) => cr.x > -sc * 0.3);
+  // plum petals on the air
+  if (!bg.petals) bg.petals = [];
+  if (Math.random() < 0.05) bg.petals.push({ x: Math.random() * w, y: -8, r: Math.random() * 6, vy: 0.3 + Math.random() * 0.4 });
+  for (const p of bg.petals) {
+    p.r += 0.03; p.x += Math.sin(p.r) * 0.5 - 0.15; p.y += p.vy;
+    ctx.fillStyle = L ? 'rgba(214,92,110,0.6)' : 'rgba(240,170,185,0.55)';
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, sc * 0.004, sc * 0.0025, p.r, 0, Math.PI * 2); ctx.fill();
+  }
+  bg.petals = bg.petals.filter((p) => p.y < h + 10);
 }
 
 /* 풍등: one paper lantern, lit from the flame at its open bottom, drawn once and reused */

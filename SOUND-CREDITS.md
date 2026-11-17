@@ -148,6 +148,12 @@ Each background has its own loop: cut into a seamless loop (whole bars for rhyth
 | thunder1 | [Distant Thunder 4](https://freesound.org/s/581125/) |
 | thunder2 | [Distant Thunder Clap_Gentle.wav](https://freesound.org/s/347562/) |
 | thunder3 | Distant Thunder 4, slowed and deepened ([581125](https://freesound.org/s/581125/)) |
+| haunted | [Dark Ambience - Abandoned Fields](https://freesound.org/s/164272/) |
+| heaven | [Angelic Choir](https://freesound.org/s/434700/) |
+| castle | [Orchestral Suspense Loop 1](https://freesound.org/s/387223/) |
+| hell | [Drone Horror Music 03](https://freesound.org/s/465858/) + [fire roar and crackle](https://freesound.org/s/386560/) |
+| cyberpunk | [Cyberpunk Beat](https://freesound.org/s/525290/) |
+| korea | Original gugak-style piece (gayageum and daegeum), generated for MinsuTerm with ACE-Step 1.5 |
 
 ## Background video
 
