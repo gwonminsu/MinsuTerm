@@ -2389,7 +2389,7 @@ function createBg(canvas) {
     else if (k === 'warp') bg.items = Array.from({ length: 160 }, () => ({ x: (R() - 0.5) * 2, y: (R() - 0.5) * 2, z: R(), pz: 0 }));
     else if (k === 'jellyfish') bg.items = Array.from({ length: Math.min(9, Math.round(0.25 * area) + 4) }, () => ({ x: R() * w, y: R() * h, s: (16 + R() * 26) * sc, ph: R() * 6, v: 0.15 + R() * 0.25, c: (R() * 3) | 0 }));
     else if (k === 'campfire') { bg.items = []; campfireVideo(); }
-    else if (k === 'lanterns') bg.items = Array.from({ length: Math.min(24, Math.round(0.6 * area) + 8) }, () => ({ x: R() * w, y: R() * h, v: (0.12 + R() * 0.3) * Math.max(0.5, sc), s: (5 + R() * 9) * sc, ph: R() * 6, sw: R() * 6 }));
+    else if (k === 'lanterns') bg.items = Array.from({ length: Math.min(26, Math.round(0.6 * area) + 10) }, () => { const z = 0.25 + R() * 0.75; return { z, x: R() * w, y: R() * h * 1.1, v: (0.1 + z * 0.32) * Math.max(0.5, sc), s: (5 + z * 13) * sc, ph: R() * 6, sw: R() * 6 }; }).sort((a, b) => a.z - b.z);
     else if (k === 'constellation') { bg.items = Array.from({ length: Math.round(30 * area) }, () => ({ x: R() * w, y: R() * h, z: R(), ph: R() * 6 })); bg.cons = []; }
     else if (k === 'lavalamp') bg.items = Array.from({ length: 7 }, (_, i) => ({ x: (0.15 + R() * 0.7) * w, y: R() * h, r: (50 + R() * 70) * sc, vy: (R() < 0.5 ? -1 : 1) * (0.15 + R() * 0.25) * Math.max(0.4, sc), ph: R() * 6, c: i % 3 }));
     else if (k === 'pond') { bg.items = []; bg.lilies = Array.from({ length: 3 }, () => ({ x: R() * w, y: R() * h, r: (14 + R() * 12) * sc, rot: R() * 6 })); }
@@ -2423,7 +2423,7 @@ function createBg(canvas) {
   bg.set = (kind) => {
     bg.kind = kind || 'none';
     // 뇌우 draws its own light-mode colours (a lightning flash must stay a flash, not get inverted into a dark flicker)
-    bg.canvas.classList.toggle('bg-own-light', bg.kind === 'thunder' || bg.kind === 'balloonsky' || bg.kind === 'campfire');
+    bg.canvas.classList.toggle('bg-own-light', bg.kind === 'thunder' || bg.kind === 'balloonsky' || bg.kind === 'campfire' || bg.kind === 'lanterns');
     bg.seed();
     cancelAnimationFrame(bg.raf);
     bg.raf = 0;
@@ -2751,26 +2751,37 @@ function drawBg(bg) {
       }
       ctx.globalCompositeOperation = 'source-over';
       break;
-    case 'lanterns':
-      ctx.globalCompositeOperation = 'lighter';
+    case 'lanterns': { // 풍등: paper sky lanterns lit from inside, swaying up into the night, near ones big and bright
+      const L = isLight();
+      const spr = lanternSprite();
       for (const l of bg.items) {
-        l.y -= l.v; l.sw += 0.012; l.ph += 0.15 + Math.random() * 0.1;
-        const x = l.x + Math.sin(l.sw) * 8;
-        if (l.y < -40) { l.y = h + 30; l.x = Math.random() * w; }
-        const fl = 0.85 + 0.15 * Math.sin(l.ph); // candle flicker
-        const fade = Math.max(0, Math.min(1, l.y / (h * 0.25)));
-        const g = ctx.createRadialGradient(x, l.y, 0, x, l.y, l.s * 4);
-        g.addColorStop(0, `rgba(255,170,80,${0.22 * fl * fade})`); g.addColorStop(1, 'rgba(255,120,40,0)');
-        ctx.fillStyle = g; ctx.fillRect(x - l.s * 4, l.y - l.s * 4, l.s * 8, l.s * 8);
-        ctx.fillStyle = `rgba(255,${Math.round(180 + 40 * fl)},120,${0.55 * fade})`;
-        ctx.beginPath(); // a paper lantern, wider at the top
-        ctx.moveTo(x - l.s * 0.7, l.y - l.s); ctx.lineTo(x + l.s * 0.7, l.y - l.s);
-        ctx.lineTo(x + l.s * 0.5, l.y + l.s * 0.9); ctx.lineTo(x - l.s * 0.5, l.y + l.s * 0.9); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = `rgba(255,250,220,${0.5 * fl * fade})`;
-        ctx.beginPath(); ctx.arc(x, l.y + l.s * 0.6, l.s * 0.18, 0, Math.PI * 2); ctx.fill();
+        l.y -= l.v; l.sw += 0.008 + l.z * 0.006; l.ph += 0.12 + Math.random() * 0.08;
+        if (l.y < -l.s * 4) { l.y = h + l.s * 3; l.x = Math.random() * w; }
+        const x = l.x + Math.sin(l.sw) * (4 + l.z * 8);
+        const tilt = Math.cos(l.sw) * 0.07;
+        const fl = 0.86 + 0.1 * Math.sin(l.ph) + 0.04 * Math.sin(l.ph * 2.7); // candle flicker
+        const fade = Math.max(0, Math.min(1, (l.y + l.s * 3) / (h * 0.3))); // dims as it drifts away at the top
+        const a = fade * (0.35 + l.z * 0.65);
+        // the warm halo
+        ctx.globalCompositeOperation = L ? 'source-over' : 'lighter';
+        const r = l.s * (3.2 + l.z * 1.6);
+        const g = ctx.createRadialGradient(x, l.y + l.s * 0.3, 0, x, l.y + l.s * 0.3, r);
+        g.addColorStop(0, 'rgba(255,170,80,' + (L ? 0.22 : 0.3) * fl * a + ')');
+        g.addColorStop(0.4, 'rgba(255,130,50,' + (L ? 0.08 : 0.1) * fl * a + ')');
+        g.addColorStop(1, 'rgba(255,110,40,0)');
+        ctx.fillStyle = g; ctx.fillRect(x - r, l.y + l.s * 0.3 - r, r * 2, r * 2);
+        ctx.globalCompositeOperation = 'source-over';
+        // the lantern
+        const lw = l.s * 1.6, lh = lw * 1.3;
+        ctx.save();
+        ctx.translate(x, l.y); ctx.rotate(tilt);
+        ctx.globalAlpha = a * (0.85 + 0.15 * fl);
+        ctx.drawImage(spr, -lw / 2, -lh / 2, lw, lh);
+        ctx.restore();
       }
-      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
       break;
+    }
     case 'constellation': {
       for (const s of bg.items) {
         s.ph += 0.02;
@@ -3095,6 +3106,53 @@ function drawBg(bg) {
     default:
       break;
   }
+}
+
+/* 풍등: one paper lantern, lit from the flame at its open bottom, drawn once and reused */
+let LANTERN_SPRITE = null;
+function lanternSprite() {
+  if (LANTERN_SPRITE) return LANTERN_SPRITE;
+  const W = 72, H = 94;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  const top = 6, bot = H - 14, tw = W * 0.86, bw = W * 0.62;
+  const body = () => {
+    x.beginPath();
+    x.moveTo(W / 2 - tw / 2, top + 6);
+    x.quadraticCurveTo(W / 2, top - 4, W / 2 + tw / 2, top + 6); // a gently domed top
+    x.bezierCurveTo(W / 2 + tw / 2 + 2, top + (bot - top) * 0.45, W / 2 + bw / 2 + 3, bot - 10, W / 2 + bw / 2, bot);
+    x.lineTo(W / 2 - bw / 2, bot);
+    x.bezierCurveTo(W / 2 - bw / 2 - 3, bot - 10, W / 2 - tw / 2 - 2, top + (bot - top) * 0.45, W / 2 - tw / 2, top + 6);
+    x.closePath();
+  };
+  // paper glowing from the flame below: brightest low and in the middle, deeper orange at the edges
+  body();
+  const g = x.createRadialGradient(W / 2, bot - 6, 2, W / 2, bot - 18, H * 0.85);
+  g.addColorStop(0, '#fff6d6'); g.addColorStop(0.28, '#ffd27a'); g.addColorStop(0.62, '#f59a3c'); g.addColorStop(1, '#c2541f');
+  x.fillStyle = g; x.fill();
+  // seams of the paper panels
+  x.save(); body(); x.clip();
+  x.strokeStyle = 'rgba(150,60,15,0.32)'; x.lineWidth = 1.2;
+  for (const k of [-0.6, -0.2, 0.2, 0.6]) {
+    x.beginPath(); x.moveTo(W / 2 + k * tw / 2, top); x.quadraticCurveTo(W / 2 + k * tw / 2 * 1.04, (top + bot) / 2, W / 2 + k * bw / 2, bot); x.stroke();
+  }
+  // a softer sheen on one side, a darker top band
+  const sh = x.createLinearGradient(0, 0, W, 0);
+  sh.addColorStop(0, 'rgba(120,40,10,0.28)'); sh.addColorStop(0.35, 'rgba(255,255,255,0)'); sh.addColorStop(0.75, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(120,40,10,0.32)');
+  x.fillStyle = sh; x.fillRect(0, 0, W, H);
+  const tb = x.createLinearGradient(0, top, 0, top + 16);
+  tb.addColorStop(0, 'rgba(110,40,15,0.45)'); tb.addColorStop(1, 'rgba(110,40,15,0)');
+  x.fillStyle = tb; x.fillRect(0, 0, W, top + 16);
+  x.restore();
+  // the rim at the bottom and the flame inside it
+  x.fillStyle = '#7a3412';
+  x.beginPath(); x.ellipse(W / 2, bot, bw / 2, 3.2, 0, 0, Math.PI * 2); x.fill();
+  const fg = x.createRadialGradient(W / 2, bot + 1, 0, W / 2, bot + 1, 9);
+  fg.addColorStop(0, 'rgba(255,255,235,1)'); fg.addColorStop(0.4, 'rgba(255,210,110,0.9)'); fg.addColorStop(1, 'rgba(255,140,40,0)');
+  x.fillStyle = fg; x.beginPath(); x.ellipse(W / 2, bot + 1, 9, 6, 0, 0, Math.PI * 2); x.fill();
+  LANTERN_SPRITE = c;
+  return c;
 }
 
 /* 캠프파이어: one looping, muted video shared by the background and its picker previews */
