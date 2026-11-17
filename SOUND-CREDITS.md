@@ -138,7 +138,7 @@ Cut into seamless 40-second loops (the end crossfaded into the start) and level-
 | campfire (people) | [180615 Party small outside voices kids laughing, chimney swifts.flac](https://freesound.org/s/572414/) |
 | thunder1 | [Distant Thunder 4](https://freesound.org/s/581125/) |
 | thunder2 | [Distant Thunder Clap_Gentle.wav](https://freesound.org/s/347562/) |
-| thunder3 | [thunder.rumble.ogg](https://freesound.org/s/486557/) |
+| thunder3 | Distant Thunder 4, slowed and deepened (https://freesound.org/s/581125/) |
 
 ## Background video
 

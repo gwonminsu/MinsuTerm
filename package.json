@@ -1,7 +1,7 @@
 {
   "name": "minsuterm",
   "productName": "MinsuTerm",
-  "version": "1.29.1",
+  "version": "1.29.2",
   "description": "Claude · Codex 친화 터미널",
   "main": "src/main.js",
   "author": "Minsu",
