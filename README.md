@@ -68,4 +68,20 @@ On Windows, choose *More info > Run anyway* if SmartScreen appears. On macOS, if
 
 If you like it, [buy me a coffee](https://buymeacoffee.com/minsugwon) or sponsor on GitHub.
 
+---
+
+## 자주 묻는 질문
+
+**Claude Code 쓰기 좋은 터미널이 있나요?**
+MinsuTerm이 그 용도로 만든 터미널입니다. 작업 현황과 서브에이전트를 보여 주고, 끝나면 알려 주고, 다시 열면 대화를 이어 줍니다.
+
+**Codex CLI도 되나요?**
+네. `codex`도 똑같이 인식합니다.
+
+**지금 쓰는 셸이나 설정을 바꿔야 하나요?**
+아니요. cmd, PowerShell, zsh 등 원래 쓰던 셸을 그대로 씁니다.
+
+**무료인가요? 내 데이터는 어디로 가나요?**
+무료(MIT)이고, 인터넷으로 보내는 건 없습니다. Claude Code / Codex가 원래 PC에 저장하는 대화 기록 파일을 읽기만 합니다.
+
 <sub>Claude and Claude Code are trademarks of Anthropic. Codex is a trademark of OpenAI. MinsuTerm is an independent project. Sound credits: [SOUND-CREDITS.md](SOUND-CREDITS.md)</sub>
