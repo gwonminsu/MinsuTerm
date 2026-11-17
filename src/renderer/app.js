@@ -3051,9 +3051,11 @@ function drawBg(bg) {
       if (v.readyState >= 2 && v.videoWidth) {
         const k = Math.max(w / v.videoWidth, h / v.videoHeight);
         const dw = v.videoWidth * k, dh = v.videoHeight * k;
+        if (isLight()) ctx.filter = 'saturate(0.7) brightness(1.25)'; // light mode: a paler painting under dark text
         ctx.drawImage(v, (w - dw) * 0.4, h - dh, dw, dh); // keep the fire (left of centre, low) in view
+        ctx.filter = 'none';
       }
-      if (isLight()) { ctx.fillStyle = 'rgba(250,248,245,0.32)'; ctx.fillRect(0, 0, w, h); } // light mode: a lighter wash so dark text reads
+      if (isLight()) { ctx.fillStyle = 'rgba(250,248,245,0.58)'; ctx.fillRect(0, 0, w, h); } // light mode: a strong light wash so dark text reads
       break;
     }
     case 'balloonsky': { // latex balloons drifting up on curly strings, near ones big and crisp, far ones small and hazy
