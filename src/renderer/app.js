@@ -5366,6 +5366,11 @@ function setupPicker(root, opts) {
       });
     });
     pop.querySelector('.pk-item.sel')?.scrollIntoView({ block: 'nearest' });
+    // while the list is open the page behind it stays put: the list floats at a fixed spot, so scrolling the
+    // settings underneath would leave it hanging over the wrong row. Only the list itself scrolls.
+    const holdScroll = (e) => { if (pop && !pop.contains(e.target)) e.preventDefault(); };
+    window.addEventListener('wheel', holdScroll, { capture: true, passive: false });
+    cleanups.push(() => window.removeEventListener('wheel', holdScroll, { capture: true }));
   });
   root.closest('.modal').addEventListener('pointerdown', (e) => { if (pop && !root.contains(e.target)) close(); });
   const prevCleanup = S.overlay.cleanup;
