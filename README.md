@@ -7,8 +7,8 @@
 **Claude Code · Codex CLI 사용자를 위한 Windows / macOS 터미널 앱**
 <br>A desktop terminal built for people who work with the **Claude Code** and **OpenAI Codex** CLI agents.
 
-설치만 하면 끝 — 에이전트 작업 현황판, 완료 알림, 세션 복원, 그리고 일하는 시간을 즐겁게 만드는 수백 가지 꾸미기.
-<br>Install it and you get an agent dashboard, done notifications, session restore — and hundreds of ways to make the work feel good.
+설치만 하면 끝 - 에이전트 작업 현황판, 완료 알림, 세션 복원, 그리고 일하는 시간을 즐겁게 만드는 수백 가지 꾸미기.
+<br>Install it and you get an agent dashboard, done notifications, session restore - and hundreds of ways to make the work feel good.
 
 [⬇️ 다운로드 / Download](../../releases/latest) · [English](#english) · [후원하기 / Sponsor](#-후원--support)
 
@@ -31,18 +31,18 @@ MinsuTerm은 평범한 터미널(Windows: cmd / PowerShell, macOS: zsh)에서 `c
 
 ## 주요 기능
 
-### 🤖 에이전트 뷰 — 한눈에 보는 작업 현황
+### 🤖 에이전트 뷰 - 한눈에 보는 작업 현황
 - 폴더별로 **입력 대기 · 진행 중 · 완료** 작업을 자동 정리 (프롬프트 하나 = 작업 하나)
 - 작업 경과 시간, 에이전트 이름(Claude / Codex), 최근 대화 목록
 - **서브에이전트(하수인) 표시**: 에이전트가 서브에이전트를 띄우면 작업 아래에 귀여운 하수인 캐릭터가 붙어서 일하고, 끝나면 체크 표시
-- 에이전트가 **선택지를 물어보면** 말풍선 배지 + OS 알림 — 다른 창을 보고 있어도 놓치지 않음
+- 에이전트가 **선택지를 물어보면** 말풍선 배지 + OS 알림 - 다른 창을 보고 있어도 놓치지 않음
 - 다른 탭의 작업이 끝나면 데스크톱 알림
 
 ### 💾 세션 복원
 - 앱을 다시 열면 탭 구성과 **Claude / Codex 대화가 그대로 이어짐**
 - 지난 대화 검색 (제목 · 프롬프트), 휴지통에서 복원
 
-### 🎨 꾸미기 — 일하는 시간을 즐겁게
+### 🎨 꾸미기 - 일하는 시간을 즐겁게
 <img src="docs/media/border.gif" width="880" alt="Working borders while Claude Code reads files: relay race, chomp chase, train, Santa sleigh and marching ants; then dark themes and a light theme">
 
 | 항목 | 개수 | 예시 |
@@ -127,19 +127,19 @@ MinsuTerm은 혼자 만드는 무료 앱입니다. 마음에 드셨다면 커피
 
 Run `claude` or `codex` in any tab and MinsuTerm switches to **agent mode**:
 
-- **Agent view** — every prompt becomes a task, sorted into *Waiting for input · In progress · Done* per project folder, with elapsed time.
-- **Subagents** — when the agent launches subagents, little "minion" rows appear under the task, work, and get a check mark when they finish.
-- **Never miss a question** — when the agent asks you to choose, the task shows a speech-bubble badge and you get a desktop notification.
-- **Session restore** — reopen the app and your tabs and Claude / Codex conversations continue where you left off. Search past conversations; restore from trash.
-- **Decorations** — 35+ working borders (relay race, Santa's sleigh, train, marching ants…), 35+ celebrations, 30+ done-text styles, 30+ animated backgrounds, 35+ typing effects, 45+ typing sounds, 30+ dark & light color themes.
-- **A solid terminal** — xterm.js with WebGL, split panes by dragging tabs, Korean/CJK IME friendly, Shift+Enter newlines, drag-and-drop file paths, window transparency.
-- **UI languages** — 한국어, English, 日本語, 中文 (including every decoration name).
+- **Agent view** - every prompt becomes a task, sorted into *Waiting for input · In progress · Done* per project folder, with elapsed time.
+- **Subagents** - when the agent launches subagents, little "minion" rows appear under the task, work, and get a check mark when they finish.
+- **Never miss a question** - when the agent asks you to choose, the task shows a speech-bubble badge and you get a desktop notification.
+- **Session restore** - reopen the app and your tabs and Claude / Codex conversations continue where you left off. Search past conversations; restore from trash.
+- **Decorations** - 35+ working borders (relay race, Santa's sleigh, train, marching ants…), 35+ celebrations, 30+ done-text styles, 30+ animated backgrounds, 35+ typing effects, 45+ typing sounds, 30+ dark & light color themes.
+- **A solid terminal** - xterm.js with WebGL, split panes by dragging tabs, Korean/CJK IME friendly, Shift+Enter newlines, drag-and-drop file paths, window transparency.
+- **UI languages** - 한국어, English, 日本語, 中文 (including every decoration name).
 
-**Install** — download from [Releases](../../releases/latest). Windows: run the installer (choose *More info → Run anyway* on the SmartScreen prompt). macOS: unzip; if macOS says the app is "damaged", run `xattr -cr .` in the unzipped folder, then `bash "MinsuTerm 설치.command"` (the app isn't notarized yet).
+**Install** - download from [Releases](../../releases/latest). Windows: run the installer (choose *More info → Run anyway* on the SmartScreen prompt). macOS: unzip; if macOS says the app is "damaged", run `xattr -cr .` in the unzipped folder, then `bash "MinsuTerm 설치.command"` (the app isn't notarized yet).
 
-**Privacy** — MinsuTerm sends nothing anywhere. It only reads the transcript files Claude Code / Codex already keep on your machine.
+**Privacy** - MinsuTerm sends nothing anywhere. It only reads the transcript files Claude Code / Codex already keep on your machine.
 
-**Support** — GitHub Sponsors (the *Sponsor* button above) or [Buy Me a Coffee](https://buymeacoffee.com/minsugwon). Sponsorships go toward Apple notarization and Windows code signing.
+**Support** - GitHub Sponsors (the *Sponsor* button above) or [Buy Me a Coffee](https://buymeacoffee.com/minsugwon). Sponsorships go toward Apple notarization and Windows code signing.
 
 ## License
 
