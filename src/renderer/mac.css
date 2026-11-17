@@ -1,0 +1,9 @@
+/* macOS: native traffic lights sit inside our tab bar (titleBarStyle: hiddenInset),
+   Apple system fonts, and no room reserved for Windows caption buttons. Applied via body.mac */
+
+body.mac {
+  --ui-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Apple SD Gothic Neo', system-ui, sans-serif;
+}
+body.mac #titlebar { padding-left: 80px; } /* close · minimise · zoom */
+body.mac .drag-fill { flex: 0 0 40px; } /* no caption buttons on the right: just a drag handle */
+body.mac kbd { font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; }

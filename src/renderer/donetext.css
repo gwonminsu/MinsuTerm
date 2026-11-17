@@ -1,0 +1,421 @@
+/* 작업 완료 텍스트: a phrase floating over the pane whose task just finished.
+   --dt-size / --dt-font / --dt-time are set per phrase; .dt-ch carries --i (letter index). */
+
+.done-text {
+  position: absolute; z-index: 13; pointer-events: none;
+  display: flex; justify-content: center; align-items: center;
+  padding: 0 24px; box-sizing: border-box; overflow: hidden;
+}
+.done-text.dt-top { align-items: flex-start; padding-top: 9%; }
+.done-text.dt-bottom { align-items: flex-end; padding-bottom: 11%; }
+.done-text .dt-inner {
+  display: inline-block; max-width: 100%; text-align: center; white-space: pre-wrap; word-break: keep-all;
+  font: 800 var(--dt-size)/1.2 var(--dt-font);
+  color: #fff; letter-spacing: 0.01em;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.65), 0 0 22px color-mix(in srgb, var(--violet) 65%, transparent);
+}
+.done-text .dt-ch { display: inline-block; white-space: pre; }
+.done-text.out { animation: dtOut 0.5s ease forwards; }
+@keyframes dtOut { to { opacity: 0; transform: translateY(-14px); filter: blur(4px); } }
+
+/* 팡! */
+.dt-pop .dt-inner { animation: dtPop 0.55s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes dtPop { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: scale(1); } }
+
+/* 타자 치기 */
+.dt-type .dt-ch { opacity: 0; animation: dtTypeCh 0.01s linear forwards; animation-delay: calc(var(--i) * 0.075s); }
+@keyframes dtTypeCh { to { opacity: 1; } }
+.dt-type .dt-inner::after {
+  content: ''; display: inline-block; width: 0.08em; height: 0.95em; margin-left: 0.06em; vertical-align: -0.1em;
+  background: var(--violet); animation: dtCaret 0.8s steps(1) infinite;
+}
+@keyframes dtCaret { 50% { opacity: 0; } }
+
+/* 네온사인 */
+.dt-neon .dt-inner {
+  color: #fff6ff;
+  text-shadow: 0 0 4px #fff, 0 0 12px var(--violet), 0 0 26px var(--violet), 0 0 48px color-mix(in srgb, var(--violet) 70%, #ff4fd8);
+  animation: dtNeon 1.2s linear both;
+}
+@keyframes dtNeon {
+  0% { opacity: 0; } 8% { opacity: 1; } 12% { opacity: 0.1; } 20% { opacity: 1; } 26% { opacity: 0.3; }
+  34%, 100% { opacity: 1; }
+}
+
+/* 도장 쾅 */
+.dt-stamp .dt-inner {
+  padding: 0.1em 0.45em; border: 0.08em solid currentColor; border-radius: 0.18em;
+  color: #ff7a8a; text-shadow: none; box-shadow: 0 0 0 0.03em rgba(255, 122, 138, 0.3), 0 8px 30px rgba(0, 0, 0, 0.4);
+  background: rgba(20, 10, 14, 0.55);
+  animation: dtStamp 0.5s cubic-bezier(.3, 1.4, .5, 1) both;
+}
+@keyframes dtStamp {
+  0% { opacity: 0; transform: scale(2.8) rotate(-14deg); }
+  60% { opacity: 1; transform: scale(0.94) rotate(-7deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-7deg); }
+}
+
+/* 물결 */
+.dt-wave .dt-ch { animation: dtWave 1.1s ease-in-out infinite both; animation-delay: calc(var(--i) * 0.08s); }
+@keyframes dtWave { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-0.28em); } }
+.dt-wave .dt-inner { animation: dtFade 0.3s ease both; }
+@keyframes dtFade { from { opacity: 0; } }
+
+/* 스르륵 */
+.dt-slide .dt-inner { animation: dtSlide 0.7s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes dtSlide { from { opacity: 0; transform: translateY(0.9em); filter: blur(6px); } }
+
+/* 무지개 */
+.dt-rainbow .dt-inner { animation: dtPop 0.5s cubic-bezier(.2, 1.5, .4, 1) both; text-shadow: 0 2px 14px rgba(0, 0, 0, 0.6); }
+.dt-rainbow .dt-ch { animation: dtHue 1.6s linear infinite; animation-delay: calc(var(--i) * -0.12s); }
+@keyframes dtHue {
+  0%, 100% { color: #ff6b81; } 17% { color: #ffa94d; } 33% { color: #ffe066; }
+  50% { color: #69db7c; } 67% { color: #4dabf7; } 83% { color: #b197fc; }
+}
+
+/* 줌 아웃 */
+.dt-zoom .dt-inner { animation: dtZoom 0.6s cubic-bezier(.15, .9, .3, 1) both; }
+@keyframes dtZoom { from { opacity: 0; transform: scale(4); filter: blur(8px); } }
+
+/* 해독: scrambling symbols lock into place (driven by JS; .scr = still scrambling) */
+.dt-decode .dt-inner { font-family: 'Cascadia Mono', Menlo, Consolas, var(--dt-font); animation: dtFade .2s ease both; }
+.dt-decode .dt-ch.scr { color: color-mix(in srgb, var(--violet) 70%, #7cf); text-shadow: 0 0 10px var(--violet); }
+
+/* 글리치: two colour-shifted copies sliced and jittering */
+.dt-glitch .dt-inner { position: relative; animation: dtGlitchIn .5s steps(2) both; }
+.dt-glitch .dt-inner::before, .dt-glitch .dt-inner::after {
+  content: attr(data-text); position: absolute; inset: 0; pointer-events: none; text-shadow: none;
+}
+.dt-glitch .dt-inner::before { color: #00e5ff; mix-blend-mode: screen; animation: dtSliceA 1.4s steps(1) infinite; }
+.dt-glitch .dt-inner::after { color: #ff2e88; mix-blend-mode: screen; animation: dtSliceB 1.4s steps(1) infinite; }
+@keyframes dtGlitchIn { 0% { opacity: 0; transform: skewX(20deg); } 50% { opacity: 1; transform: skewX(-12deg) translateX(6px); } 100% { transform: none; } }
+@keyframes dtSliceA {
+  0%, 100% { clip-path: inset(0 0 0 0); transform: translate(-3px, 0); }
+  20% { clip-path: inset(15% 0 55% 0); transform: translate(-7px, -2px); }
+  40% { clip-path: inset(60% 0 10% 0); transform: translate(5px, 1px); }
+  60% { clip-path: inset(35% 0 40% 0); transform: translate(-2px, 2px); }
+  80% { clip-path: inset(80% 0 0 0); transform: translate(6px, 0); }
+}
+@keyframes dtSliceB {
+  0%, 100% { clip-path: inset(0 0 0 0); transform: translate(3px, 0); }
+  15% { clip-path: inset(50% 0 25% 0); transform: translate(7px, 1px); }
+  45% { clip-path: inset(5% 0 70% 0); transform: translate(-5px, -1px); }
+  70% { clip-path: inset(70% 0 5% 0); transform: translate(3px, 2px); }
+}
+
+/* 플립 보드: each letter on its own dark tile, flipping down in turn */
+.dt-flip .dt-inner { perspective: 600px; text-shadow: none; }
+.dt-flip .dt-ch {
+  margin: 0 0.04em; padding: 0.06em 0.12em; border-radius: 0.12em; min-width: 0.6em;
+  background: linear-gradient(180deg, #23262f 0 49%, #1a1c23 51% 100%); box-shadow: 0 4px 14px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .06);
+  transform-origin: 50% 0; animation: dtFlip .45s cubic-bezier(.3, 1.3, .5, 1) both; animation-delay: calc(var(--i) * .06s);
+}
+@keyframes dtFlip { 0% { transform: rotateX(-95deg); opacity: 0; } 60% { opacity: 1; } 100% { transform: none; } }
+
+/* 손글씨: drawn left → right, as if by a pen (outline first, then the ink fills in) */
+.dt-handwrite .dt-inner {
+  -webkit-text-stroke: 0.02em color-mix(in srgb, var(--violet) 80%, #fff);
+  -webkit-mask: linear-gradient(90deg, #000 0 45%, transparent 55% 100%) 100% 0 / 230% 100% no-repeat;
+          mask: linear-gradient(90deg, #000 0 45%, transparent 55% 100%) 100% 0 / 230% 100% no-repeat;
+  animation: dtWrite calc(0.25s + var(--n) * .11s) ease-out both, dtInk .6s ease calc(0.25s + var(--n) * .11s) both;
+}
+@keyframes dtWrite { from { -webkit-mask-position: 100% 0; mask-position: 100% 0; } to { -webkit-mask-position: 0 0; mask-position: 0 0; } }
+@keyframes dtInk { from { color: transparent; } to { color: #fff; } }
+
+/* 젤리 낙하: letters drop in one by one and squash on landing */
+.dt-jelly .dt-ch { transform-origin: 50% 100%; animation: dtJelly .7s ease-out both; animation-delay: calc(var(--i) * .07s); }
+@keyframes dtJelly {
+  0% { transform: translateY(-2.5em); opacity: 0; }
+  45% { transform: translateY(0) scale(1.25, .7); opacity: 1; }
+  65% { transform: translateY(-.25em) scale(.9, 1.12); }
+  82% { transform: translateY(0) scale(1.06, .95); }
+  100% { transform: none; }
+}
+
+/* 매트릭스: green letters rain down and lock in place, then cool to white */
+.dt-matrix .dt-inner { font-family: 'Cascadia Mono', Menlo, Consolas, var(--dt-font); }
+.dt-matrix .dt-ch {
+  color: #4ade80; text-shadow: 0 0 8px #22c55e, 0 0 18px rgba(34, 197, 94, .6);
+  animation: dtRain .55s cubic-bezier(.5, 0, .9, .6) both, dtCool .8s ease forwards; animation-delay: calc(var(--i) * .05s), calc(.6s + var(--i) * .05s);
+}
+@keyframes dtRain { from { transform: translateY(-6em); opacity: 0; filter: blur(2px); } 30% { opacity: 1; } to { transform: none; filter: none; } }
+@keyframes dtCool { to { color: #eafff0; text-shadow: 0 0 10px rgba(34, 197, 94, .5); } }
+
+/* 산산조각: pops in, then every letter flies apart spinning */
+.dt-shatter .dt-inner { animation: dtPop .5s cubic-bezier(.2, 1.6, .4, 1) both; }
+.done-text.dt-shatter.out { animation: none; }
+.dt-shatter.out .dt-ch { animation: dtShard 1s cubic-bezier(.2, .6, .4, 1) forwards; animation-delay: calc(var(--i) * .015s); }
+@keyframes dtShard { to { transform: translate(var(--dx), var(--dy)) rotate(var(--dr)) scale(.4); opacity: 0; filter: blur(2px); } }
+
+/* 만화 효과음: a yellow comic starburst with outlined letters, slammed in, shaking */
+.done-text.dt-comic { filter: drop-shadow(0.07em 0.07em 0 #e63946) drop-shadow(0 0 0.04em #1a1a1a); }
+.dt-comic .dt-inner {
+  padding: 0.55em 1em; color: #fff; background: #ffd23f;
+  -webkit-text-stroke: 0.07em #1a1a1a; paint-order: stroke fill; text-shadow: 0.05em 0.06em 0 #1a1a1a;
+  clip-path: polygon(50% 0%, 59% 14%, 75% 4%, 74% 21%, 93% 18%, 84% 34%, 100% 42%, 86% 52%, 98% 66%, 80% 68%, 84% 86%, 66% 79%, 58% 98%, 47% 83%, 33% 96%, 30% 79%, 12% 86%, 16% 68%, 0% 60%, 14% 49%, 2% 34%, 19% 31%, 13% 13%, 31% 18%, 38% 2%);
+  animation: dtComic .45s cubic-bezier(.2, 1.8, .4, 1) both, dtShake .35s .45s linear;
+}
+@keyframes dtComic { from { opacity: 0; transform: scale(.2) rotate(-25deg); } to { opacity: 1; transform: scale(1) rotate(-5deg); } }
+@keyframes dtShake { 0%, 100% { transform: rotate(-5deg); } 20% { transform: rotate(-5deg) translate(-3px, 2px); } 40% { transform: rotate(-5deg) translate(3px, -2px); } 60% { transform: rotate(-5deg) translate(-2px, -1px); } 80% { transform: rotate(-5deg) translate(2px, 1px); } }
+
+/* 테이프 메모: a paper note slapped on, taped at both corners */
+.dt-tape .dt-inner {
+  position: relative; padding: 0.35em 0.9em; color: #2b2b2b; text-shadow: none; background: #fffdf3;
+  box-shadow: 0 0.15em 0.6em rgba(0, 0, 0, .45);
+  animation: dtSlap .42s cubic-bezier(.2, 1.5, .4, 1) both;
+}
+.dt-tape .dt-inner::before, .dt-tape .dt-inner::after {
+  content: ''; position: absolute; top: -0.25em; width: 1.6em; height: 0.55em; background: rgba(255, 233, 150, .78);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
+}
+.dt-tape .dt-inner::before { left: -0.5em; transform: rotate(-35deg); }
+.dt-tape .dt-inner::after { right: -0.5em; transform: rotate(35deg); }
+@keyframes dtSlap { from { opacity: 0; transform: scale(1.5) rotate(-14deg); } to { opacity: 1; transform: rotate(-3deg); } }
+
+/* 리본 현수막: a swallow-tailed ribbon unrolling left → right */
+.dt-banner .dt-inner {
+  padding: 0.25em 1.4em; color: #fff; text-shadow: 0 0.06em 0 rgba(0, 0, 0, .3);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--violet) 85%, #fff), var(--violet) 55%, color-mix(in srgb, var(--violet) 75%, #000));
+  box-shadow: 0 0.2em 0.5em rgba(0, 0, 0, .35);
+  clip-path: polygon(0 0, 100% 0, 96% 50%, 100% 100%, 0 100%, 4% 50%);
+  animation: dtUnroll .7s cubic-bezier(.3, .8, .3, 1) both;
+}
+@keyframes dtUnroll {
+  from { clip-path: polygon(0 0, 0 0, 0 50%, 0 100%, 0 100%, 0 50%); }
+  to { clip-path: polygon(0 0, 100% 0, 96% 50%, 100% 100%, 0 100%, 4% 50%); }
+}
+
+/* 아케이드: chunky pixel-shadow letters that pop in step by step and blink like STAGE CLEAR */
+.dt-arcade .dt-inner {
+  font-family: 'Cascadia Mono', Menlo, Consolas, var(--dt-font); font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #ffe14d; text-shadow: 0.06em 0.06em 0 #e63946, 0.12em 0.12em 0 #1d3557;
+  animation: dtArcadeIn .4s steps(4) both, dtBlink .32s steps(1) .5s 4;
+}
+@keyframes dtArcadeIn { from { transform: scale(0); } to { transform: scale(1); } }
+@keyframes dtBlink { 50% { opacity: 0; } }
+
+/* 영수증: printed out of a slot, line by line, on paper with a torn zigzag edge */
+.dt-receipt .dt-inner {
+  position: relative; padding: 0.55em 0.9em 0.7em; color: #222; text-shadow: none;
+  font-family: 'Cascadia Mono', Menlo, Consolas, var(--dt-font); font-weight: 700; font-size: calc(var(--dt-size) * .72);
+  background: #f6f3ea; box-shadow: 0 0.3em 0.8em rgba(0, 0, 0, .4);
+  animation: dtPrint .9s steps(9) both;
+}
+.dt-receipt .dt-inner::before { content: '— 작업 완료 —'; display: block; font-size: .5em; letter-spacing: .2em; color: #777; margin-bottom: .35em; text-align: center; }
+.dt-receipt .dt-inner::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -0.38em; height: 0.4em;
+  background: linear-gradient(135deg, #f6f3ea 33%, transparent 33%) 0 0 / 0.6em 0.4em repeat-x, linear-gradient(225deg, #f6f3ea 33%, transparent 33%) 0 0 / 0.6em 0.4em repeat-x;
+}
+@keyframes dtPrint { from { clip-path: inset(0 0 100% 0); transform: translateY(-0.6em); } to { clip-path: inset(0 0 -0.5em 0); transform: none; } }
+
+/* 노래방 자막: white lyrics with a blue outline; the sung colour fills in from the left */
+.dt-karaoke .dt-inner {
+  position: relative; color: #fff; text-shadow: none;
+  -webkit-text-stroke: 0.09em #1d3a8f; paint-order: stroke fill;
+  animation: dtFade .25s ease both;
+}
+.dt-karaoke .dt-inner::after {
+  content: attr(data-text); position: absolute; left: 0; top: 0; white-space: pre;
+  color: #ff4fa3; -webkit-text-stroke: 0.09em #fff; paint-order: stroke fill;
+  clip-path: inset(0 100% 0 0);
+  animation: dtSing calc(var(--dt-time) * 0.75) linear .3s forwards;
+}
+@keyframes dtSing { to { clip-path: inset(0 0 0 0); } }
+
+/* 뉴스 속보: a lower-third — red "속보" tag + white bar sliding in */
+.dt-news .dt-inner {
+  display: inline-flex; align-items: center; padding: 0.15em 0.8em 0.15em 0; color: #111; text-shadow: none;
+  background: linear-gradient(90deg, #fff 80%, rgba(255, 255, 255, .85)); box-shadow: 0 0.2em 0.6em rgba(0, 0, 0, .4);
+  font-weight: 800; animation: dtNews .5s cubic-bezier(.2, .9, .3, 1) both;
+}
+.dt-news .dt-inner::before {
+  content: '속보'; align-self: stretch; display: flex; align-items: center; padding: 0 0.45em; margin-right: 0.5em;
+  background: #d7263d; color: #fff; font-size: 0.75em; letter-spacing: .05em;
+  animation: dtNewsTag 1s steps(1) .5s 3;
+}
+@keyframes dtNews { from { transform: translateX(-60%); opacity: 0; clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes dtNewsTag { 50% { background: #8f0f22; } }
+
+/* 업적 달성: a game achievement toast with a trophy medallion */
+.dt-achieve .dt-inner {
+  position: relative; display: inline-flex; align-items: center;
+  padding: 0.55em 1.1em 0.3em 0.35em; border-radius: 999px; color: #fff; text-shadow: none;
+  font-size: calc(var(--dt-size) * .8); background: rgba(18, 20, 26, .94); box-shadow: 0 0.25em 0.9em rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(255, 255, 255, .08);
+  animation: dtToast .6s cubic-bezier(.2, 1.3, .4, 1) both;
+}
+.dt-achieve .dt-inner::before {
+  content: '🏆'; display: grid; place-items: center; width: 1.7em; height: 1.7em; margin: -0.25em 0.45em 0 0; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe9a3, #f5b82e 55%, #b7791f); box-shadow: 0 0 0.6em rgba(245, 184, 46, .55);
+  font-size: 1.05em;
+}
+.dt-achieve .dt-inner::after {
+  content: '업적 달성'; position: absolute; left: 2.6em; top: 0.35em; font-size: 0.42em; font-weight: 700; letter-spacing: .12em; color: #f5c451;
+}
+@keyframes dtToast { from { transform: translateY(1.5em) scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* 슬롯머신: each letter on a reel that spins, then stops — left to right */
+.dt-slot .dt-ch {
+  overflow: hidden; margin: 0 0.04em; padding: 0 0.12em; border-radius: 0.14em; line-height: 1.25;
+  color: transparent; background: linear-gradient(#fff, #e9e4d6 50%, #fff); box-shadow: inset 0 0.12em 0.2em rgba(0, 0, 0, .25), 0 0 0 0.06em #c8a23c;
+  text-shadow: 0 0 0 #c1121f;
+  animation: dtReel calc(.55s + var(--i) * .14s) cubic-bezier(.25, .9, .35, 1.25) both;
+}
+.dt-slot .dt-ch:empty, .dt-slot .dt-inner { text-shadow: none; }
+@keyframes dtReel {
+  0% { text-shadow: 0 -5em 0 #c1121f, 0 -3.75em 0 #c1121f, 0 -2.5em 0 #c1121f, 0 -1.25em 0 #c1121f; filter: blur(1.5px); }
+  80% { filter: none; }
+  100% { text-shadow: 0 0 0 #c1121f, 0 1.25em 0 #c1121f, 0 2.5em 0 #c1121f, 0 3.75em 0 #c1121f; }
+}
+
+/* 스티커: a thick white die-cut border, slapped on with a wobble, a shine sweeping across */
+.dt-sticker .dt-inner {
+  position: relative; color: var(--violet); text-shadow: none;
+  -webkit-text-stroke: 0.2em #fff; paint-order: stroke fill;
+  filter: drop-shadow(0 0.08em 0.1em rgba(0, 0, 0, .5));
+  animation: dtSticker .55s cubic-bezier(.2, 1.6, .4, 1) both;
+}
+.dt-sticker .dt-inner::after {
+  content: attr(data-text); position: absolute; left: 0; top: 0; white-space: pre; color: transparent; -webkit-text-stroke: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, .85) 50%, transparent 60%) -150% 0 / 200% 100% no-repeat;
+  -webkit-background-clip: text; background-clip: text;
+  animation: dtShine 1.2s ease .6s both;
+}
+@keyframes dtSticker { from { transform: scale(.4) rotate(-25deg); opacity: 0; } to { transform: rotate(-4deg); opacity: 1; } }
+@keyframes dtShine { to { background-position: 150% 0; } }
+
+/* 비행기 현수막: a plane tows a banner in from the right, the banner flutters; on the way out it flies off left */
+.dt-plane .dt-inner {
+  position: relative; margin-left: 2.6em; padding: 0.15em 0.7em; color: #c1121f; text-shadow: none;
+  background: #fffdf5; border: 0.06em solid #c1121f; box-shadow: 0 0.15em 0.4em rgba(0, 0, 0, .35);
+  transform-origin: 0 50%;
+  animation: dtTow 1.1s cubic-bezier(.2, .8, .3, 1) both, dtFlutter .6s ease-in-out 1.1s infinite alternate;
+}
+.dt-plane .dt-inner::before { content: '✈️'; position: absolute; left: -2.5em; top: 50%; font-size: 1.15em; transform: translateY(-55%) scaleX(-1); }
+.dt-plane .dt-inner::after { content: ''; position: absolute; left: -1.1em; top: 50%; width: 1.1em; border-top: 0.05em dashed rgba(255, 255, 255, .7); }
+.done-text.dt-plane.out { animation: none; }
+.dt-plane.out .dt-inner { animation: dtTowOut .9s cubic-bezier(.6, 0, .9, .5) forwards; }
+@keyframes dtTow { from { transform: translateX(110vw) translateY(-0.4em); } 70% { transform: translateX(-0.3em); } to { transform: none; } }
+@keyframes dtFlutter { from { transform: skewY(-1.5deg) translateY(-0.05em); } to { transform: skewY(1.5deg) translateY(0.05em); } }
+@keyframes dtTowOut { to { transform: translateX(-120vw) translateY(-0.6em); } }
+
+/* 포춘쿠키: the cookie wiggles and cracks; a paper slip slides out of it */
+.dt-fortune .dt-inner {
+  position: relative; margin-left: 1.9em; padding: 0.2em 0.7em; color: #b42318; text-shadow: none;
+  font-size: calc(var(--dt-size) * .62); font-weight: 700;
+  background: linear-gradient(#fffdf6, #f6efdf); box-shadow: 0 0.1em 0.3em rgba(0, 0, 0, .3);
+  clip-path: inset(0 100% 0 -3em); /* the cookie (left of the slip) always shows */
+  animation: dtSlip .8s cubic-bezier(.3, .9, .3, 1) .75s forwards;
+}
+.dt-fortune .dt-inner::before {
+  content: '🥠'; position: absolute; left: -1.75em; top: 50%; font-size: 2.6em; line-height: 1; transform: translateY(-50%);
+  clip-path: none; animation: dtCookie .75s ease-in-out both;
+}
+.dt-fortune .dt-inner { overflow: visible; }
+@keyframes dtSlip { to { clip-path: inset(0 0 0 -3em); } }
+@keyframes dtCookie {
+  0% { transform: translateY(-50%) scale(0); }
+  30% { transform: translateY(-50%) scale(1.1) rotate(0); }
+  45% { transform: translateY(-50%) rotate(-12deg); } 60% { transform: translateY(-50%) rotate(10deg); }
+  75% { transform: translateY(-50%) rotate(-6deg); } 100% { transform: translateY(-50%) rotate(0); }
+}
+
+/* 냉장고 자석: every letter a coloured magnet, slapped on one by one at its own little angle */
+.dt-magnets .dt-inner { text-shadow: none; }
+.dt-magnets .dt-ch {
+  margin: 0 0.05em; padding: 0.02em 0.14em; border-radius: 0.16em; color: #fff;
+  text-shadow: 0 0.04em 0 rgba(0, 0, 0, .3); box-shadow: 0 0.1em 0.18em rgba(0, 0, 0, .45), inset 0 -0.08em 0 rgba(0, 0, 0, .2);
+  animation: dtMagnet .4s cubic-bezier(.2, 1.7, .4, 1) both; animation-delay: calc(var(--i) * .09s);
+}
+.dt-magnets .dt-ch.sp { background: none; box-shadow: none; }
+.dt-magnets .dt-ch:nth-child(5n + 1) { background: #ef476f; --r: -6deg; }
+.dt-magnets .dt-ch:nth-child(5n + 2) { background: #ffb703; --r: 5deg; }
+.dt-magnets .dt-ch:nth-child(5n + 3) { background: #06d6a0; --r: -3deg; }
+.dt-magnets .dt-ch:nth-child(5n + 4) { background: #118ab2; --r: 7deg; }
+.dt-magnets .dt-ch:nth-child(5n + 5) { background: #9b5de5; --r: -8deg; }
+@keyframes dtMagnet { from { transform: translateY(-0.8em) scale(1.7); opacity: 0; } to { transform: rotate(var(--r, 0deg)); opacity: 1; } }
+
+/* settings: picker previews */
+/* 별가루 preview: the letters as a twinkling field of dots (the real one is canvas particles) */
+.done-text.dt-pv.dt-stardust .dt-inner { text-shadow: none; filter: drop-shadow(0 0 3px var(--violet)) drop-shadow(0 0 1px #fff); }
+.done-text.dt-pv.dt-stardust .dt-ch {
+  color: transparent; font-size: 1.15em;
+  background: radial-gradient(circle, #fff 0 45%, transparent 60%) 0 0 / 2px 2px;
+  -webkit-background-clip: text; background-clip: text;
+  animation: dtDustIn 1.2s ease-out both; animation-delay: calc(var(--i) * .08s);
+}
+/* 매트릭스 preview: fall from just above the small box, not from far off-screen */
+.done-text.dt-pv.dt-matrix .dt-ch { animation-name: dtRainSmall, dtCool; }
+@keyframes dtRainSmall { from { transform: translateY(-1.6em); opacity: 0; } 40% { opacity: 1; } to { transform: none; } }
+/* 영수증 preview: no header line, it would crowd the little box */
+.done-text.dt-pv.dt-receipt .dt-inner::before { display: none; }
+.done-text.dt-pv.dt-receipt .dt-inner { padding: 0.2em 0.6em 0.3em; }
+@keyframes dtDustIn { from { opacity: 0; filter: blur(3px); letter-spacing: .5em; } to { opacity: 1; filter: none; } }
+.done-text.dt-pv.dt-shatter.out .dt-ch { animation-duration: .8s; }
+.done-text.dt-pv.dt-flip .dt-ch { padding: 0 1px; }
+.done-text.dt-pv { position: relative; inset: auto; display: inline-flex; padding: 0; overflow: visible; }
+.done-text.dt-pv .dt-inner { text-shadow: 0 0 6px color-mix(in srgb, var(--violet) 70%, transparent); }
+.done-text.dt-pv.dt-stamp .dt-inner { text-shadow: none; }
+
+/* settings: phrase list */
+.dt-opts > .field.dt-texts { flex-direction: column; align-items: stretch; gap: 8px; }
+.dt-list { display: flex; flex-direction: column; gap: 6px; }
+.dt-row { display: flex; align-items: center; gap: 8px; }
+.dt-row input { flex: 1; min-width: 0; }
+.dt-count { font-size: 11px; color: var(--dim); min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+.dt-add { align-self: flex-start; }
+
+/* 풍선 글자: every letter a balloon on a string, floating up and bobbing */
+.dt-balloons .dt-inner { text-shadow: none; }
+.dt-balloons .dt-ch { position: relative; width: 1.25em; height: 1.4em; margin: 0 .06em; line-height: 1.38em; color: #fff; font-size: .8em;
+  border-radius: 50% 50% 48% 48% / 55% 55% 45% 45%; background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, .7) 0 8%, transparent 22%), var(--bc, #ff6b6b);
+  box-shadow: inset -0.12em -0.18em 0.3em rgba(0, 0, 0, .2); animation: dtBalloonIn 1.1s cubic-bezier(.2, .8, .3, 1.2) both, dtBob 2.2s ease-in-out 1.1s infinite;
+  animation-delay: calc(var(--i) * .12s), calc(1.1s + var(--i) * .2s); }
+.dt-balloons .dt-ch.sp { background: none; box-shadow: none; width: .4em; }
+.dt-balloons .dt-ch:not(.sp)::after { content: ''; position: absolute; left: 50%; top: 100%; width: 1px; height: .9em; background: rgba(255, 255, 255, .55); transform: rotate(4deg); transform-origin: top; }
+.dt-balloons .dt-ch:nth-child(5n+1) { --bc: #ff6b6b; } .dt-balloons .dt-ch:nth-child(5n+2) { --bc: #ffa94d; } .dt-balloons .dt-ch:nth-child(5n+3) { --bc: #51cf66; }
+.dt-balloons .dt-ch:nth-child(5n+4) { --bc: #4dabf7; } .dt-balloons .dt-ch:nth-child(5n+5) { --bc: #cc5de8; }
+@keyframes dtBalloonIn { from { transform: translateY(4em) scale(.4); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+@keyframes dtBob { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-.15em) rotate(3deg); } }
+
+/* 칠판: a wood-framed board drops in, the letters chalked one by one */
+.dt-chalk .dt-inner { padding: .45em .8em .55em; background: #2f4a3a; border: .22em solid #8b5a2b; border-radius: .2em; color: #f1f3f5;
+  font-family: 'Segoe Print', 'Comic Sans MS', var(--dt-font); text-shadow: 0 0 .06em rgba(255, 255, 255, .7); box-shadow: 0 .4em 1em rgba(0, 0, 0, .45), inset 0 0 1.4em rgba(0, 0, 0, .35);
+  animation: dtBoard .55s cubic-bezier(.3, 1.4, .5, 1) both; }
+.dt-chalk .dt-ch { opacity: 0; filter: blur(2px); animation: dtChalk .25s ease-out both; animation-delay: calc(.5s + var(--i) * .16s); }
+.dt-chalk .dt-inner::after { content: ''; position: absolute; right: .4em; bottom: -.12em; width: 1.1em; height: .22em; border-radius: .05em; background: #f8f9fa; box-shadow: .1em .05em 0 rgba(0, 0, 0, .3); }
+@keyframes dtBoard { from { transform: translateY(-2.5em) rotate(-4deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes dtChalk { from { opacity: 0; filter: blur(3px); transform: translate(-.05em, .05em); } to { opacity: 1; filter: blur(.3px); transform: none; } }
+
+/* 먹물 붓글씨: ink blots bleed into brush lettering on hanji, then the red seal */
+.dt-ink .dt-inner { padding: .5em .9em; background: #f3ead6; color: #1a1a1a; text-shadow: none; border-radius: .1em;
+  font-family: 'Batang', 'Gungsuh', 'Nanum Myeongjo', serif; font-weight: 900; box-shadow: 0 .3em .9em rgba(0, 0, 0, .35); animation: dtFade .4s ease-out both; }
+.dt-ink .dt-ch { animation: dtBleed .9s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(.25s + var(--i) * .22s); }
+.dt-ink .dt-inner::after { content: '완'; position: absolute; right: -.35em; bottom: -.3em; width: 1.25em; height: 1.25em; display: grid; place-items: center;
+  font-size: .5em; color: #fff; background: #c92a2a; border-radius: .15em; transform: rotate(-8deg); font-family: 'Batang', serif;
+  animation: dtSeal .35s cubic-bezier(.2, 1.6, .4, 1) both; animation-delay: calc(.6s + var(--n, 3) * .22s); }
+@keyframes dtBleed { 0% { opacity: 0; filter: blur(.25em); transform: scale(1.5); } 60% { opacity: 1; filter: blur(.04em); } 100% { opacity: 1; filter: none; transform: none; } }
+@keyframes dtSeal { from { transform: scale(2.4) rotate(-25deg); opacity: 0; } to { transform: rotate(-8deg); opacity: .95; } }
+@keyframes dtFade { from { opacity: 0; } to { opacity: 1; } }
+
+/* 전광판: marquee bulbs chase round the sign, the amber letters flicker on one by one */
+.dt-bulbs .dt-inner { padding: .5em .9em; background: #17110a; color: #ffb000; border-radius: .25em; font-family: 'Cascadia Mono', Consolas, monospace; font-weight: 800;
+  text-shadow: 0 0 .1em #ffb000, 0 0 .4em rgba(255, 140, 0, .8); box-shadow: 0 0 0 .14em #3a2a14, 0 .3em 1em rgba(0, 0, 0, .5); }
+.dt-bulbs .dt-inner::before { content: ''; position: absolute; inset: -.42em; border-radius: .45em; pointer-events: none;
+  background: radial-gradient(circle, #ffe08a 0 .09em, transparent .13em) 0 0 / .42em .42em; animation: dtChase .5s steps(2) infinite;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; padding: .2em; }
+.dt-bulbs .dt-ch { opacity: 0; animation: dtBulbOn .45s steps(1) both; animation-delay: calc(.2s + var(--i) * .13s); }
+@keyframes dtChase { from { background-position: 0 0; } to { background-position: .42em 0; } }
+@keyframes dtBulbOn { 0% { opacity: 0; } 20% { opacity: 1; } 40% { opacity: .2; } 60%, 100% { opacity: 1; } }
+
+/* 영화 슬레이트: the clapper snaps shut (딱!) and the scene's title shows, TAKE 1 */
+.dt-clapper .dt-inner { padding: .55em .9em .45em; margin-top: .6em; background: #1b1b1f; color: #fff; text-shadow: none; border-radius: .08em;
+  box-shadow: 0 .35em 1em rgba(0, 0, 0, .5); font-weight: 800; animation: dtSlate .3s ease-out both; }
+.dt-clapper .dt-inner::before { content: ''; position: absolute; left: 0; right: 0; top: -.55em; height: .5em; border-radius: .06em .06em 0 0; transform-origin: 0 100%;
+  background: repeating-linear-gradient(-55deg, #f1f3f5 0 .35em, #1b1b1f .35em .7em); animation: dtClap .55s cubic-bezier(.6, 0, .9, .5) both; }
+.dt-clapper .dt-inner::after { content: 'SCENE 1 · TAKE 1'; display: block; margin-top: .3em; font-size: .32em; letter-spacing: .25em; color: #adb5bd; text-align: center; font-family: 'Cascadia Mono', monospace; }
+.dt-clapper .dt-ch { opacity: 0; animation: dtFade .15s ease-out both; animation-delay: .55s; }
+@keyframes dtClap { 0% { transform: rotate(-28deg); } 85% { transform: rotate(-28deg); } 100% { transform: rotate(0); } }
+@keyframes dtSlate { from { transform: translateY(.6em); opacity: 0; } to { transform: none; opacity: 1; } }
+/* the decorations (seal, chalk, bulbs, clapper, balloon strings) belong to the card, not to the whole screen */
+.dt-ink .dt-inner, .dt-chalk .dt-inner, .dt-bulbs .dt-inner, .dt-clapper .dt-inner, .dt-balloons .dt-inner { position: relative; }
+.dt-ink .dt-inner::after { right: -.45em; bottom: -.4em; width: 1.5em; height: 1.5em; font-size: .45em; }

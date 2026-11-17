@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+scripts/dev-check.ps1
+scripts/i18n-new.json

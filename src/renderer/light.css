@@ -1,0 +1,98 @@
+/* 라이트 테마: the same layout, light surfaces. Applied when <html data-theme="light">. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef0f4;
+  --stage: #fafbfc;
+  --surface: #ffffff;
+  --surface-2: #f3f4f7;
+  --surface-3: #e7e9ef;
+  --border: #e0e3ea;
+  --border-strong: #cfd4dd;
+  --text: #1d2129;
+  --text-2: #3b4250;
+  --muted: #646c7d;
+  --dim: #9aa1ae;
+  --green: #16a34a;
+  --amber: #c27c0e;
+  --red: #dc2626;
+  --shadow: 0 12px 36px rgba(20, 24, 40, 0.14), 0 2px 8px rgba(20, 24, 40, 0.08);
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* white-on-dark highlights become dark-on-light */
+[data-theme="light"] ::-webkit-scrollbar-thumb { background-color: rgba(0, 0, 0, 0.14); }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background-color: rgba(0, 0, 0, 0.26); }
+[data-theme="light"] .theme-card { border-color: rgba(0, 0, 0, 0.08); }
+[data-theme="light"] .theme-card:hover { border-color: rgba(0, 0, 0, 0.2); }
+[data-theme="light"] .swatch, [data-theme="light"] .ip-color { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
+[data-theme="light"] .seg button.on { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); background: var(--surface); }
+[data-theme="light"] .past-head:hover, [data-theme="light"] .past-more:hover, [data-theme="light"] .fbox-head:hover { background: rgba(0, 0, 0, 0.03); }
+[data-theme="light"] .past-row:hover { background: rgba(0, 0, 0, 0.04); }
+[data-theme="light"] .cur-card.focused { box-shadow: 0 2px 10px rgba(20, 24, 40, 0.1), inset 0 0 0 1px rgba(0, 0, 0, 0.03); }
+[data-theme="light"] .fbox.open { box-shadow: 0 4px 18px rgba(20, 24, 40, 0.08); }
+[data-theme="light"] #terminals.grid .term-host.tiled.active { box-shadow: 0 0 0 1px color-mix(in srgb, var(--violet) 25%, transparent), 0 6px 20px rgba(20, 24, 40, 0.1); }
+[data-theme="light"] .img-thumb { background-color: var(--stage); }
+[data-theme="light"] .img-thumb.no-img { background-image: repeating-linear-gradient(45deg, transparent 0 4px, rgba(0, 0, 0, 0.05) 4px 8px); }
+[data-theme="light"] .bgimg-layer::after { background: rgba(250, 251, 252, var(--dim, 0.55)); }
+[data-theme="light"] .drop-hint { background: rgba(250, 251, 252, 0.85); }
+[data-theme="light"] .split-drop span { background: rgba(255, 255, 255, 0.92); color: #2a2440; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12); }
+[data-theme="light"] .scrim { background: rgba(30, 34, 46, 0.25); }
+
+/* pale yellow / orange status text (made for dark) → deeper tones that read on white */
+[data-theme="light"] .st-working .ac-pill, [data-theme="light"] .tk.working, [data-theme="light"] .tk.pending,
+[data-theme="light"] .cc-status.st-working, [data-theme="light"] .bdg.run, [data-theme="light"] .fb-tab.live span { color: #9a5b00; }
+[data-theme="light"] .st-attention .ac-pill, [data-theme="light"] .tk.attention,
+[data-theme="light"] .cc-status.st-attention, [data-theme="light"] .bdg.attn { color: #c2410c; }
+[data-theme="light"] .btn.claude:hover { color: #c2410c; }
+
+/* background animations are drawn for a dark stage (stars, glows): in light mode they are inverted —
+   bright becomes dark, hues stay — so they read on the light stage; previews show the same, on a light box */
+[data-theme="light"] .bg-layer, [data-theme="light"] .bg-pv { filter: invert(1) hue-rotate(180deg); }
+[data-theme="light"] [data-picker="bgAnim"] .pk-pv,
+[data-theme="light"] .pk-pop[data-for="bgAnim"] .pk-item-pv { background: var(--stage-solid); border-color: rgba(0, 0, 0, 0.08); }
+
+/* ---- settings previews in light mode: they show what you'll get on the light stage ---- */
+[data-theme="light"] .pk-pv, [data-theme="light"] .pk-item-pv { background: var(--stage-solid); border: 1px solid rgba(0, 0, 0, 0.08); }
+[data-theme="light"] .pv-term { color: var(--text); }
+[data-theme="light"] .pv-pane i { background: rgba(0, 0, 0, 0.16); }
+/* white sparks, stars and glows (made for a dark stage) get a thin dark edge so they read on light —
+   live effects and their previews alike */
+[data-theme="light"] .fx-layer, [data-theme="light"] .pv-canvas:not(.bg-pv), [data-theme="light"] .composer-fx {
+  filter: drop-shadow(0 0 0.6px rgba(20, 24, 40, 0.55)) drop-shadow(0 1px 2px rgba(20, 24, 40, 0.18));
+}
+/* 작업 완료 텍스트: white letters keep their style, with a crisp dark outline on light */
+[data-theme="light"] .done-text .dt-inner {
+  text-shadow: 0 0 1px rgba(20, 24, 40, 0.9), 0 1px 2px rgba(20, 24, 40, 0.6), 0 2px 12px rgba(20, 24, 40, 0.28), 0 0 22px color-mix(in srgb, var(--violet) 55%, transparent);
+}
+
+/* 내 프롬프트 표시: frames drawn in translucent white → translucent dark on light */
+[data-theme="light"] .ps-subtle .pbox { background: rgba(0, 0, 0, 0.04); outline-color: rgba(0, 0, 0, 0.04); }
+[data-theme="light"] .ps-glass .pbox::after, [data-theme="light"] .pv-pbox.ps-glass::after {
+  border-color: rgba(0, 0, 0, 0.1); border-top-color: rgba(0, 0, 0, 0.22);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 55%);
+}
+[data-theme="light"] .ps-terminal .pbox::after, [data-theme="light"] .pv-pbox.ps-terminal::after {
+  border-color: rgba(0, 0, 0, 0.14); box-shadow: 0 6px 16px rgba(20, 24, 40, 0.12);
+  background:
+    radial-gradient(circle at 9px 6.5px, #ff5f57 0 2.6px, transparent 3px),
+    radial-gradient(circle at 18px 6.5px, #febc2e 0 2.6px, transparent 3px),
+    radial-gradient(circle at 27px 6.5px, #28c840 0 2.6px, transparent 3px),
+    linear-gradient(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.05)) 0 0 / 100% 13px no-repeat;
+}
+[data-theme="light"] .ps-floating .pbox::after, [data-theme="light"] .pv-pbox.ps-floating::after {
+  border-color: rgba(0, 0, 0, 0.08); border-top-color: rgba(0, 0, 0, 0.12); box-shadow: 0 10px 22px rgba(20, 24, 40, 0.14), 0 2px 6px rgba(20, 24, 40, 0.08);
+}
+[data-theme="light"] .ps-spot .pbox::after, [data-theme="light"] .pv-pbox.ps-spot::after {
+  background: radial-gradient(ellipse 60% 120% at 50% 0%, color-mix(in srgb, var(--violet) 14%, transparent), transparent 70%);
+}
+[data-theme="light"] .ps-spot .pbox::before, [data-theme="light"] .pv-pbox.ps-spot::before { background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--violet) 70%, transparent), transparent); }
+[data-theme="light"] .ps-scan .pbox::after, [data-theme="light"] .pv-pbox.ps-scan::after { filter: saturate(1.4) brightness(0.85); }
+
+/* 작업 중 테두리: the all-white ring (프리즘) becomes graphite on light */
+[data-theme="light"] [data-wg="prism"]::before { background: rgba(40, 44, 60, 0.75); }
+[data-theme="light"] .pv-pane { background: var(--surface); box-shadow: 0 1px 3px rgba(20, 24, 40, 0.1); }
+/* every 완료 텍스트 style, whatever its own text-shadow: a crisp dark edge around the white letters */
+[data-theme="light"] .done-text:not(.out):not(.dt-comic) { filter: drop-shadow(0 0 0.8px rgba(20, 24, 40, 0.85)) drop-shadow(0 1px 3px rgba(20, 24, 40, 0.3)); }
+
+/* 뇌우 paints its own light-mode colours: no inversion (a flash must stay a flash) */
+[data-theme="light"] .bg-layer.bg-own-light, [data-theme="light"] .bg-pv.bg-own-light { filter: none; }

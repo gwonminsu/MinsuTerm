@@ -1,0 +1,564 @@
+/* Working border: shown around a pane while its agent works.
+   Applies to live panes (.term-host.busy) and to settings previews (.pv-pane). Style = [data-wg]. */
+
+.term-host.busy::before,
+.pv-pane::before {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--ring-gap, 4px));
+  z-index: 4;
+  border-radius: 10px;
+  padding: var(--ring-w, 2px);
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+#terminals.grid .term-host.tiled.busy::before { inset: 0; }
+.pv-pane::before { inset: 0; border-radius: 7px; }
+
+/* 궤도: a light travels around */
+[data-wg="orbit"]::before { background: conic-gradient(from var(--ang), transparent 0deg 250deg, var(--violet) 300deg, #ff8a5b 340deg, transparent 360deg); animation: spinAng 2.4s linear infinite; }
+/* 혜성: short and bright, faster */
+[data-wg="comet"]::before { padding: 2px; background: conic-gradient(from var(--ang), transparent 0deg 320deg, rgba(255, 255, 255, 0.2) 335deg, var(--violet) 350deg, #fff 358deg, transparent 360deg); animation: spinAng 1.4s linear infinite; }
+/* 무지개 */
+[data-wg="rainbow"]::before { background: conic-gradient(from var(--ang), #ff5f6d, #ffc371, #47e891, #49a7ff, #b06bff, #ff5f6d); animation: spinAng 3s linear infinite; }
+/* 맥박: whole border breathes */
+[data-wg="pulse"]::before { padding: 2px; background: var(--violet); animation: wgPulse 1.5s ease-in-out infinite; }
+@keyframes wgPulse { 0%, 100% { opacity: .15; } 50% { opacity: .95; } }
+/* 네온: steady glow (shadow on the pane itself, so it is not masked away) */
+[data-wg="neon"]::before { background: var(--violet); }
+.term-host.busy[data-wg="neon"], .pv-pane[data-wg="neon"] { animation: wgNeon 2.2s ease-in-out infinite; }
+@keyframes wgNeon { 0%, 100% { box-shadow: 0 0 6px rgba(143, 115, 255, 0.35); } 50% { box-shadow: 0 0 18px rgba(143, 115, 255, 0.7); } }
+/* 행진 점선: marching dashes */
+[data-wg="dashed"]::before {
+  -webkit-mask: none; mask: none; padding: 0;
+  background:
+    linear-gradient(90deg, var(--violet) 50%, transparent 0) repeat-x top left / 12px 2px,
+    linear-gradient(90deg, var(--violet) 50%, transparent 0) repeat-x bottom left / 12px 2px,
+    linear-gradient(0deg, var(--violet) 50%, transparent 0) repeat-y top left / 2px 12px,
+    linear-gradient(0deg, var(--violet) 50%, transparent 0) repeat-y top right / 2px 12px;
+  animation: wgAnts .7s linear infinite;
+}
+@keyframes wgAnts { to { background-position: 12px top, -12px bottom, left -12px, right 12px; } }
+/* 스캔: light sweeps along the top and bottom edges */
+[data-wg="scan"]::before {
+  -webkit-mask: none; mask: none; padding: 0;
+  background:
+    linear-gradient(90deg, transparent, var(--violet), #fff, var(--violet), transparent) no-repeat,
+    linear-gradient(90deg, transparent, var(--violet), transparent) no-repeat;
+  background-size: 35% 2px, 35% 2px;
+  background-position: -40% 0, 140% 100%;
+  animation: wgScan 1.8s cubic-bezier(.5, 0, .5, 1) infinite;
+}
+@keyframes wgScan { to { background-position: 140% 0, -40% 100%; } }
+
+/* shared outer glow layer (::after) for the styles that need one */
+.term-host.busy[data-wg="siri"]::after,
+.pv-pane[data-wg="siri"]::after,
+.term-host.busy[data-wg="twinkle"]::after,
+.pv-pane[data-wg="twinkle"]::after {
+  content: ''; position: absolute; pointer-events: none; z-index: 4;
+}
+
+/* Siri 글로우: crisp pastel ring + soft blurred halo */
+[data-wg="siri"]::before { padding: 2px; background: conic-gradient(from var(--ang), #ff7ab6, #b388ff, #6ea8ff, #5ef0d0, #ffd36e, #ff7ab6); animation: spinAng 4s linear infinite; }
+.term-host.busy[data-wg="siri"]::after, .pv-pane[data-wg="siri"]::after {
+  inset: -10px; border-radius: 16px; padding: 9px;
+  background: conic-gradient(from var(--ang), #ff7ab6, #b388ff, #6ea8ff, #5ef0d0, #ffd36e, #ff7ab6);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  filter: blur(9px); opacity: .55; animation: spinAng 4s linear infinite;
+}
+#terminals.grid .term-host.tiled.busy[data-wg="siri"]::after { inset: 0; padding: 6px; filter: blur(6px); }
+.pv-pane[data-wg="siri"]::after { inset: -6px; padding: 6px; border-radius: 11px; filter: blur(5px); }
+
+/* 사탕 줄무늬: flowing candy-cane stripes */
+[data-wg="candy"]::before {
+  padding: 3px;
+  background: repeating-linear-gradient(45deg, var(--violet) 0 7px, #fff 7px 10px, #ff8a5b 10px 17px, #fff 17px 20px);
+  background-size: 28.28px 28.28px;
+  animation: wgCandy .9s linear infinite;
+}
+@keyframes wgCandy { to { background-position: 28.28px 0; } }
+
+/* 윤슬: a white glint slides over a thin accent ring */
+[data-wg="shimmer"]::before {
+  padding: 1.5px;
+  background:
+    linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.95) 48%, transparent 60%) 0 0 / 260% 100% no-repeat,
+    linear-gradient(color-mix(in srgb, var(--violet) 60%, transparent), color-mix(in srgb, var(--violet) 60%, transparent));
+  animation: wgShimmer 2.6s ease-in-out infinite;
+}
+@keyframes wgShimmer { 0% { background-position: 160% 0, 0 0; } 100% { background-position: -60% 0, 0 0; } }
+
+/* 반짝이: thin ring + twinkling stars at corners / edges */
+[data-wg="twinkle"]::before { padding: 1px; background: color-mix(in srgb, var(--violet) 55%, transparent); }
+.term-host.busy[data-wg="twinkle"]::after, .pv-pane[data-wg="twinkle"]::after {
+  inset: -5px;
+  background:
+    radial-gradient(circle, #fff 0 1.2px, rgba(255, 255, 255, 0.5) 2px, transparent 5px) 0 0 / 12px 12px no-repeat,
+    radial-gradient(circle, #ffe9a8 0 1.2px, rgba(255, 233, 168, 0.5) 2px, transparent 5px) 100% 0 / 12px 12px no-repeat,
+    radial-gradient(circle, #fff 0 1.2px, rgba(255, 255, 255, 0.5) 2px, transparent 5px) 0 100% / 12px 12px no-repeat,
+    radial-gradient(circle, #c9b8ff 0 1.2px, rgba(201, 184, 255, 0.5) 2px, transparent 5px) 100% 100% / 12px 12px no-repeat,
+    radial-gradient(circle, #fff 0 1px, transparent 4px) 50% 0 / 10px 10px no-repeat,
+    radial-gradient(circle, #fff 0 1px, transparent 4px) 30% 100% / 10px 10px no-repeat;
+  animation: wgTwinkle 1.8s ease-in-out infinite;
+}
+.pv-pane[data-wg="twinkle"]::after { inset: -5px; }
+#terminals.grid .term-host.tiled.busy[data-wg="twinkle"]::after { inset: 0; }
+@keyframes wgTwinkle { 0%, 100% { opacity: .35; transform: scale(.98); } 50% { opacity: 1; transform: scale(1); } }
+
+/* 네온사인: pink neon tube that flickers now and then */
+[data-wg="neonsign"]::before { padding: 2px; background: #ff4fd8; animation: wgSign 4s linear infinite; }
+.term-host.busy[data-wg="neonsign"], .pv-pane[data-wg="neonsign"] { animation: wgSignGlow 4s linear infinite; }
+@keyframes wgSign { 0%, 9%, 11%, 13%, 54%, 56%, 100% { opacity: 1; } 10%, 12%, 55% { opacity: .2; } }
+@keyframes wgSignGlow {
+  0%, 9%, 11%, 13%, 54%, 56%, 100% { box-shadow: 0 0 10px rgba(255, 79, 216, 0.55), 0 0 22px rgba(255, 79, 216, 0.25); }
+  10%, 12%, 55% { box-shadow: none; }
+}
+
+/* 파스텔 숨결: pastel colours flowing + a soft breathing glow */
+[data-wg="pastel"]::before {
+  padding: 2px;
+  background: linear-gradient(90deg, #ffd1dc, #c8b6ff, #b8f2e6, #ffd6a5, #ffd1dc) 0 0 / 300% 100%;
+  animation: wgLiquid 6s linear infinite;
+}
+.term-host.busy[data-wg="pastel"], .pv-pane[data-wg="pastel"] { animation: wgPastel 3.2s ease-in-out infinite; }
+@keyframes wgPastel { 0%, 100% { box-shadow: 0 0 6px rgba(200, 182, 255, 0.25); } 50% { box-shadow: 0 0 16px rgba(255, 209, 220, 0.5); } }
+
+/* 프리즘: white rim with chromatic (red / blue) fringes shifting */
+[data-wg="prism"]::before { padding: 1.5px; background: rgba(255, 255, 255, 0.85); }
+.term-host.busy[data-wg="prism"], .pv-pane[data-wg="prism"] { animation: wgPrism 2.6s ease-in-out infinite; }
+@keyframes wgPrism {
+  0%, 100% { box-shadow: -3px 0 8px rgba(255, 40, 110, 0.5), 3px 0 8px rgba(0, 200, 255, 0.5), 0 0 14px rgba(170, 130, 255, 0.3); }
+  50% { box-shadow: 3px 1px 8px rgba(255, 40, 110, 0.5), -3px -1px 8px rgba(0, 200, 255, 0.5), 0 0 18px rgba(170, 130, 255, 0.4); }
+}
+/* 흐르는 구슬: glowing beads travel around */
+[data-wg="beads"]::before {
+  padding: 2.5px;
+  /* six soft beads, 60° apart, on a faint accent rail */
+  background: repeating-conic-gradient(from var(--ang),
+    color-mix(in srgb, var(--violet) 30%, transparent) 0deg 48deg,
+    rgba(255, 255, 255, 0.95) 54deg,
+    color-mix(in srgb, var(--violet) 30%, transparent) 60deg);
+  animation: spinAng 7s linear infinite;
+}
+/* 바다 */
+[data-wg="ocean"]::before { padding: 2px; background: linear-gradient(90deg, #0ea5e9, #22d3ee, #2dd4bf, #60a5fa, #0ea5e9) 0 0 / 300% 100%; animation: wgLiquid 4s linear infinite; }
+.term-host.busy[data-wg="ocean"], .pv-pane[data-wg="ocean"] { animation: wgOcean 3s ease-in-out infinite; }
+@keyframes wgOcean { 0%, 100% { box-shadow: 0 0 6px rgba(34, 211, 238, 0.25); } 50% { box-shadow: 0 0 16px rgba(34, 211, 238, 0.5); } }
+/* 일출 */
+[data-wg="sunrise"]::before { padding: 2px; background: linear-gradient(90deg, #ff7e5f, #feb47b, #ffd86f, #ff9a8b, #ff7e5f) 0 0 / 300% 100%; animation: wgLiquid 5s linear infinite; }
+.term-host.busy[data-wg="sunrise"], .pv-pane[data-wg="sunrise"] { animation: wgSunrise 3.6s ease-in-out infinite; }
+@keyframes wgSunrise { 0%, 100% { box-shadow: 0 0 8px rgba(255, 150, 90, 0.3); } 50% { box-shadow: 0 0 18px rgba(255, 190, 110, 0.55); } }
+/* 은하수: deep purple rim with tiny stars streaming */
+[data-wg="milkyway"]::before {
+  padding: 2px;
+  background: repeating-conic-gradient(from var(--ang), rgba(255, 255, 255, 0.9) 0deg 0.7deg, transparent 0.7deg 9deg),
+              conic-gradient(from var(--ang), #2b1055, #7597de, #b06ab3, #2b1055);
+  animation: spinAng 12s linear infinite;
+}
+.term-host.busy[data-wg="milkyway"], .pv-pane[data-wg="milkyway"] { box-shadow: 0 0 14px rgba(117, 151, 222, 0.35); }
+/* 용암 */
+[data-wg="lava"]::before { padding: 2.5px; background: linear-gradient(90deg, #ff3d00, #ff9100, #ffd600, #ff6d00, #ff3d00) 0 0 / 300% 100%; animation: wgLiquid 2.6s linear infinite; }
+.term-host.busy[data-wg="lava"], .pv-pane[data-wg="lava"] { animation: wgLava 1.4s ease-in-out infinite alternate; }
+@keyframes wgLava { from { box-shadow: 0 0 8px rgba(255, 80, 0, 0.35); } to { box-shadow: 0 0 20px rgba(255, 140, 0, 0.6); } }
+
+/* 디지털 비: green code streaks running down both sides */
+[data-wg="digirain"]::before {
+  padding: 2px;
+  background: repeating-linear-gradient(180deg, #4ade80 0 6px, rgba(74, 222, 128, .15) 6px 10px, #bbf7d0 10px 12px, rgba(74, 222, 128, .1) 12px 22px) 0 0 / 100% 220px;
+  animation: wgDigi 1.4s linear infinite;
+}
+.term-host.busy[data-wg="digirain"], .pv-pane[data-wg="digirain"] { box-shadow: 0 0 12px rgba(74, 222, 128, .3); }
+@keyframes wgDigi { to { background-position: 0 220px; } }
+/* 불꽃 고리: the whole ring licked by flames */
+[data-wg="firering"]::before {
+  padding: 2.5px;
+  background: conic-gradient(from var(--ang), #ff3d00, #ffb300, #ff6d00, #ffd54f, #ff3d00, #ff9100, #ff3d00);
+  animation: spinAng 2.2s linear infinite;
+}
+.term-host.busy[data-wg="firering"], .pv-pane[data-wg="firering"] { animation: wgFire .18s ease-in-out infinite alternate; }
+@keyframes wgFire { from { box-shadow: 0 0 10px rgba(255, 100, 0, .45), 0 -2px 16px rgba(255, 170, 0, .25); } to { box-shadow: 0 0 16px rgba(255, 130, 0, .6), 0 -4px 22px rgba(255, 200, 60, .35); } }
+/* 픽셀 뱀: a segmented 8-bit snake stepping around the frame */
+[data-wg="snake"]::before {
+  padding: 3px;
+  background: conic-gradient(from var(--ang), #22c55e 0 4deg, transparent 4deg 6deg, #4ade80 6deg 10deg, transparent 10deg 12deg, #86efac 12deg 16deg, transparent 16deg 18deg, #bbf7d0 18deg 22deg, transparent 22deg 360deg);
+  animation: spinAng 6s steps(60) infinite;
+}
+/* 빙하: icy rim, a frost glint passing */
+[data-wg="glacier"]::before { padding: 2px; background: linear-gradient(115deg, #a5f3fc, #e0f2fe 30%, #ffffff 35%, #7dd3fc 40%, #a5f3fc 70%, #e0f2fe) 0 0 / 300% 100%; animation: wgLiquid 3.2s linear infinite; }
+.term-host.busy[data-wg="glacier"], .pv-pane[data-wg="glacier"] { box-shadow: 0 0 14px rgba(125, 211, 252, .35), inset 0 0 18px rgba(186, 230, 253, .08); }
+/* 베이퍼웨이브 */
+[data-wg="vaporwave"]::before { padding: 2.5px; background: linear-gradient(90deg, #ff71ce, #01cdfe, #05ffa1, #b967ff, #fffb96, #ff71ce) 0 0 / 400% 100%; animation: wgLiquid 5s linear infinite; }
+.term-host.busy[data-wg="vaporwave"], .pv-pane[data-wg="vaporwave"] { box-shadow: 0 0 14px rgba(255, 113, 206, .35), 0 0 22px rgba(1, 205, 254, .2); }
+
+/* 꾸미기: collapsible cards */
+.deco-sec { border: 1px solid var(--border); border-radius: 12px; margin: 10px 0; background: color-mix(in srgb, var(--surface-2, #171a22) 60%, transparent); overflow: hidden; }
+.deco-sec:first-child { margin-top: 4px; }
+.ds-head { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; text-align: left; border-radius: 12px; }
+.ds-head:hover { background: rgba(255, 255, 255, 0.03); }
+.ds-ico { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 9px; color: var(--violet); background: color-mix(in srgb, var(--violet) 14%, transparent); }
+.ds-ico .ico { width: 16px; height: 16px; }
+.ds-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ds-title b { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.ds-sum { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-chev { color: var(--dim); transition: transform .18s ease; }
+.deco-sec.open .ds-chev { transform: rotate(180deg); }
+.deco-sec.open .ds-head { border-radius: 12px 12px 0 0; }
+.deco-sec:not(.open) .ds-body { display: none; }
+.ds-body { padding: 0 14px 4px; border-top: 1px solid var(--border); }
+.ds-body > .field:last-child, .sub-opts .field:last-child { border-bottom: 0; }
+
+/* an option's control + its "세부" toggle */
+.ctl-row { display: flex; align-items: center; gap: 8px; flex: none; }
+.sub-toggle {
+  display: inline-flex; align-items: center; gap: 2px; height: 26px; padding: 0 6px 0 9px; border-radius: 7px;
+  font-size: 11.5px; color: var(--muted); border: 1px solid var(--border);
+}
+.sub-toggle:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
+.sub-toggle:disabled { opacity: .35; cursor: default; }
+.sub-toggle .ico { width: 13px; height: 13px; transition: transform .18s ease; }
+.sub-toggle.open { color: var(--violet); border-color: color-mix(in srgb, var(--violet) 45%, transparent); }
+.sub-toggle.open .ico { transform: rotate(180deg); }
+
+/* the details of an option, tucked under it */
+.sub-opts {
+  margin: -2px 0 10px 4px; padding: 0 0 0 14px; border-left: 2px solid color-mix(in srgb, var(--violet) 35%, var(--border));
+  animation: subIn .16s ease;
+}
+.sub-opts .field { padding: 9px 0; }
+.sub-opts .field-label b { font-weight: 500; }
+@keyframes subIn { from { opacity: 0; transform: translateY(-4px); } }
+
+/* keep everything inside the settings scroll area (a thumbnail leaked over the title) */
+.modal.settings .modal-body { contain: paint; }
+
+/* 쌍둥이 궤도: two lights opposite each other */
+[data-wg="twin"]::before { padding: 2px; background: conic-gradient(from var(--ang), transparent 0deg 130deg, var(--violet) 175deg, transparent 180deg 310deg, #ff8a5b 355deg, transparent 360deg); animation: spinAng 2s linear infinite; }
+/* 흐르는 물감: colours flow along the border */
+[data-wg="liquid"]::before { padding: 2px; background: linear-gradient(90deg, var(--violet), #ff8a5b, #2fc6b0, #5b8cff, var(--violet)) 0 0 / 300% 100%; animation: wgLiquid 3.2s linear infinite; }
+@keyframes wgLiquid { to { background-position: 300% 0; } }
+/* 심장박동: double beat */
+[data-wg="heartbeat"]::before { padding: 2px; background: #ff5f8f; animation: wgBeat 1.3s ease-out infinite; }
+@keyframes wgBeat { 0% { opacity: .15; } 10% { opacity: 1; } 22% { opacity: .3; } 32% { opacity: .95; } 55%, 100% { opacity: .15; } }
+/* HUD 모서리: corner brackets that breathe */
+[data-wg="hud"]::before {
+  -webkit-mask: none; mask: none; padding: 0;
+  --l: 14px;
+  background:
+    linear-gradient(var(--violet), var(--violet)) top left / var(--l) 2px no-repeat,
+    linear-gradient(var(--violet), var(--violet)) top left / 2px var(--l) no-repeat,
+    linear-gradient(var(--violet), var(--violet)) top right / var(--l) 2px no-repeat,
+    linear-gradient(var(--violet), var(--violet)) top right / 2px var(--l) no-repeat,
+    linear-gradient(var(--violet), var(--violet)) bottom left / var(--l) 2px no-repeat,
+    linear-gradient(var(--violet), var(--violet)) bottom left / 2px var(--l) no-repeat,
+    linear-gradient(var(--violet), var(--violet)) bottom right / var(--l) 2px no-repeat,
+    linear-gradient(var(--violet), var(--violet)) bottom right / 2px var(--l) no-repeat;
+  animation: wgHud 1.6s ease-in-out infinite;
+}
+@property --l { syntax: '<length>'; initial-value: 14px; inherits: false; }
+@keyframes wgHud { 0%, 100% { --l: 10px; opacity: .6; } 50% { --l: 26px; opacity: 1; } }
+.pv-pane[data-wg="hud"]::before { animation-name: wgHudSmall; }
+@keyframes wgHudSmall { 0%, 100% { --l: 5px; opacity: .6; } 50% { --l: 12px; opacity: 1; } }
+/* 전류: jittery electric sparks */
+[data-wg="electric"]::before {
+  padding: 1.5px;
+  background: conic-gradient(from var(--ang), transparent 0deg, #9fe8ff 8deg, transparent 18deg, transparent 85deg, var(--violet) 95deg, transparent 105deg, transparent 190deg, #fff 198deg, transparent 206deg, transparent 280deg, #9fe8ff 290deg, transparent 300deg);
+  animation: spinAng .9s steps(14) infinite, wgFlick .18s steps(2) infinite;
+}
+@keyframes wgFlick { 50% { opacity: .55; } }
+/* 오로라: multicolour glow spilling outward */
+[data-wg="aurora"]::before { padding: 1.5px; background: conic-gradient(from var(--ang), #8f73ff, #2fc6b0, #ff8a5b, #f472b6, #8f73ff); opacity: .8; animation: spinAng 6s linear infinite; }
+.term-host.busy[data-wg="aurora"], .pv-pane[data-wg="aurora"] { animation: wgAurora 4.5s ease-in-out infinite; }
+@keyframes wgAurora {
+  0%, 100% { box-shadow: 0 0 16px rgba(143, 115, 255, 0.5); }
+  33% { box-shadow: 0 0 18px rgba(47, 198, 176, 0.45); }
+  66% { box-shadow: 0 0 18px rgba(255, 138, 91, 0.45); }
+}
+
+/* settings: a dependent option sits indented under its switch */
+.field.sub { padding-left: 14px; border-left: 2px solid var(--border-strong); margin-left: 4px; }
+
+/* sound preview: a play button with a tiny equaliser */
+.pv-play {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px 0 7px;
+  border-radius: 12px; background: var(--violet-soft); color: #c3b5ff; font-size: 11px; font-weight: 600;
+}
+.pv-play:hover { background: var(--violet); color: #fff; }
+.pv-play .ico { width: 11px; height: 11px; }
+.pv-play i { width: 2px; height: 6px; border-radius: 1px; background: currentColor; opacity: .7; }
+.pv-play.playing i { animation: eq .3s ease-in-out infinite alternate; }
+.pv-play.playing i:nth-of-type(2) { animation-delay: .1s; }
+.pv-play.playing i:nth-of-type(3) { animation-delay: .2s; }
+@keyframes eq { to { height: 12px; } }
+.pk-pv .pv-play span, .pk-pv .pv-play i { display: none; }
+.pk-pv .pv-play { padding: 0 7px; }
+
+/* prompt-style preview */
+.pv-prompt { display: inline-block; padding: 3px 8px; border-radius: 2px; font-family: 'Cascadia Mono', Consolas, monospace; font-size: 11px; white-space: nowrap; }
+.pk-pv .pv-prompt { font-size: 9px; padding: 2px 4px; }
+
+/* settings preview: a mini pane with a few fake lines */
+.pv-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 92px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 7px;
+  background: #161922;
+}
+.pv-pane i { display: block; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.18); }
+.pv-pane i:nth-child(1) { width: 70%; }
+.pv-pane i:nth-child(2) { width: 45%; }
+.pv-pane i:nth-child(3) { width: 58%; }
+.pk-pv .pv-pane { width: 50px; height: 20px; padding: 0 6px; gap: 3px; }
+
+/* ---------- frames with actors on them (WG_RUNNERS) ---------- */
+.wg-run { position: absolute; inset: calc(-1 * var(--ring-gap, 4px)); pointer-events: none; z-index: 6; --wr: 12px; }
+#terminals.grid .term-host.tiled .wg-run, .pv-pane .wg-run { inset: 0; }
+.pv-pane .wg-run { --wr: 7px; }
+.pk-pv .pv-pane .wg-run { --wr: 5px; }
+.wg-run > em, .wg-run > b { position: absolute; left: 0; top: 0; font-style: normal; font-weight: 400; font-size: var(--wr); line-height: 1;
+  offset-path: inset(0 round 10px); offset-anchor: center; offset-rotate: auto; }
+.pv-pane .wg-run > em, .pv-pane .wg-run > b { offset-path: inset(0 round 7px); }
+.wg-run > em { animation: wgRun var(--dur, 14s) linear infinite; animation-delay: calc(var(--k, 0) * var(--gap, -0.6s)); }
+@keyframes wgRun { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+
+/* 기차 여행: a rail of sleepers; the engine pulls its carriages, puffing smoke */
+[data-wg="train"]::before { padding: 3px; background: repeating-conic-gradient(from 0deg, #8b6b4a 0 1.6deg, rgba(139, 107, 74, .25) 1.6deg 4deg); }
+[data-wg="train"] .wg-run { --dur: 16s; --gap: -0.16s; }
+.pv-pane[data-wg="train"] .wg-run { --dur: 8s; --gap: -0.2s; }
+[data-wg="train"] .wg-run > em { transform: scaleX(-1); }
+[data-wg="train"] .wr-smoke { animation-delay: .1s; opacity: .8; }
+[data-wg="train"] .wr-smoke { animation-name: wgRun, wgPuff; animation-duration: var(--dur, 16s), .9s; animation-timing-function: linear, ease-out; }
+@keyframes wgPuff { 0% { scale: .5; opacity: .9; } 100% { scale: 1.4; opacity: 0; } }
+
+/* 개미 행렬: a faint trail, nine ants marching on it */
+[data-wg="ants"]::before { padding: 1px; background: rgba(160, 110, 60, .55); }
+[data-wg="ants"] .wg-run { --dur: 26s; --gap: -0.55s; --wr: 10px; }
+.pv-pane[data-wg="ants"] .wg-run { --dur: 12s; --gap: -0.35s; --wr: 6px; }
+[data-wg="ants"] .wg-run > em { rotate: 90deg; }
+
+/* 공사 중: caution tape scrolling, warning lights blinking at the corners */
+[data-wg="tape"]::before { padding: 5px; background: repeating-linear-gradient(45deg, #ffd43b 0 7px, #1d1d1d 7px 14px); background-size: 200% 200%; animation: wgTape 1s linear infinite; }
+.pv-pane[data-wg="tape"]::before { padding: 3px; background: repeating-linear-gradient(45deg, #ffd43b 0 4px, #1d1d1d 4px 8px); }
+@keyframes wgTape { from { background-position: 0 0; } to { background-position: 19.8px 0; } }
+[data-wg="tape"] .wr-c { offset-path: none; position: absolute; font-size: calc(var(--wr) * 1.1); animation: wgBlink 1s steps(1) infinite; }
+[data-wg="tape"] .c0 { left: -4px; top: -6px; } [data-wg="tape"] .c1 { right: -4px; bottom: -6px; left: auto; top: auto; animation-delay: .5s; }
+[data-wg="tape"] .c2 { right: -4px; top: -6px; left: auto; animation: none; } [data-wg="tape"] .c3 { left: -4px; bottom: -6px; top: auto; animation: none; }
+@keyframes wgBlink { 50% { opacity: .25; } }
+
+/* 도화선: a rope fuse; the spark runs it, embers trailing behind */
+[data-wg="fuse"]::before { padding: 2px; background: repeating-conic-gradient(from 0deg, #c8a27a 0 2deg, #8a6a4a 2deg 4deg); }
+[data-wg="fuse"] .wg-run { --dur: 9s; --gap: 0.12s; }
+.pv-pane[data-wg="fuse"] .wg-run { --dur: 5s; }
+[data-wg="fuse"] .wr-spark { filter: drop-shadow(0 0 3px #ffb703) drop-shadow(0 0 6px #ff6b00); animation-name: wgRun, wgCrackle; animation-duration: var(--dur), .12s; animation-timing-function: linear, steps(2); }
+[data-wg="fuse"] .wr-ember { width: 3px; height: 3px; border-radius: 50%; background: #ff922b; box-shadow: 0 0 4px #ff6b00; opacity: .8; }
+[data-wg="fuse"] .wr-ember:nth-child(3) { opacity: .55; width: 2px; height: 2px; } [data-wg="fuse"] .wr-ember:nth-child(4) { opacity: .3; width: 2px; height: 2px; }
+@keyframes wgCrackle { from { scale: 1; } to { scale: 1.35; } }
+
+/* 꽃 덩굴: a vine around the frame; flowers bloom and fade one after another, leaves resting on it */
+[data-wg="vine"]::before { padding: 2px; background: linear-gradient(90deg, #2f9e44, #69db7c, #2f9e44) 0 0 / 200% 100%; animation: wgLiquid 6s linear infinite; }
+[data-wg="vine"] .wr-f, [data-wg="vine"] .wr-leaf { offset-distance: var(--d); offset-rotate: 0deg; }
+[data-wg="vine"] .wr-f { animation: wgBloom 4s ease-in-out infinite; animation-delay: calc(var(--k) * .5s); scale: 0; }
+[data-wg="vine"] .wr-leaf { font-size: calc(var(--wr) * .85); }
+@keyframes wgBloom { 0% { scale: 0; rotate: -90deg; } 20% { scale: 1.15; rotate: 0deg; } 30%, 70% { scale: 1; } 90%, 100% { scale: 0; rotate: 60deg; } }
+/* motion-path actors: animate transform (individual scale/rotate props misplace path-positioned elements) */
+[data-wg="ants"] .wg-run > em { rotate: none; transform: rotate(90deg); }
+[data-wg="train"] .wr-smoke { animation-name: wgRun, wgPuff2; }
+@keyframes wgPuff2 { 0% { transform: scale(.5); opacity: .9; } 100% { transform: scale(1.4); opacity: 0; } }
+[data-wg="fuse"] .wr-spark { animation-name: wgRun, wgCrackle2; }
+@keyframes wgCrackle2 { from { transform: scale(1); } to { transform: scale(1.35); } }
+[data-wg="vine"] .wr-f { scale: none; animation-name: wgBloom2; }
+@keyframes wgBloom2 { 0% { transform: scale(0) rotate(-90deg); } 20% { transform: scale(1.15); } 30%, 70% { transform: scale(1); } 90%, 100% { transform: scale(0) rotate(60deg); } }
+.wg-run { --wr: 15px; }
+[data-wg="ants"] .wg-run { --wr: 12px; }
+
+/* 계주 이어달리기: a running track (red with a white lane line); four runners each run a quarter lap and hand
+   the baton on — the next one starts in the exchange zone, the last one eases off and leaves the track */
+[data-wg="relay"]::before { padding: 8px; background: #c4553d; box-shadow: none; }
+.pv-pane[data-wg="relay"]::before { padding: 4px; }
+.term-host.busy[data-wg="relay"]::after, .pv-pane[data-wg="relay"]::after { content: ''; position: absolute; inset: calc(4px - var(--ring-gap, 4px)); border: 1px dashed rgba(255, 255, 255, .75); border-radius: 7px; pointer-events: none; z-index: 4; }
+.pv-pane[data-wg="relay"]::after { inset: 2px; border-radius: 5px; }
+#terminals.grid .term-host.tiled[data-wg="relay"]::after { inset: 4px; }
+[data-wg="relay"] .wg-run { --T: 9s; --wr: 22px; }
+.pv-pane[data-wg="relay"] .wg-run { --T: 6s; --wr: 11px; }
+[data-wg="relay"] .wg-run > em { offset-path: inset(4px round 7px); }
+.pv-pane[data-wg="relay"] .wg-run > em { offset-path: inset(2px round 5px); }
+[data-wg="relay"] .wr-runner { width: var(--wr); height: calc(var(--wr) * 1.2); offset-anchor: 50% 70%;
+  animation: wgRelay var(--T) linear infinite; animation-delay: calc(var(--T) * (var(--k) / 4 - 1)); }
+[data-wg="relay"] .wr-runner svg { width: 100%; height: 100%; overflow: visible; display: block; }
+/* one lap = 4 legs; this runner's leg is the first quarter of its cycle */
+@keyframes wgRelay {
+  0% { offset-distance: var(--s); opacity: 1; }
+  25% { offset-distance: calc(var(--s) + 25%); opacity: 1; }
+  31% { offset-distance: calc(var(--s) + 27.5%); opacity: 0; }
+  32%, 72% { offset-distance: calc(var(--s) - 3%); opacity: 0; }
+  80% { offset-distance: calc(var(--s) - 3%); opacity: 1; }
+  100% { offset-distance: var(--s); opacity: 1; }
+}
+/* the baton travels the whole lap, always in the hand of whoever is running */
+[data-wg="relay"] .wr-baton { width: calc(var(--wr) * .32); height: calc(var(--wr) * .1); border-radius: 2px; background: #ffe066; box-shadow: 0 0 3px rgba(0, 0, 0, .5);
+  offset-anchor: -20% 220%; animation: wgRun var(--T) linear infinite; }
+/* the running cycle: 8 drawn frames, each shown for an eighth of a stride */
+.rn .rf { opacity: 0; animation: rnFrame .56s steps(1) infinite; }
+@keyframes rnFrame { 0% { opacity: 1; } 12.5%, 100% { opacity: 0; } }
+
+.term-host.busy[data-wg="relay"]::before { padding: 8px; }
+.term-host.busy[data-wg="train"]::before { padding: 3px; }
+.term-host.busy[data-wg="tape"]::before { padding: 5px; }
+.term-host.busy[data-wg="fuse"]::before { padding: 2.5px; }
+.term-host.busy[data-wg="vine"]::before { padding: 2.5px; }
+[data-wg="relay"] .wg-run { --wr: 26px; }
+
+[data-wg="relay"] .wg-run { --wr: 34px; }
+.pv-pane[data-wg="relay"] .wg-run { --wr: 13px; }
+
+/* 냠냠 추격전: a dark lane with violet edges; the chomper eats the dots (they grow back before its next lap),
+   the critters bob along behind it */
+[data-wg="chase"]::before, .term-host.busy[data-wg="chase"]::before { padding: 8px; background: linear-gradient(#171433, #171433) padding-box, #171433; box-shadow: inset 0 0 0 1.5px #9775fa; }
+.term-host.busy[data-wg="chase"]::after, .pv-pane[data-wg="chase"]::after { content: ''; position: absolute; inset: calc(-1 * var(--ring-gap, 4px)); border: 1.5px solid #9775fa; border-radius: 10px; pointer-events: none; z-index: 4;
+  -webkit-mask: none; }
+.term-host.busy[data-wg="chase"]::after { box-shadow: inset 0 0 0 6.5px transparent, inset 0 0 0 8px #9775fa; }
+.pv-pane[data-wg="chase"]::before { padding: 4px; }
+.pv-pane[data-wg="chase"]::after { inset: 0; border-radius: 7px; box-shadow: inset 0 0 0 3px transparent, inset 0 0 0 4px #9775fa; border-width: 1px; }
+[data-wg="chase"] .wg-run { --T: 12s; --wr: 18px; }
+.pv-pane[data-wg="chase"] .wg-run { --T: 7s; --wr: 8px; }
+[data-wg="chase"] .wg-run > em { offset-path: inset(4px round 7px); }
+.pv-pane[data-wg="chase"] .wg-run > em { offset-path: inset(2px round 5px); }
+[data-wg="chase"] .wr-dot { width: calc(var(--wr) * .22); height: calc(var(--wr) * .22); border-radius: 50%; background: #ffe8b0; offset-distance: calc(var(--d) * 1%);
+  offset-rotate: 0deg; animation: chDot var(--T) linear infinite; animation-delay: calc(var(--T) * (var(--d) / 100 - 1)); }
+@keyframes chDot { 0%, 55% { opacity: 0; transform: scale(.2); } 62%, 100% { opacity: 1; transform: scale(1); } }
+[data-wg="chase"] .wr-chomp { width: var(--wr); height: var(--wr); animation: wgRun var(--T) linear infinite; }
+[data-wg="chase"] .wr-critter { width: calc(var(--wr) * .95); height: calc(var(--wr) * .95); animation: wgRun var(--T) linear infinite;
+  animation-delay: calc(var(--T) * var(--k) * -0.045 + var(--T) * var(--k) * 0.09); }
+[data-wg="chase"] .wr-critter { animation-delay: calc(var(--T) * var(--k) * 0.06); }
+[data-wg="chase"] svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.ch .cf { opacity: 0; animation: rnFrame2 .32s steps(1) infinite; }
+.ch .cf + .cf { animation-delay: -.16s; }
+@keyframes rnFrame2 { 0% { opacity: 1; } 50%, 100% { opacity: 0; } }
+.cr { animation: crBob .45s ease-in-out infinite alternate; }
+@keyframes crBob { from { transform: translateY(-.8px); } to { transform: translateY(.8px); } }
+[data-wg="relay"] .wg-run { --wr: 28px; }
+/* 냠냠 추격전 lane: dark, with a thin violet line on each edge */
+.term-host.busy[data-wg="chase"]::after { box-shadow: none; outline: 1.5px solid #9775fa; outline-offset: -9.5px; }
+.pv-pane[data-wg="chase"]::after { box-shadow: none; outline: 1px solid #9775fa; outline-offset: -5px; }
+/* 계주: runners on the INNER side of the track — mirrored across it, feet on the lane, body toward the pane */
+[data-wg="relay"] .wr-runner { offset-anchor: 50% 8%; }
+[data-wg="relay"] .wr-runner svg { transform: scaleY(-1); }
+
+/* ---- 계주 v3: one edge per runner, stride synced to speed, baton in hand ---- */
+[data-wg="relay"] .wr-runner { animation-name: wgLeg; animation-duration: var(--T, 20s); animation-timing-function: linear; animation-iteration-count: infinite;
+  animation-delay: calc(var(--T, 20s) * (var(--k) / 4 - 1)); offset-anchor: 50% 6%; }
+[data-wg="relay"] .wr-runner svg { transform: none; }
+[data-wg="relay"] .wr-runner.e2 { offset-anchor: 50% 6%; }
+[data-wg="relay"] .wr-runner.e2 svg { transform: scaleY(-1); }
+@keyframes wgLeg {
+  0% { offset-distance: var(--s); opacity: 1; }
+  25% { offset-distance: var(--e); opacity: 1; }
+  29% { offset-distance: var(--e); opacity: 0; }
+  30%, 76% { offset-distance: var(--s); opacity: 0; }
+  84%, 100% { offset-distance: var(--s); opacity: 1; }
+}
+[data-wg="relay"] .wr-baton { display: none; }
+.rn .rf { animation-duration: var(--cyc, .56s); }
+/* the baton is only in the hands of the runner whose leg it is */
+[data-wg="relay"] .rn .bt { animation: wgBaton var(--T, 20s) steps(1) infinite; animation-delay: calc(var(--T, 20s) * (var(--k) / 4 - 1)); }
+@keyframes wgBaton { 0% { opacity: 1; } 25%, 100% { opacity: 0; } }
+.rn .bt { opacity: 0; }
+
+/* 계주 v4: feet on the track, bodies outside it (the pane gets room for them while this style is chosen) */
+[data-wg="relay"] .wr-runner, [data-wg="relay"] .wr-runner.e2 { offset-anchor: 50% 96%; }
+[data-wg="relay"] .wr-runner svg, [data-wg="relay"] .wr-runner.e2 svg { transform: none; }
+
+/* ---- 계주 v5: border unchanged; feet on the track, bodies inside (so on the top edge they run upside down);
+   all four always on the track — after a handoff a runner goes back to its station and waits, ready ---- */
+[data-wg="relay"] .wr-runner, [data-wg="relay"] .wr-runner.e2 { offset-anchor: 50% 4%; animation-name: wgLeg5; }
+[data-wg="relay"] .wr-runner svg, [data-wg="relay"] .wr-runner.e2 svg { transform: scaleY(-1); }
+@keyframes wgLeg5 {
+  0% { offset-distance: var(--s); opacity: 1; }
+  25% { offset-distance: var(--e); opacity: 1; }
+  27% { offset-distance: var(--e); opacity: 0; }
+  28% { offset-distance: var(--s); opacity: 0; }
+  31%, 100% { offset-distance: var(--s); opacity: 1; }
+}
+/* running frames while it's this runner's leg, the ready stance the rest of the time */
+[data-wg="relay"] .rn .rr { animation: wgRunVis var(--T, 20s) steps(1) infinite; animation-delay: calc(var(--T, 20s) * (var(--k) / 4 - 1)); }
+[data-wg="relay"] .rn .ri { animation: wgIdleVis var(--T, 20s) steps(1) infinite; animation-delay: calc(var(--T, 20s) * (var(--k) / 4 - 1)); }
+@keyframes wgRunVis { 0% { opacity: 1; } 27%, 100% { opacity: 0; } }
+@keyframes wgIdleVis { 0% { opacity: 0; } 27%, 100% { opacity: 1; } }
+.rn .ri { opacity: 0; }
+
+/* 냠냠 추격전: the critters follow at a fixed distance (set from the pane's size) */
+[data-wg="chase"] .wr-critter { animation-delay: calc(var(--k) * var(--cgap, .4s)); }
+
+/* 개미 행렬: drawn ants that really walk (tripod gait), not sliding emoji */
+[data-wg="ants"] .wg-run > em.wr-ant { rotate: none; transform: none; width: calc(var(--wr) * 1.55); height: var(--wr); }
+[data-wg="ants"] .wg-run { --wr: 13px; }
+.pv-pane[data-wg="ants"] .wg-run { --wr: 7px; }
+.ant { width: 100%; height: 100%; display: block; overflow: visible; }
+.ant g { transform-box: view-box; }
+.ant .ta { animation: antStep .32s ease-in-out infinite alternate; }
+.ant .tb { animation: antStep .32s ease-in-out infinite alternate-reverse; }
+.ant .an { transform-origin: 17.6px 7px; animation: antFeel .5s ease-in-out infinite alternate; }
+@keyframes antStep { from { transform: rotate(-20deg); } to { transform: rotate(20deg); } }
+@keyframes antFeel { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
+[data-wg="ants"] .wg-run { --wr: 16px; }
+/* 기차 연기: puffs rise from the engine's chimney (above the track) and drift back, fading */
+[data-wg="train"] .wg-run > em.wr-smoke { transform: none; opacity: 1;
+  animation-name: wgRun, wgSmoke; animation-duration: var(--dur, 16s), 1.5s; animation-timing-function: linear, ease-out; animation-iteration-count: infinite, infinite;
+  animation-delay: calc(var(--gap, .34s) * (-0.15 + var(--p) * 0.55)), calc(var(--p) * -0.5s);
+  offset-anchor: 50% calc(135% + var(--p) * 45%); font-size: calc(var(--wr, 15px) * (0.7 - var(--p) * 0.1)); }
+@keyframes wgSmoke { 0% { transform: scale(.4); opacity: .95; } 100% { transform: scale(1.3) translateX(-30%); opacity: 0; } }
+/* 기차 연기 v2: there's no room above the track at the screen's edge, so the puffs stream BACK from the chimney
+   over the engine's roof, growing and fading as they fall behind (like a train under way) */
+[data-wg="train"] .wg-run > em.wr-smoke { offset-anchor: 50% 78%; animation-name: wgRun, wgSmoke2;
+  animation-delay: calc(var(--gap, .34s) * -0.12), calc(var(--p) * -0.42s); animation-duration: var(--dur, 16s), 1.25s;
+  font-size: calc(var(--wr, 15px) * .6); }
+@keyframes wgSmoke2 { 0% { transform: translateX(0) scale(.35); opacity: .95; } 100% { transform: translateX(-190%) translateY(-22%) scale(1.15); opacity: 0; } }
+
+/* ---------- 산타 배달 ---------- */
+.term-host.busy[data-wg="santa"]::before, .pv-pane[data-wg="santa"]::before { padding: 8px;
+  background: radial-gradient(circle, rgba(255, 255, 255, .9) 0 .8px, transparent 1.3px) 0 0 / 11px 9px,
+              radial-gradient(circle, rgba(255, 255, 255, .55) 0 .7px, transparent 1.1px) 5px 4px / 14px 11px, #566177; }
+.pv-pane[data-wg="santa"]::before { padding: 4px; }
+.term-host.busy[data-wg="santa"]::after, .pv-pane[data-wg="santa"]::after { content: ''; position: absolute; inset: calc(-1 * var(--ring-gap, 4px)); border: 2px solid #eef3ff;
+  border-radius: 10px; outline: 2px solid #eef3ff; outline-offset: -10px; pointer-events: none; z-index: 4; -webkit-mask: none; box-shadow: 0 0 6px rgba(255, 255, 255, .25); }
+.pv-pane[data-wg="santa"]::after { inset: 0; border-radius: 7px; border-width: 1px; outline-width: 1px; outline-offset: -5px; }
+[data-wg="santa"] .wg-run { --wr: 20px; }
+.pv-pane[data-wg="santa"] .wg-run { --wr: 7px; }
+[data-wg="santa"] .wg-run > em.wr-santa { width: calc(var(--wr) * 2.45); height: var(--wr); offset-path: inset(4px round 7px); offset-anchor: 50% 60%;
+  animation: wgRun var(--T, 40s) linear infinite; }
+.pv-pane[data-wg="santa"] .wg-run > em.wr-santa { offset-path: inset(2px round 5px); }
+.sleigh { width: 100%; height: 100%; display: block; overflow: visible; }
+.sleigh g { transform-box: view-box; }
+.sleigh .rd-l1 { transform-origin: 41px 14.5px; animation: rdLeg .3s ease-in-out infinite alternate; }
+.sleigh .rd-l2 { transform-origin: 41px 14.5px; animation: rdLeg .3s ease-in-out infinite alternate-reverse; }
+.sleigh .rd { animation: rdBob .3s ease-in-out infinite alternate; }
+.sleigh .rd-nose { filter: drop-shadow(0 0 2px #ff3b3b); animation: rdNose 1s ease-in-out infinite alternate; }
+@keyframes rdLeg { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
+@keyframes rdBob { from { transform: translateY(0); } to { transform: translateY(-.8px); } }
+@keyframes rdNose { from { opacity: .7; } to { opacity: 1; } }
+[data-wg="santa"] .wg-run > b.wr-house { position: absolute; offset-path: none; width: calc(var(--wr) * 1.35); height: calc(var(--wr) * 1.35); transform-origin: 50% 100%; }
+.house { width: 100%; height: 100%; display: block; }
+.wr-gift { position: absolute; left: 0; top: 0; font-style: normal; font-size: calc(var(--wr, 20px) * .75); line-height: 1; pointer-events: none; z-index: 2; }
+/* the sleigh rides mostly on the pane side of the road, so the screen edge never clips it */
+[data-wg="santa"] .wg-run { --wr: 22px; }
+[data-wg="santa"] .wg-run > em.wr-santa { offset-anchor: 50% 22%; }
+.pv-pane[data-wg="santa"] .wg-run { --wr: 7px; }
+/* 산타 v2: the houses stand ON the road; the sleigh drives just inside it and throws the presents out to them */
+[data-wg="santa"] .wg-run > em.wr-santa { offset-path: inset(36px round 14px); offset-anchor: 50% 50%; }
+.pv-pane[data-wg="santa"] .wg-run > em.wr-santa { offset-path: inset(9px round 6px); }
+[data-wg="santa"] .wg-run > b.wr-house { z-index: 1; }
+[data-wg="santa"] .wg-run > em.wr-santa { offset-path: inset(46px round 16px); }
+.pv-pane[data-wg="santa"] .wg-run > em.wr-santa { offset-path: inset(11px round 6px); }
+/* 산타 v3: snow on every side of the road (a pattern finer than the road is wide), smaller houses sitting on it */
+.term-host.busy[data-wg="santa"]::before, .pv-pane[data-wg="santa"]::before {
+  background: radial-gradient(circle, rgba(255, 255, 255, .85) 0 .7px, transparent 1.2px) 0 0 / 6px 9px,
+              radial-gradient(circle, rgba(255, 255, 255, .5) 0 .6px, transparent 1px) 3px 4px / 6px 11px, #566177; }
+[data-wg="santa"] .wg-run > b.wr-house { width: calc(var(--wr) * .95); height: calc(var(--wr) * .95); }

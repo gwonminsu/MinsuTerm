@@ -1,0 +1,255 @@
+/* "내 프롬프트" boxes drawn over the terminal. The cells carry a marker tint;
+   these shapes add the border / bar / badge. Shared by live boxes (.ps-x .pbox) and previews (.pv-pbox.ps-x). */
+
+/* 은은하게 / 강조 색: when the prompt has no background (newer Claude Code), draw the tint as a box */
+.ps-subtle .pbox { background: rgba(255, 255, 255, 0.05); border-radius: 4px; outline: 3px solid rgba(255, 255, 255, 0.05); }
+.ps-accent .pbox { background: color-mix(in srgb, var(--violet) 16%, transparent); border-radius: 4px; outline: 3px solid color-mix(in srgb, var(--violet) 16%, transparent); }
+
+/* overflow stays visible: bars / outlines sit just outside the text, in the terminal's left margin */
+.pbox-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: visible; }
+.pbox { position: absolute; pointer-events: none; }
+.pv-pbox { position: relative; display: inline-block; line-height: 0; }
+.pv-pbox .pv-prompt { line-height: normal; }
+
+/* 카드: tinted cells + soft border + left accent bar */
+.ps-card .pbox, .pv-pbox.ps-card { outline: 1px solid color-mix(in srgb, var(--violet) 45%, transparent); outline-offset: 2px; border-radius: 4px; }
+.ps-card .pbox::before, .pv-pbox.ps-card::before {
+  content: ''; position: absolute; left: -5px; top: -2px; bottom: -2px; width: 3px; border-radius: 3px; background: var(--violet);
+}
+
+/* 왼쪽 막대 */
+.ps-bar .pbox::before, .pv-pbox.ps-bar::before {
+  content: ''; position: absolute; left: -7px; top: 0; bottom: 0; width: 3px; border-radius: 3px;
+  background: linear-gradient(180deg, var(--violet), color-mix(in srgb, var(--violet) 40%, transparent));
+}
+
+/* 네온 테두리 */
+.ps-neon .pbox::after, .pv-pbox.ps-neon::after {
+  content: ''; position: absolute; inset: -3px -4px; border-radius: 6px;
+  border: 1px solid var(--violet);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--violet) 70%, transparent), inset 0 0 8px color-mix(in srgb, var(--violet) 30%, transparent);
+}
+
+/* 그라디언트 테두리 */
+.ps-gradient .pbox::after, .pv-pbox.ps-gradient::after {
+  content: ''; position: absolute; inset: -3px -4px; border-radius: 7px; padding: 1.5px;
+  background: linear-gradient(90deg, #7c5cff, #c266e8, #ff8a5b);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* '나' 배지: bar + a little tag on the top-right corner */
+.ps-badge .pbox::before, .pv-pbox.ps-badge::before {
+  content: ''; position: absolute; left: -7px; top: 0; bottom: 0; width: 3px; border-radius: 3px; background: var(--violet);
+}
+.pbox-badge {
+  position: absolute; top: -7px; right: -6px; height: 15px; padding: 0 6px; border-radius: 8px;
+  display: inline-flex; align-items: center;
+  background: var(--violet); color: #fff; font: 600 9.5px/1 var(--ui-font);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.pv-pbox .pbox-badge { top: -6px; right: -8px; height: 12px; font-size: 8.5px; padding: 0 4px; }
+
+/* 말풍선: rounded bubble with a tail */
+.ps-bubble .pbox::after, .pv-pbox.ps-bubble::after {
+  content: ''; position: absolute; inset: -3px -5px; border-radius: 10px;
+  border: 1.5px solid color-mix(in srgb, var(--violet) 70%, transparent);
+}
+.ps-bubble .pbox::before, .pv-pbox.ps-bubble::before {
+  content: ''; position: absolute; left: 10px; bottom: -8px; width: 9px; height: 9px;
+  border-right: 1.5px solid color-mix(in srgb, var(--violet) 70%, transparent);
+  border-bottom: 1.5px solid color-mix(in srgb, var(--violet) 70%, transparent);
+  transform: rotate(45deg);
+}
+
+/* 형광펜: a marker stroke under the words */
+.ps-marker .pbox::after, .pv-pbox.ps-marker::after {
+  content: ''; position: absolute; left: -2px; right: -2px; bottom: 1px; height: 38%;
+  border-radius: 3px 6px 4px 7px / 6px 3px 7px 4px;
+  background: color-mix(in srgb, #ffe066 38%, transparent);
+  mix-blend-mode: screen;
+  transform: skewX(-8deg);
+}
+
+/* 대괄호: [ ] around the prompt */
+.ps-bracket .pbox::before, .ps-bracket .pbox::after, .pv-pbox.ps-bracket::before, .pv-pbox.ps-bracket::after {
+  content: ''; position: absolute; top: -2px; bottom: -2px; width: 6px;
+  border: 2px solid var(--violet);
+}
+.ps-bracket .pbox::before, .pv-pbox.ps-bracket::before { left: -8px; border-right: 0; border-radius: 3px 0 0 3px; }
+.ps-bracket .pbox::after, .pv-pbox.ps-bracket::after { right: -8px; border-left: 0; border-radius: 0 3px 3px 0; }
+
+/* 유리 카드: frosted glass with a light catching the top edge */
+.ps-glass .pbox::after, .pv-pbox.ps-glass::after {
+  content: ''; position: absolute; inset: -3px -5px; border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-top-color: rgba(255, 255, 255, 0.4);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 55%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+/* 빛나는 점: a soft glowing dot on the left */
+.ps-dot .pbox::before, .pv-pbox.ps-dot::before {
+  content: ''; position: absolute; left: -10px; top: 6px; width: 6px; height: 6px; border-radius: 50%; /* beside the first line */
+  background: var(--violet);
+  box-shadow: 0 0 6px var(--violet), 0 0 12px color-mix(in srgb, var(--violet) 60%, transparent);
+  animation: pdot 2.4s ease-in-out infinite;
+}
+.pv-pbox.ps-dot::before { top: 50%; margin-top: -3px; }
+@keyframes pdot { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
+.pk-pv .pv-pbox .pbox-badge { display: none; }
+
+/* 미니 창: a tiny window frame — a title strip with traffic lights above, a hairline frame around */
+.ps-terminal .pbox::after, .pv-pbox.ps-terminal::after {
+  content: ''; position: absolute; inset: -14px -6px -4px; border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    radial-gradient(circle at 9px 6.5px, #ff5f57 0 2.6px, transparent 3px),
+    radial-gradient(circle at 18px 6.5px, #febc2e 0 2.6px, transparent 3px),
+    radial-gradient(circle at 27px 6.5px, #28c840 0 2.6px, transparent 3px),
+    linear-gradient(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.07)) 0 0 / 100% 13px no-repeat;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* 무지개 흐름: a rainbow running around the border */
+.ps-flow .pbox::after, .pv-pbox.ps-flow::after {
+  content: ''; position: absolute; inset: -3px -5px; border-radius: 8px; padding: 1.5px;
+  background: linear-gradient(90deg, #ff6b81, #ffa94d, #ffe066, #69db7c, #4dabf7, #b197fc, #ff6b81) 0 0 / 300% 100%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: pflow 4s linear infinite;
+}
+@keyframes pflow { to { background-position: 300% 0; } }
+
+/* 포스트잇: yellow note (the cells carry the yellow tint), with a folded corner */
+.ps-sticky .pbox::after, .pv-pbox.ps-sticky::after {
+  content: ''; position: absolute; right: -6px; bottom: -4px; width: 12px; height: 12px;
+  background: linear-gradient(135deg, rgba(255, 224, 120, 0.55) 0 50%, var(--bg, #0d0f14) 50%);
+  border-radius: 0 0 3px 0;
+}
+.ps-sticky .pbox::before, .pv-pbox.ps-sticky::before {
+  content: ''; position: absolute; inset: -4px -6px; border-radius: 2px 2px 10px 2px;
+  border: 1px solid rgba(255, 214, 102, 0.35); box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* 인용구: big quotation marks */
+.ps-quote .pbox::before, .pv-pbox.ps-quote::before {
+  content: '\201C'; position: absolute; left: -20px; top: -10px;
+  font: 700 30px/1 Georgia, 'Times New Roman', serif; color: var(--violet); opacity: 0.85;
+}
+.ps-quote .pbox::after, .pv-pbox.ps-quote::after {
+  content: '\201D'; position: absolute; right: -16px; bottom: -22px;
+  font: 700 30px/1 Georgia, 'Times New Roman', serif; color: var(--violet); opacity: 0.5;
+}
+.pv-pbox.ps-quote::before { left: -12px; top: -6px; font-size: 20px; }
+.pv-pbox.ps-quote::after { right: -10px; bottom: -14px; font-size: 20px; }
+
+/* 스캔 빛: a light sweeping across, every few seconds */
+.ps-scan .pbox, .pv-pbox.ps-scan { overflow: hidden; border-radius: 3px; }
+.ps-scan .pbox::after, .pv-pbox.ps-scan::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: -40%; width: 40%;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--violet) 45%, transparent), rgba(255, 255, 255, 0.35), transparent);
+  mix-blend-mode: screen;
+  animation: pscan 3.2s ease-in-out infinite;
+}
+.ps-scan .pbox::before, .pv-pbox.ps-scan::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--violet); }
+@keyframes pscan { 0%, 30% { left: -40%; } 75%, 100% { left: 100%; } }
+
+/* 티켓: a dashed admission ticket with notches cut from both sides */
+.ps-ticket .pbox::after, .pv-pbox.ps-ticket::after {
+  content: ''; position: absolute; inset: -4px -10px; border-radius: 6px;
+  border: 1.5px dashed color-mix(in srgb, var(--violet) 75%, transparent);
+  -webkit-mask: radial-gradient(circle at 0 50%, transparent 6px, #000 6.5px) left / 51% 100% no-repeat, radial-gradient(circle at 100% 50%, transparent 6px, #000 6.5px) right / 51% 100% no-repeat;
+          mask: radial-gradient(circle at 0 50%, transparent 6px, #000 6.5px) left / 51% 100% no-repeat, radial-gradient(circle at 100% 50%, transparent 6px, #000 6.5px) right / 51% 100% no-repeat;
+}
+
+/* 물결 밑줄: a wavy line drifting under the words */
+.ps-wave .pbox::after, .pv-pbox.ps-wave::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -5px; height: 6px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='6' viewBox='0 0 16 6'><path d='M0 3 Q4 0 8 3 T16 3' fill='none' stroke='%23a78bfa' stroke-width='1.6'/></svg>") 0 0 / 16px 6px repeat-x;
+  animation: pwave 1.2s linear infinite;
+}
+@keyframes pwave { to { background-position: 16px 0; } }
+
+/* 캡슐: a fully rounded pill with a glowing gradient rim */
+.ps-pill .pbox::after, .pv-pbox.ps-pill::after {
+  content: ''; position: absolute; inset: -3px -9px; border-radius: 999px; padding: 1.5px;
+  background: linear-gradient(90deg, var(--violet), #ff8a5b);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--violet) 60%, transparent));
+}
+.ps-pill .pbox, .pv-pbox.ps-pill { border-radius: 999px; }
+
+/* 공책: ruled notebook paper with a red margin line */
+.ps-notebook .pbox::before, .pv-pbox.ps-notebook::before {
+  content: ''; position: absolute; inset: -3px -6px -3px -14px; border-radius: 3px;
+  background:
+    linear-gradient(90deg, transparent 7px, rgba(255, 99, 99, 0.7) 7px 8.5px, transparent 8.5px),
+    repeating-linear-gradient(180deg, transparent 0 calc(1lh - 1px), rgba(130, 170, 255, 0.28) calc(1lh - 1px) 1lh);
+}
+
+/* 사이버 프레임: chamfered neon frame with corner ticks */
+.ps-cyber .pbox::after, .pv-pbox.ps-cyber::after {
+  content: ''; position: absolute; inset: -4px -8px; padding: 1.5px;
+  background: #22e6ff;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  filter: drop-shadow(0 0 4px rgba(34, 230, 255, 0.7));
+}
+.ps-cyber .pbox::before, .pv-pbox.ps-cyber::before {
+  content: ''; position: absolute; right: -10px; top: -6px; width: 6px; height: 6px; background: #ff2e88; box-shadow: 0 0 6px #ff2e88;
+}
+
+/* 떠있는 카드: lifted, with a long soft shadow and a light top edge */
+.ps-floating .pbox::after, .pv-pbox.ps-floating::after {
+  content: ''; position: absolute; inset: -4px -7px; border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1); border-top-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+  transform: translateY(-2px);
+}
+
+/* 스포트라이트: a soft cone of light from above */
+.ps-spot .pbox::after, .pv-pbox.ps-spot::after {
+  content: ''; position: absolute; inset: -14px -10px -4px; border-radius: 10px; pointer-events: none;
+  background: radial-gradient(ellipse 60% 120% at 50% 0%, color-mix(in srgb, #fff 18%, transparent), transparent 70%);
+}
+.ps-spot .pbox::before, .pv-pbox.ps-spot::before {
+  content: ''; position: absolute; left: 50%; top: -9px; width: 30%; height: 2px; transform: translateX(-50%); border-radius: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+}
+
+/* 리본: a ribbon bookmark on the left, a soft underline fading out */
+.ps-ribbon .pbox::before, .pv-pbox.ps-ribbon::before {
+  content: ''; position: absolute; left: -13px; top: -4px; width: 8px; height: calc(100% + 8px); max-height: 22px;
+  background: linear-gradient(180deg, var(--violet), color-mix(in srgb, var(--violet) 70%, #ff8a5b));
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%); }
+.ps-ribbon .pbox::after, .pv-pbox.ps-ribbon::after {
+  content: ''; position: absolute; left: -4px; right: 0; bottom: -3px; height: 1.5px; border-radius: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--violet) 80%, transparent), transparent); }
+
+/* 도장: a red round seal stamped on the right end */
+.ps-stamp .pbox::after, .pv-pbox.ps-stamp::after {
+  content: '나'; position: absolute; right: -24px; top: 50%; width: 18px; height: 18px; margin-top: -9px; display: grid; place-items: center;
+  font: 800 10px/1 'Malgun Gothic', var(--ui-font); color: #e03131; border: 1.6px solid #e03131; border-radius: 50%;
+  box-shadow: inset 0 0 0 1.4px transparent, inset 0 0 0 2.4px rgba(224, 49, 49, .5); transform: rotate(-14deg); opacity: .85;
+  -webkit-mask: radial-gradient(circle at 30% 40%, #000 60%, rgba(0, 0, 0, .55) 61%); }
+
+/* 별가루: tiny stars twinkling at the corners */
+.ps-sparkle .pbox::before, .ps-sparkle .pbox::after, .pv-pbox.ps-sparkle::before, .pv-pbox.ps-sparkle::after {
+  content: '✦'; position: absolute; font-size: 9px; line-height: 1; color: #ffe066; text-shadow: 0 0 4px #ffd43b; animation: psTwinkle 1.8s ease-in-out infinite; }
+.ps-sparkle .pbox::before, .pv-pbox.ps-sparkle::before { left: -10px; top: -6px; }
+.ps-sparkle .pbox::after, .pv-pbox.ps-sparkle::after { right: -10px; bottom: -6px; color: #b197fc; text-shadow: 0 0 4px #9775fa; animation-delay: .9s; }
+@keyframes psTwinkle { 0%, 100% { transform: scale(.5) rotate(0); opacity: .3; } 50% { transform: scale(1.15) rotate(45deg); opacity: 1; } }
+
+/* 마스킹 테이프: patterned washi tape pinned on both top corners */
+.ps-washi .pbox::before, .ps-washi .pbox::after, .pv-pbox.ps-washi::before, .pv-pbox.ps-washi::after {
+  content: ''; position: absolute; top: -6px; width: 24px; height: 8px; opacity: .8; border-radius: 1px;
+  background: repeating-linear-gradient(90deg, #ffc9de 0 3px, #ffe3ee 3px 6px); }
+.ps-washi .pbox::before, .pv-pbox.ps-washi::before { left: -12px; transform: rotate(-32deg); }
+.ps-washi .pbox::after, .pv-pbox.ps-washi::after { right: -12px; transform: rotate(32deg); background: repeating-linear-gradient(90deg, #c5e8ff 0 3px, #e4f4ff 3px 6px); }
+
+/* 내 메시지: a sent-message bubble (one squared corner, bottom right) */
+.ps-chat .pbox::after, .pv-pbox.ps-chat::after {
+  content: ''; position: absolute; inset: -4px -8px; border-radius: 12px 12px 3px 12px;
+  border: 1.5px solid color-mix(in srgb, var(--violet) 75%, transparent); box-shadow: 0 2px 10px color-mix(in srgb, var(--violet) 22%, transparent); }
+.pk-item-pv .pv-pbox.ps-stamp::after, .pk-pv .pv-pbox.ps-stamp::after { right: -12px; width: 14px; height: 14px; margin-top: -7px; font-size: 8px; }

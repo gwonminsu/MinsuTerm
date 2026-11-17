@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MinsuTerm — Claude Code · Codex CLI 사용자를 위한 터미널</title>
+<meta name="description" content="MinsuTerm은 Claude Code와 OpenAI Codex CLI 사용자를 위한 무료 오픈소스 Windows / macOS 터미널입니다. 에이전트 작업 현황판, 서브에이전트 표시, 완료 알림, 세션 복원, 다양한 꾸미기 효과를 제공합니다.">
+<meta property="og:title" content="MinsuTerm — a terminal for Claude Code & Codex CLI users">
+<meta property="og:description" content="Agent dashboard, subagent minions, done notifications, session restore and hundreds of decorations. Free & open source for Windows and macOS.">
+<meta property="og:image" content="media/agent.gif">
+<meta property="og:type" content="website">
+<link rel="icon" href="icon.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "MinsuTerm",
+  "applicationCategory": "DeveloperApplication",
+  "applicationSubCategory": "Terminal emulator",
+  "operatingSystem": "Windows 10, Windows 11, macOS",
+  "description": "A free, open-source desktop terminal for people who use the Claude Code and OpenAI Codex CLI agents: agent dashboard, subagent display, done notifications, session restore and decorative effects.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "license": "https://opensource.org/licenses/MIT",
+  "inLanguage": ["ko", "en", "ja", "zh"],
+  "downloadUrl": "https://github.com/gwonminsu/MinsuTerm/releases/latest",
+  "codeRepository": "https://github.com/gwonminsu/MinsuTerm",
+  "featureList": [
+    "Agent view: tasks grouped as waiting for input, in progress and done",
+    "Subagent (minion) rows for Claude Code and Codex subagents",
+    "Desktop notification when an agent finishes or asks for a choice",
+    "Session restore for Claude Code and Codex conversations",
+    "35+ working-border animations, 35+ celebrations, 30+ animated backgrounds",
+    "35+ typing effects and 45+ typing sounds",
+    "30+ dark and light color themes",
+    "Korean, English, Japanese and Chinese UI"
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "What terminal is good for Claude Code?",
+      "acceptedAnswer": { "@type": "Answer", "text": "MinsuTerm is a free Windows / macOS terminal built for Claude Code and Codex CLI. When you run claude or codex it shows task progress, subagents and choice prompts in a sidebar, notifies you when the agent is done, and restores your conversations when you reopen the app." } },
+    { "@type": "Question", "name": "Does MinsuTerm support OpenAI Codex CLI?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. codex is detected the same way as claude, with task tracking, subagent display and session restore." } },
+    { "@type": "Question", "name": "Can I get a notification when Claude Code finishes?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. MinsuTerm sends a desktop notification when an agent in another tab finishes or asks you to choose something." } },
+    { "@type": "Question", "name": "Does MinsuTerm send my data anywhere?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. It makes no network requests; it only reads the transcript files Claude Code and Codex already keep on your computer." } }
+  ]
+}
+</script>
+<style>
+  :root { --bg: #0d0f14; --panel: #161a22; --text: #e6e8ee; --muted: #9aa3b5; --accent: #a78bfa; --accent2: #f472b6; --line: #262b36; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) { --bg: #f7f7fb; --panel: #ffffff; --text: #1d2130; --muted: #5b6375; --accent: #7c3aed; --accent2: #db2777; --line: #e3e5ec; }
+  }
+  :root[data-theme="dark"] { --bg: #0d0f14; --panel: #161a22; --text: #e6e8ee; --muted: #9aa3b5; --accent: #a78bfa; --accent2: #f472b6; --line: #262b36; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 48px 16px 80px; }
+  header { text-align: center; }
+  header img.logo { width: 84px; height: 84px; }
+  h1 { font-size: clamp(32px, 6vw, 48px); margin: 12px 0 4px; letter-spacing: -0.02em; }
+  .tag { font-size: clamp(17px, 2.6vw, 21px); color: var(--muted); margin: 0 0 24px; }
+  .tag b { color: var(--text); }
+  .cta { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 32px; }
+  .btn { display: inline-block; padding: 11px 20px; border-radius: 10px; text-decoration: none; font-weight: 600; border: 1px solid var(--line); color: var(--text); background: var(--panel); }
+  .btn.primary { border: 0; color: #fff; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  figure { margin: 0 0 40px; }
+  figure img { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); display: block; }
+  figcaption { color: var(--muted); font-size: 14px; text-align: center; margin-top: 8px; }
+  h2 { font-size: 24px; margin: 48px 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  details { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { color: var(--muted); margin: 8px 0 0; }
+  footer { margin-top: 56px; color: var(--muted); font-size: 13px; text-align: center; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img class="logo" src="icon.png" alt="MinsuTerm icon">
+    <h1>MinsuTerm</h1>
+    <p class="tag"><b>Claude Code · Codex CLI 사용자를 위한 터미널</b><br>A terminal for people who work with Claude Code and Codex.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/gwonminsu/MinsuTerm/releases/latest">⬇️ 다운로드 (Windows · macOS)</a>
+      <a class="btn" href="https://github.com/gwonminsu/MinsuTerm">GitHub</a>
+      <a class="btn" href="https://buymeacoffee.com/minsugwon">☕ 후원하기</a>
+    </div>
+  </header>
+
+  <figure>
+    <img src="media/agent.gif" alt="MinsuTerm running Claude Code with two subagents, a Santa sleigh border while it works and a done message when it finishes" loading="eager">
+    <figcaption>실제 Claude Code 작업 화면 — 서브에이전트 하수인, 작업 중 테두리, 완료 문구</figcaption>
+  </figure>
+
+  <h2>설치만 하면 바뀌는 것</h2>
+  <div class="grid">
+    <div class="card"><h3>🤖 에이전트 뷰</h3><p>프롬프트 하나가 작업 하나. 폴더별로 입력 대기 · 진행 중 · 완료를 자동 정리합니다.</p></div>
+    <div class="card"><h3>👾 서브에이전트 하수인</h3><p>에이전트가 서브에이전트를 띄우면 작업 아래에서 하수인이 일하고, 끝나면 체크.</p></div>
+    <div class="card"><h3>🔔 놓치지 않는 알림</h3><p>작업이 끝나거나 선택지를 물어보면 말풍선 배지와 데스크톱 알림.</p></div>
+    <div class="card"><h3>💾 세션 복원</h3><p>다시 열면 탭과 Claude / Codex 대화가 그대로 이어집니다.</p></div>
+    <div class="card"><h3>🎨 수백 가지 꾸미기</h3><p>작업 중 테두리, 완료 축하, 배경 애니메이션, 타이핑 효과와 소리, 다크 · 라이트 테마.</p></div>
+    <div class="card"><h3>🌏 4개 언어</h3><p>한국어 · English · 日本語 · 中文 — 꾸미기 항목 이름까지 전부.</p></div>
+  </div>
+
+  <h2>작업 중 테두리 · 테마</h2>
+  <figure><img src="media/border.gif" alt="Working borders: relay race, chomp chase, train, Santa sleigh, marching ants; dark and light themes" loading="lazy"></figure>
+
+  <h2>배경 · 타이핑 효과</h2>
+  <figure><img src="media/deco.gif" alt="Animated backgrounds and typing effects: thunderstorm, black hole, aurora, snow, synthwave" loading="lazy"></figure>
+
+  <h2>자주 묻는 질문</h2>
+  <details open><summary>Claude Code를 쓰기 좋은 터미널이 있나요?</summary><p>MinsuTerm이 바로 그 용도의 터미널입니다. claude를 실행하면 작업 진행, 서브에이전트, 선택 대기를 사이드바에 보여 주고, 끝나면 알려 주고, 다시 열면 대화를 이어 줍니다.</p></details>
+  <details><summary>Codex CLI도 되나요?</summary><p>네. codex도 같은 방식으로 작업 현황, 서브에이전트, 세션 복원을 지원합니다.</p></details>
+  <details><summary>무료인가요? 데이터를 보내나요?</summary><p>무료 · 오픈소스(MIT)입니다. 네트워크 통신을 하지 않고, Claude Code / Codex가 내 PC에 저장한 기록 파일만 읽습니다.</p></details>
+  <details><summary>macOS에서 "손상되었다"고 나와요.</summary><p>아직 Apple 공증 전이라 생기는 메시지입니다. 압축을 푼 폴더에서 <code>xattr -cr .</code> 후 <code>bash "MinsuTerm 설치.command"</code>를 실행하세요.</p></details>
+
+  <footer>
+    MIT License · Claude and Claude Code are trademarks of Anthropic; Codex is a trademark of OpenAI. MinsuTerm is an independent project, not affiliated with either.
+  </footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;" />
+  <title>MinsuTerm</title>
+  <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="ui.css" />
+  <link rel="stylesheet" href="folders.css" />
+  <link rel="stylesheet" href="glow.css" />
+  <link rel="stylesheet" href="cursors.css" />
+  <link rel="stylesheet" href="prompt.css" />
+  <link rel="stylesheet" href="donetext.css" />
+  <link rel="stylesheet" href="mac.css" />
+  <link rel="stylesheet" href="light.css" />
+</head>
+<body>
+  <!-- Brand mark: "M" monogram (Minsu) + terminal cursor, transparent background -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="mt-grad" x1="6" y1="12" x2="58" y2="52" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#7C5CFF" />
+        <stop offset="0.55" stop-color="#C266E8" />
+        <stop offset="1" stop-color="#FF8A5B" />
+      </linearGradient>
+      <symbol id="mt-logo" viewBox="0 0 64 64">
+        <path d="M10 48V16.5L28 34.5L44 18.5" fill="none" stroke="url(#mt-grad)" stroke-width="9.2" stroke-linecap="round" stroke-linejoin="round" />
+        <rect x="41.5" y="12" width="12" height="40.6" rx="4" fill="#FF8A5B" class="logo-cursor" />
+      </symbol>
+    </defs>
+  </svg>
+
+  <div id="app">
+    <header id="titlebar">
+      <button class="tb-btn" id="btn-sidebar" title="사이드바 (Ctrl+Shift+B)" data-icon="sidebar"></button>
+      <div class="brand" title="MinsuTerm"><svg viewBox="0 0 64 64"><use href="#mt-logo" /></svg></div>
+      <div id="tabs-wrap">
+        <div id="tabs" role="tablist"></div>
+        <button class="tb-btn new-tab" id="btn-new" title="새 터미널 (Ctrl+Shift+T)" data-icon="plus"></button>
+        <button class="tb-btn new-tab-menu" id="btn-new-menu" title="셸 선택 · 대화 기록" data-icon="chevronDown"></button>
+      </div>
+      <div class="drag-fill"></div>
+    </header>
+
+    <div id="body">
+      <aside id="sidebar">
+        <div id="sb-resizer" title="드래그해서 너비 조절 · 더블클릭하면 기본값"></div>
+        <section class="sb-section current-section">
+          <div class="sb-head">
+            <span>현재 탭</span>
+            <span class="count kind" id="current-kind" hidden></span>
+          </div>
+          <div id="current" class="current-list"></div>
+        </section>
+
+        <section class="sb-section grow projects-section">
+          <div class="sb-head">
+            <span>폴더</span>
+            <span class="sb-head-actions">
+              <button class="icon-btn" data-action="history" title="대화 기록 (Ctrl+Shift+O)" data-icon="history"></button>
+              <button class="icon-btn" data-action="recycle" title="휴지통 (삭제한 대화 복원 · 영구 삭제)" data-icon="trash"></button>
+              <button class="icon-btn" id="btn-add-project" title="프로젝트 폴더 추가" data-icon="folderPlus"></button>
+            </span>
+          </div>
+          <div id="projects" class="sb-list"></div>
+        </section>
+
+        <footer class="sb-foot">
+          <button class="icon-btn" data-action="palette" title="명령 팔레트 (Ctrl+Shift+P)" data-icon="command"></button>
+          <button class="icon-btn" data-action="settings" title="설정 (Ctrl+,)" data-icon="settings"></button>
+          <span class="version" id="version"></span>
+        </footer>
+      </aside>
+
+      <main id="stage">
+        <div id="gridbar" class="viewbar" hidden>
+          <span data-icon="grid"></span>
+          <span class="gb-title"></span>
+          <span class="gb-sub"></span>
+          <button class="btn small" id="gridbar-exit" title="Ctrl+Shift+G">한 탭만 보기</button>
+        </div>
+        <div id="zoombar" class="viewbar mini" hidden>
+          <span data-icon="maximize"></span>
+          <span class="gb-sub">분할 화면 중 이 패널만 크게 보는 중</span>
+          <button class="btn small" id="zoombar-exit" title="Ctrl+Shift+Z">분할로 돌아가기</button>
+        </div>
+        <div id="terminals"></div>
+
+        <div id="empty" class="empty" hidden>
+          <div class="empty-inner">
+            <div class="empty-logo"><svg viewBox="0 0 64 64"><use href="#mt-logo" /></svg></div>
+            <h1>MinsuTerm</h1>
+            <p>터미널에서 <kbd>claude</kbd> 나 <kbd>codex</kbd> 를 실행하면 에이전트 모드로 바뀝니다.</p>
+            <div class="empty-actions">
+              <button class="btn primary" data-action="new-shell"><span data-icon="terminal"></span>새 터미널</button>
+              <button class="btn" data-action="add-project"><span data-icon="folderPlus"></span>프로젝트 추가</button>
+            </div>
+            <div id="empty-recent" class="empty-recent"></div>
+            <div class="shortcuts">
+              <div><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd><span>새 터미널</span></div>
+              <div><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd><span>모든 기능</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="searchbar" class="searchbar" hidden>
+          <span data-icon="search" class="sb-ico"></span>
+          <input id="search-input" type="text" placeholder="검색" spellcheck="false" />
+          <span id="search-count" class="search-count"></span>
+          <button class="icon-btn" id="search-prev" title="이전 (Shift+Enter)" data-icon="arrowUp"></button>
+          <button class="icon-btn" id="search-next" title="다음 (Enter)" data-icon="arrowDown"></button>
+          <button class="icon-btn" id="search-close" title="닫기 (Esc)" data-icon="x"></button>
+        </div>
+      </main>
+    </div>
+
+    <footer id="statusbar">
+      <div class="st-left">
+        <span id="st-kind" class="st-item st-kind"></span>
+        <span id="st-cwd" class="st-item st-cwd"></span>
+      </div>
+      <div class="st-right">
+        <span id="st-status" class="st-item"></span>
+        <button id="st-session" class="st-item st-btn mono" hidden></button>
+        <button id="st-composer" class="st-item st-btn" title="프롬프트 작성기 (Ctrl+Shift+E)" hidden><span data-icon="edit"></span>작성기</button>
+        <button id="st-palette" class="st-item st-btn" title="명령 팔레트 (Ctrl+Shift+P)"><span data-icon="command"></span></button>
+      </div>
+    </footer>
+  </div>
+
+  <div id="overlay-root"></div>
+  <div id="toast-root"></div>
+
+  <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="../../node_modules/@xterm/addon-webgl/lib/addon-webgl.js"></script>
+  <script src="../../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
+  <script src="../../node_modules/@xterm/addon-search/lib/addon-search.js"></script>
+  <script src="../../node_modules/@xterm/addon-unicode11/lib/addon-unicode11.js"></script>
+  <script src="icons.js"></script>
+  <script src="themes.js"></script>
+  <script src="samples.js"></script>
+  <script src="i18n-data.js"></script>
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
