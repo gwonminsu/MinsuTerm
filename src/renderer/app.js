@@ -2389,6 +2389,7 @@ function createBg(canvas) {
     else if (k === 'warp') bg.items = Array.from({ length: 160 }, () => ({ x: (R() - 0.5) * 2, y: (R() - 0.5) * 2, z: R(), pz: 0 }));
     else if (k === 'jellyfish') bg.items = Array.from({ length: Math.min(9, Math.round(0.25 * area) + 4) }, () => ({ x: R() * w, y: R() * h, s: (16 + R() * 26) * sc, ph: R() * 6, v: 0.15 + R() * 0.25, c: (R() * 3) | 0 }));
     else if (k === 'campfire') { bg.items = []; campfireVideo(); }
+    else if (k === 'lanterns') bg.items = Array.from({ length: Math.min(24, Math.round(0.6 * area) + 8) }, () => ({ x: R() * w, y: R() * h, v: (0.12 + R() * 0.3) * Math.max(0.5, sc), s: (5 + R() * 9) * sc, ph: R() * 6, sw: R() * 6 }));
     else if (k === 'constellation') { bg.items = Array.from({ length: Math.round(30 * area) }, () => ({ x: R() * w, y: R() * h, z: R(), ph: R() * 6 })); bg.cons = []; }
     else if (k === 'lavalamp') bg.items = Array.from({ length: 7 }, (_, i) => ({ x: (0.15 + R() * 0.7) * w, y: R() * h, r: (50 + R() * 70) * sc, vy: (R() < 0.5 ? -1 : 1) * (0.15 + R() * 0.25) * Math.max(0.4, sc), ph: R() * 6, c: i % 3 }));
     else if (k === 'pond') { bg.items = []; bg.lilies = Array.from({ length: 3 }, () => ({ x: R() * w, y: R() * h, r: (14 + R() * 12) * sc, rot: R() * 6 })); }
@@ -2654,7 +2655,7 @@ function drawBg(bg) {
         ctx.fillStyle = `rgba(230,235,255,${(0.2 + s.z * 0.5) * (0.6 + 0.4 * Math.sin(s.ph))})`;
         ctx.beginPath(); ctx.arc(s.x, s.y, 0.5 + s.z * 1.1, 0, Math.PI * 2); ctx.fill();
       }
-      if (Math.random() < 0.012) bg.meteors.push({ x: Math.random() * w * 0.8 + w * 0.2, y: Math.random() * h * 0.35, life: 1 });
+      if (Math.random() < 0.012) { bg.meteors.push({ x: Math.random() * w * 0.8 + w * 0.2, y: Math.random() * h * 0.35, life: 1 }); if (bg.canvas.classList.contains('bg-layer')) ambSfx('meteor'); }
       bg.meteors = bg.meteors.filter((m) => (m.life -= 0.025) > 0);
       for (const m of bg.meteors) {
         const len = 90;
@@ -3018,7 +3019,7 @@ function drawBg(bg) {
       let hitX = false; let hitY = false;
       if (b.x < 0 || b.x + lw > w) { b.vx *= -1; b.x = Math.max(0, Math.min(w - lw, b.x)); hitX = true; }
       if (b.y < 0 || b.y + lh > h) { b.vy *= -1; b.y = Math.max(0, Math.min(h - lh, b.y)); hitY = true; }
-      if (hitX || hitY) b.c = (b.c + 1) % 5;
+      if (hitX || hitY) { b.c = (b.c + 1) % 5; if (bg.canvas.classList.contains('bg-layer')) ambSfx(hitX && hitY ? 'corner' : 'boing'); }
       if (hitX && hitY) b.flash = 1; // the corner!
       const COLS = [a0, a1, a2, [96, 220, 160], [255, 214, 90]];
       ctx.font = `900 ${Math.round(fs)}px 'Segoe UI', 'Pretendard', sans-serif`; ctx.textBaseline = 'top';
@@ -3031,10 +3032,12 @@ function drawBg(bg) {
       const p = bg.items[0];
       const ph = Math.max(20, h * 0.16); const pw = Math.max(3, w * 0.008); const m = Math.max(8, w * 0.03);
       p.x += p.vx; p.y += p.vy;
-      if (p.y < 4 || p.y > h - 4) p.vy *= -1;
+      if (p.y < 4 || p.y > h - 4) { p.vy *= -1; if (bg.canvas.classList.contains('bg-layer')) ambSfx('wall'); }
+      const wasVx = p.vx;
       p.l += (p.y - p.l) * 0.06; p.r += (p.y - p.r) * 0.06;
       if (p.x < m + pw && Math.abs(p.y - p.l) < ph / 2) { p.vx = Math.abs(p.vx); p.vy += (p.y - p.l) * 0.03; }
       if (p.x > w - m - pw && Math.abs(p.y - p.r) < ph / 2) { p.vx = -Math.abs(p.vx); p.vy += (p.y - p.r) * 0.03; }
+      if (Math.sign(wasVx) !== Math.sign(p.vx) && bg.canvas.classList.contains('bg-layer')) ambSfx('paddle'); // only when the ball really turns
       if (p.x < 0 || p.x > w) { if (p.x < 0) p.sr++; else p.sl++; p.x = w / 2; p.y = h / 2; p.vy = (Math.random() - 0.5) * 3; } // a point!
       p.vy = Math.max(-4, Math.min(4, p.vy));
       ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h); ctx.stroke(); ctx.setLineDash([]);
@@ -3170,15 +3173,8 @@ function balloonSprite(col) {
  * 40 s loops whose end is crossfaded into their start, so they repeat without a seam). Changing the
  * background crossfades to its sound; 뇌우 adds a distant thunder roll after each flash.
  */
-const BG_AMBIENT = {
-  stars: 'night', shooting: 'night', constellation: 'woods', lanterns: 'woods', aurora: 'wind', sunset: 'evening',
-  rain: 'rain', thunder: 'rain', snow: 'winter', pond: 'drops', waves: 'ocean',
-  grid: 'space', warp: 'space', tunnel: 'space', blackhole: 'void',
-  network: 'hum', circuit: 'hum', code: 'hum', dna: 'hum', lavalamp: 'room', life: 'room',
-  fireflies: 'summer', sakura: 'spring', balloonsky: 'park', bokeh: 'city',
-  jellyfish: 'underwater', deepsea: 'deepsea', aquarium: 'bubbles',
-  nightfire: 'fireworks', campfire: 'campfire', bounce: 'vinyl', pong: 'vinyl',
-};
+// every background has its own loop (ambient/<background>.ogg); 뇌우 plays the rain and adds thunder on top
+const BG_AMBIENT = new Proxy({}, { get: (_t, k) => (k === 'thunder' ? 'rain' : k === 'none' ? '' : k) });
 const AMB = { ctx: null, master: null, cur: '', voice: null, buffers: new Map(), want: '' };
 const ambVolume = () => Math.max(0, Math.min(1, Number(S.settings.bgMusicVolume ?? 0.25)));
 function ambContext() {
@@ -3239,6 +3235,62 @@ async function updateAmbient() {
   gain.gain.setTargetAtTime(1, ctx.currentTime, 0.6);
   AMB.voice = { src, gain };
 }
+/**
+ * Little sounds that follow what a background does: the logo bonking a wall, a pong rally, a shooting star.
+ * Synthesised on the spot, at the background-music volume, kept soft.
+ */
+function ambSfx(kind) {
+  if (!AMB.ctx || !(ambVolume() > 0) || AMB.ctx.state !== 'running') return;
+  const ctx = AMB.ctx;
+  const t0 = ctx.currentTime + 0.005;
+  const out = ctx.createGain();
+  out.connect(AMB.master);
+  const tone = (type, f0, f1, dur, peak, at = 0) => {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t0 + at);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t0 + at + dur);
+    g.gain.setValueAtTime(0.0001, t0 + at);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + at + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + dur);
+    o.connect(g).connect(out);
+    o.start(t0 + at);
+    o.stop(t0 + at + dur + 0.02);
+  };
+  if (kind === 'boing') { // a soft rubbery bonk, pitch falling
+    const f = 420 + Math.random() * 160;
+    tone('sine', f, f * 0.5, 0.22, 0.22);
+    tone('triangle', f * 2, f, 0.12, 0.05);
+  } else if (kind === 'corner') { // the corner! a little two-note chime
+    tone('sine', 1047, 1047, 0.5, 0.16);
+    tone('sine', 1568, 1568, 0.7, 0.14, 0.09);
+    tone('triangle', 2093, 2093, 0.4, 0.04, 0.09);
+  } else if (kind === 'paddle') { // retro pong blip
+    tone('square', 494, 494, 0.07, 0.07);
+  } else if (kind === 'wall') {
+    tone('square', 247, 247, 0.06, 0.05);
+  } else if (kind === 'meteor') { // a soft whoosh and a high glint
+    const len = 0.9;
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * len), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.sin((Math.PI * i) / d.length);
+    const n = ctx.createBufferSource();
+    n.buffer = buf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 3;
+    bp.frequency.setValueAtTime(2400, t0);
+    bp.frequency.exponentialRampToValueAtTime(700, t0 + len);
+    const g = ctx.createGain();
+    g.gain.value = 0.09;
+    n.connect(bp).connect(g).connect(out);
+    n.start(t0);
+    tone('sine', 2637, 2637, 0.6, 0.05, 0.05);
+  }
+  setTimeout(() => out.disconnect(), 2000);
+}
+
 /** 뇌우: a distant roll a moment after the flash (light travels faster than sound). */
 async function ambThunder() {
   if (AMB.cur !== 'rain' || S.settings.bgAnim !== 'thunder' || !AMB.ctx) return;
@@ -7309,7 +7361,7 @@ function taskRowHtml(k) {
           ? choiceBubbleHtml()
           : `<span class="tk ${k.status}">${TASK_TEXT[k.status]}</span>${time}`}</span>
       </span>
-      <span class="item-actions"><button class="icon-btn go-prompt" data-a="goto" title="이 작업의 프롬프트로 이동" hidden>${icon('arrowUp')}</button>${k.status === 'attention' ? `<button class="icon-btn" data-a="unflag" title="확인 필요 해제">${icon('check')}</button>` : ''}${live ? '' : `<button class="icon-btn danger" data-a="forget" title="목록에서 지우기">${icon('x')}</button>`}</span>
+      <span class="item-actions"><button class="icon-btn go-prompt" data-a="goto" title="이 작업의 프롬프트로 이동"${JUMP_OK.get(k.id) ? '' : ' hidden'}>${icon('arrowUp')}</button>${k.status === 'attention' ? `<button class="icon-btn" data-a="unflag" title="확인 필요 해제">${icon('check')}</button>` : ''}${live ? '' : `<button class="icon-btn danger" data-a="forget" title="목록에서 지우기">${icon('x')}</button>`}</span>
     </div>${live ? subagentRowsHtml(tabById(k.tabId)) : ''}`;
 }
 
@@ -7520,7 +7572,11 @@ function openProjectIconPicker(p) {
     projects.hoverTask = row;
     const task = taskById(row.dataset.task);
     const btn = row.querySelector('[data-a="goto"]');
-    if (btn && task) canJumpToTask(task).then((ok) => { if (btn.isConnected) btn.hidden = !ok; });
+    if (task) canJumpToTask(task).then((ok) => {
+      JUMP_OK.set(task.id, ok); // remembered: the sidebar re-renders often, and a re-render must not hide it again
+      const cur = projects.querySelector('[data-task="' + task.id + '"] [data-a="goto"]') || btn;
+      if (cur) cur.hidden = !ok;
+    });
   });
   projects.addEventListener('mouseleave', () => { projects.hoverTask = null; });
   projects.addEventListener('click', (e) => {
@@ -8101,6 +8157,10 @@ async function refineTask(tab, task) {
  * Offered only while it can work: the tab is open, it's the same conversation (/clear starts a new one),
  * and nothing was compacted since (a compact drops the earlier transcript from the screen).
  */
+/** The open tab a task belongs to: its own tab, or (after a restart) the tab now showing its conversation. */
+const taskTab = (task) => (task.tabId && tabById(task.tabId)) || (task.sessionId && S.tabs.find((t) => t.alive && t.sessionId === task.sessionId)) || null;
+/** taskId → can its prompt be jumped to (checked on hover, kept so re-renders show the button at once) */
+const JUMP_OK = new Map();
 const promptNeedle = (task) => String(task.text || '').replace(/\s+/g, '').slice(0, 24);
 const flatText = (t) => t.replace(/\s+/g, '');
 
@@ -8122,7 +8182,7 @@ function visiblePromptRow(tab, needle) {
 
 /** Normal screen: the scrollback line of the prompt (searched from the bottom), or null. */
 function findTaskPrompt(task) {
-  const tab = task.tabId && tabById(task.tabId);
+  const tab = taskTab(task);
   if (!tab || !tab.alive || !tab.term) return null;
   const buf = tab.term.buffer.active;
   if (buf.type !== 'normal') return null;
@@ -8141,7 +8201,7 @@ function findTaskPrompt(task) {
 
 /** Can the jump button be offered for this task? */
 async function canJumpToTask(task) {
-  const tab = task.tabId && tabById(task.tabId);
+  const tab = taskTab(task);
   if (!tab || !tab.alive || !tab.term || promptNeedle(task).length < 4) return false;
   const buf = tab.term.buffer.active;
   if (buf.type === 'normal') return !!findTaskPrompt(task);
@@ -8166,8 +8226,8 @@ function markPromptRow(tab, row) {
 }
 
 async function gotoTaskPrompt(task) {
-  const tab = task.tabId && tabById(task.tabId);
-  const fail = () => { toast('프롬프트가 더 이상 화면 기록에 없습니다'); renderProjects(); };
+  const tab = taskTab(task);
+  const fail = () => { JUMP_OK.set(task.id, false); toast('프롬프트가 더 이상 화면 기록에 없습니다'); renderProjects(); };
   if (!tab || !tab.alive) return fail();
   activate(tab.id);
   const needle = promptNeedle(task);
@@ -8194,7 +8254,7 @@ async function gotoTaskPrompt(task) {
 
 /** "확인 필요" that never cleared: look at the screen again and put the task where it really is. */
 function unflagTask(task) {
-  const tab = task.tabId && tabById(task.tabId);
+  const tab = taskTab(task);
   tab && (tab.awaitChoice = false);
   if (tab && tab.taskId === task.id && tab.status === 'attention') {
     if (screenSaysWorking(tab)) { tab.armed = true; tab.armedAt = Date.now(); setStatus(tab, 'working'); }

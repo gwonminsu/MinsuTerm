@@ -109,37 +109,46 @@ Every clip below is **CC0 (public domain)** on freesound.org — free to use and
 
 ## Background ambience (배경 음악): all CC0, from Freesound
 
-Cut into seamless 40-second loops (the end crossfaded into the start) and level-matched.
+Each background has its own loop: cut into a seamless loop (whole bars for rhythmic music, the end crossfaded into the start otherwise) and level-matched. The small sounds for the bouncing logo, pong and shooting stars are synthesised in the app.
 
-| File | Freesound sound |
+| Background | Freesound sound |
 |---|---|
-| night | [Night Crickets Back Porch.aiff](https://freesound.org/s/333221/) |
-| woods | [Night Woods](https://freesound.org/s/532301/) |
-| evening | [forest with small river birds and nature field recording](https://freesound.org/s/577623/) |
-| wind | [Soft Tonal Wind_01](https://freesound.org/s/397091/) |
-| rain | [Rain Slowly Passing TREATED LOOP_Edgewater_06192020.wav](https://freesound.org/s/525046/) |
-| winter | [Winter night - frozen trees](https://freesound.org/s/370266/) |
-| space | [spacedrone3.wav](https://freesound.org/s/20705/) |
-| void | [spacedrone1.wav](https://freesound.org/s/20703/) |
-| hum | [Computer Hum Noise](https://freesound.org/s/211994/) |
-| room | [Room_Tone_Ambience_Medium_Control_Low_Hum.wav](https://freesound.org/s/144046/) |
-| summer | [Lake at night 1.aif](https://freesound.org/s/412942/) |
-| spring | [Birds In Spring (Scotland)](https://freesound.org/s/463903/) |
-| city | [Ambience City Quiet Night Air Tone](https://freesound.org/s/427841/) |
-| ocean | [Seawash (calm) ](https://freesound.org/s/176617/) |
-| underwater | [Underwater [Loop] AMB.wav](https://freesound.org/s/366159/) |
+| stars | [Crickets At Night - Raw sound](https://freesound.org/s/522299/) |
+| shooting | [Night Woods](https://freesound.org/s/532301/) |
+| sunset | [forest with small river birds and nature field recording](https://freesound.org/s/577623/) |
+| rain / thunder | [Rain Slowly Passing TREATED LOOP_Edgewater_06192020.wav](https://freesound.org/s/525046/) |
+| snow | [Winter night - frozen trees](https://freesound.org/s/370266/) |
+| fireflies | [Forest at night, crickets, cicadas and insects in the Sian Ka'an Biosphere Reserve](https://freesound.org/s/328293/) |
+| sakura | [Birds In Spring (Scotland)](https://freesound.org/s/463903/) |
+| waves | [Seawash (calm) ](https://freesound.org/s/176617/) |
+| jellyfish | [Underwater [Loop] AMB.wav](https://freesound.org/s/366159/) |
 | deepsea | [Deep Sea Ambience](https://freesound.org/s/193822/) |
-| bubbles | [WATRUndwtr_Underwater Bubble Flow Loop_KOLBYR_FREE SOUNDS](https://freesound.org/s/852478/) |
-| fireworks | [Fireworks_Distant.WAV](https://freesound.org/s/552164/) |
-| drops | [Water drops](https://freesound.org/s/181890/) |
-| vinyl | [Vinyl Dust Loop Static 01](https://freesound.org/s/222684/) |
-| park | [Park ambience - mostly birds](https://freesound.org/s/274175/) |
+| aquarium | [WATRUndwtr_Underwater Bubble Flow Loop_KOLBYR_FREE SOUNDS](https://freesound.org/s/852478/) |
+| pond | [Water drops](https://freesound.org/s/181890/) |
+| nightfire | [Fireworks_Distant.WAV](https://freesound.org/s/552164/) |
+| balloonsky | [Park ambience - mostly birds](https://freesound.org/s/274175/) |
+| blackhole | [spacedrone1.wav](https://freesound.org/s/20703/) |
+| aurora | [Ambient F Sharp Minor Ethereal Choir Pad 1](https://freesound.org/s/808032/) |
+| constellation | [Space Bar Ambient](https://freesound.org/s/568612/) |
+| grid | [80s synthWAVE Vibe Loop](https://freesound.org/s/386941/) |
+| network | [Sci-Fi Survival Dreamscape](https://freesound.org/s/468407/) |
+| bokeh | [Blade Runner Ambient](https://freesound.org/s/416070/) |
+| warp | [Space Arp F Chords.wav](https://freesound.org/s/473996/) |
+| tunnel | [Cosmic Glow](https://freesound.org/s/391438/) |
+| lanterns | [Lake Night.wav](https://freesound.org/s/744098/) |
+| lavalamp | [lofi.wav](https://freesound.org/s/587897/) |
+| dna | [Sci-fi Ambient Drone.wav](https://freesound.org/s/534018/) |
+| code | [Scanner Reel.wav](https://freesound.org/s/466445/) |
+| circuit | [Circuit Synthwave](https://freesound.org/s/460357/) |
+| life | [Lotus music.wav](https://freesound.org/s/507957/) |
+| bounce | [Cute Background Loop Song Thing](https://freesound.org/s/655515/) |
+| pong | [Sequence - 8 bit music loop](https://freesound.org/s/412343/) |
 | campfire (fire) | [Campfire 02](https://freesound.org/s/729396/) |
 | campfire (people) | [180615 Party small outside voices kids laughing, chimney swifts.flac](https://freesound.org/s/572414/) |
 | thunder1 | [Distant Thunder 4](https://freesound.org/s/581125/) |
 | thunder2 | [Distant Thunder Clap_Gentle.wav](https://freesound.org/s/347562/) |
-| thunder3 | Distant Thunder 4, slowed and deepened (https://freesound.org/s/581125/) |
+| thunder3 | Distant Thunder 4, slowed and deepened ([581125](https://freesound.org/s/581125/)) |
 
 ## Background video
 
-- 캠프파이어 (campfire.webm): [Fire آتش 07](https://commons.wikimedia.org/wiki/File:Fire_%D8%A2%D8%AA%D8%B4_07.ogv) by Mostafameraji, CC0 (Wikimedia Commons). Looped and restyled as a soft painting.
+- 캠프파이어 (campfire.webm): [Fire آتش 07](https://commons.wikimedia.org/wiki/File:Fire_%D8%A2%D8%AA%D8%B4_07.ogv) by Mostafameraji, CC0 (Wikimedia Commons). Looped and repainted in the app's night palette.
