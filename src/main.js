@@ -87,6 +87,7 @@ const DEFAULT_STORE = {
     typingFxIntensity: 1, // 0.3 .. 2
     bgAnim: 'none', // none | stars | aurora | rain | snow | grid | network
     bgAnimLevel: 0.6,
+    bgMusicVolume: 0.25, // 배경 음악
     celebrate: true,
     crt: false,
     bgImage: false, // a copy lives in the profile folder
@@ -922,6 +923,27 @@ function subagents(agent, cwd, id, since = 0) {
   return [...map.values()].slice(-12);
 }
 ipcMain.handle('agent:subagents', (_e, agent, cwd, id, since) => subagents(agent, cwd, id, since));
+
+/** Was a Claude conversation compacted at or after `since`? (its earlier screen history is gone then) */
+const compactCache = new Map();
+ipcMain.handle('agent:compactedSince', (_e, agent, cwd, id, since) => {
+  if (agent !== 'claude' || !UUID_RE.test(String(id || ''))) return false;
+  const file = path.join(claudeDirFor(cwd), `${id}.jsonl`);
+  try {
+    const mt = fs.statSync(file).mtimeMs;
+    let rec = compactCache.get(file);
+    if (!rec || rec.mt !== mt) {
+      const times = [];
+      for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+        if (!line.includes('compact_boundary')) continue;
+        try { const o = JSON.parse(line); if (o.subtype === 'compact_boundary') times.push(Date.parse(o.timestamp || '') || 0); } catch { /* partial line */ }
+      }
+      rec = { mt, times };
+      compactCache.set(file, rec);
+    }
+    return rec.times.some((t) => t >= since - 2000);
+  } catch { return false; }
+});
 
 ipcMain.handle('agent:turn', (_e, agent, cwd, id) => {
   const state = turnState(agent, cwd, id);

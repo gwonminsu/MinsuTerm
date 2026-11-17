@@ -381,6 +381,7 @@ function applyAppearance() {
   }
   document.body.classList.toggle('crt', !!st.crt);
   updateBgAnim();
+  updateAmbient();
   updateBgImage();
   scheduleCursor();
   S.tabs.forEach(updateTabEl);
@@ -467,6 +468,7 @@ const BG_KINDS = [
   ['warp', '워프 드라이브', '별빛이 길게 늘어지며 우주를 질주'],
   ['jellyfish', '해파리', '빛나는 해파리가 촉수를 흔들며 유영'],
   ['lanterns', '풍등', '따뜻한 등불이 일렁이며 밤하늘로 떠오름'],
+  ['campfire', '캠프파이어', '타닥타닥 타는 모닥불과 하늘로 튀어 오르는 불씨'],
   ['constellation', '별자리', '별들이 하나씩 이어져 별자리를 그렸다 사라짐'],
   ['lavalamp', '라바 램프', '말랑한 빛 덩어리가 천천히 오르내림'],
   ['dna', 'DNA 나선', '이중 나선이 천천히 회전'],
@@ -2386,7 +2388,7 @@ function createBg(canvas) {
     else if (k === 'blackhole') bg.items = Array.from({ length: Math.min(260, Math.round(60 * area) + 80) }, () => ({ r: 0.1 + R() * 0.9, a: R() * Math.PI * 2, z: R(), c: (R() * 3) | 0 }));
     else if (k === 'warp') bg.items = Array.from({ length: 160 }, () => ({ x: (R() - 0.5) * 2, y: (R() - 0.5) * 2, z: R(), pz: 0 }));
     else if (k === 'jellyfish') bg.items = Array.from({ length: Math.min(9, Math.round(0.25 * area) + 4) }, () => ({ x: R() * w, y: R() * h, s: (16 + R() * 26) * sc, ph: R() * 6, v: 0.15 + R() * 0.25, c: (R() * 3) | 0 }));
-    else if (k === 'lanterns') bg.items = Array.from({ length: Math.min(24, Math.round(0.6 * area) + 8) }, () => ({ x: R() * w, y: R() * h, v: (0.12 + R() * 0.3) * Math.max(0.5, sc), s: (5 + R() * 9) * sc, ph: R() * 6, sw: R() * 6 }));
+    else if (k === 'campfire') { bg.items = []; campfireVideo(); }
     else if (k === 'constellation') { bg.items = Array.from({ length: Math.round(30 * area) }, () => ({ x: R() * w, y: R() * h, z: R(), ph: R() * 6 })); bg.cons = []; }
     else if (k === 'lavalamp') bg.items = Array.from({ length: 7 }, (_, i) => ({ x: (0.15 + R() * 0.7) * w, y: R() * h, r: (50 + R() * 70) * sc, vy: (R() < 0.5 ? -1 : 1) * (0.15 + R() * 0.25) * Math.max(0.4, sc), ph: R() * 6, c: i % 3 }));
     else if (k === 'pond') { bg.items = []; bg.lilies = Array.from({ length: 3 }, () => ({ x: R() * w, y: R() * h, r: (14 + R() * 12) * sc, rot: R() * 6 })); }
@@ -2420,7 +2422,7 @@ function createBg(canvas) {
   bg.set = (kind) => {
     bg.kind = kind || 'none';
     // 뇌우 draws its own light-mode colours (a lightning flash must stay a flash, not get inverted into a dark flicker)
-    bg.canvas.classList.toggle('bg-own-light', bg.kind === 'thunder' || bg.kind === 'balloonsky');
+    bg.canvas.classList.toggle('bg-own-light', bg.kind === 'thunder' || bg.kind === 'balloonsky' || bg.kind === 'campfire');
     bg.seed();
     cancelAnimationFrame(bg.raf);
     bg.raf = 0;
@@ -2478,6 +2480,7 @@ function drawBg(bg) {
       ctx.fillStyle = cl; ctx.fillRect(0, 0, w, h * 0.45);
       // lightning timing: a double flicker, then the light dies away
       if (t >= st.next) {
+        if (bg.canvas.classList.contains('bg-layer')) ambThunder(); // the real background only, not a preview
         st.flash = t; st.next = t + 240 + Math.random() * 420;
         const R2 = Math.random;
         const make = (x, y, len, depth) => {
@@ -3043,6 +3046,16 @@ function drawBg(bg) {
       ctx.textAlign = 'start';
       break;
     }
+    case 'campfire': { // 캠프파이어: footage of a fire by the tents (CC0), painted into soft flat colours, looped without a seam
+      const v = campfireVideo();
+      if (v.readyState >= 2 && v.videoWidth) {
+        const k = Math.max(w / v.videoWidth, h / v.videoHeight);
+        const dw = v.videoWidth * k, dh = v.videoHeight * k;
+        ctx.drawImage(v, (w - dw) * 0.4, h - dh, dw, dh); // keep the fire (left of centre, low) in view
+      }
+      if (isLight()) { ctx.fillStyle = 'rgba(250,248,245,0.32)'; ctx.fillRect(0, 0, w, h); } // light mode: a lighter wash so dark text reads
+      break;
+    }
     case 'balloonsky': { // latex balloons drifting up on curly strings, near ones big and crisp, far ones small and hazy
       const L = isLight();
       const spr = bg.balloonSprites || (bg.balloonSprites = BALLOON_COLS.map((c) => balloonSprite(c)));
@@ -3077,6 +3090,22 @@ function drawBg(bg) {
     default:
       break;
   }
+}
+
+/* 캠프파이어: one looping, muted video shared by the background and its picker previews */
+let CAMPFIRE_VIDEO = null;
+function campfireVideo() {
+  if (!CAMPFIRE_VIDEO) {
+    const v = document.createElement('video');
+    v.src = 'ambient/campfire.webm';
+    v.muted = true;
+    v.loop = true;
+    v.playsInline = true;
+    v.preload = 'auto';
+    CAMPFIRE_VIDEO = v;
+  }
+  if (CAMPFIRE_VIDEO.paused) CAMPFIRE_VIDEO.play().catch(() => {});
+  return CAMPFIRE_VIDEO;
 }
 
 /* 풍선 하늘: one detailed latex balloon per colour, drawn once and reused at every size */
@@ -3132,6 +3161,95 @@ function balloonSprite(col) {
   c.lineTo(cx + r * 0.13, bot + r * 0.14); c.quadraticCurveTo(cx, bot + r * 0.09, cx - r * 0.13, bot + r * 0.14);
   c.closePath(); c.fill();
   return cv;
+}
+
+/*
+ * 배경 음악: a quiet ambience loop that fits the background (CC0 field recordings from Freesound, cut into
+ * 40 s loops whose end is crossfaded into their start, so they repeat without a seam). Changing the
+ * background crossfades to its sound; 뇌우 adds a distant thunder roll after each flash.
+ */
+const BG_AMBIENT = {
+  stars: 'night', shooting: 'night', constellation: 'woods', lanterns: 'woods', aurora: 'wind', sunset: 'evening',
+  rain: 'rain', thunder: 'rain', snow: 'winter', pond: 'drops', waves: 'ocean',
+  grid: 'space', warp: 'space', tunnel: 'space', blackhole: 'void',
+  network: 'hum', circuit: 'hum', code: 'hum', dna: 'hum', lavalamp: 'room', life: 'room',
+  fireflies: 'summer', sakura: 'spring', balloonsky: 'park', bokeh: 'city',
+  jellyfish: 'underwater', deepsea: 'deepsea', aquarium: 'bubbles',
+  nightfire: 'fireworks', campfire: 'campfire', bounce: 'vinyl', pong: 'vinyl',
+};
+const AMB = { ctx: null, master: null, cur: '', voice: null, buffers: new Map(), want: '' };
+const ambVolume = () => Math.max(0, Math.min(1, Number(S.settings.bgMusicVolume ?? 0.25)));
+function ambContext() {
+  if (!AMB.ctx) {
+    AMB.ctx = new AudioContext();
+    AMB.master = AMB.ctx.createGain();
+    AMB.master.gain.value = 0;
+    AMB.master.connect(AMB.ctx.destination);
+    const wake = () => { if (AMB.ctx.state === 'suspended') AMB.ctx.resume(); };
+    window.addEventListener('pointerdown', wake, true);
+    window.addEventListener('keydown', wake, true);
+  }
+  if (AMB.ctx.state === 'suspended') AMB.ctx.resume().catch(() => {});
+  return AMB.ctx;
+}
+function ambBuffer(name) {
+  if (!AMB.buffers.has(name)) {
+    AMB.buffers.set(name, fetch('ambient/' + name + '.ogg').then((r) => r.arrayBuffer()).then((b) => ambContext().decodeAudioData(b)).catch(() => { AMB.buffers.delete(name); return null; }));
+  }
+  return AMB.buffers.get(name);
+}
+/** Volume slider look: 0 % reads as off (dimmed track, crossed-out speaker). */
+function syncVolumeRange(range, v) {
+  if (!range) return;
+  const off = !(v > 0);
+  range.classList.toggle('muted', off);
+  const b = range.querySelector('.vol-mute');
+  if (b) { b.innerHTML = icon(off ? 'volumeX' : 'volume'); b.title = off ? '음소거 해제' : '음소거'; }
+}
+async function updateAmbient() {
+  const kind = S.settings.bgAnim || 'none';
+  const vol = ambVolume();
+  const want = vol > 0 && kind !== 'none' ? BG_AMBIENT[kind] || '' : '';
+  AMB.want = want;
+  if (!want && !AMB.ctx) return;
+  const ctx = ambContext();
+  AMB.master.gain.setTargetAtTime(vol, ctx.currentTime, 0.25);
+  if (want === AMB.cur) return;
+  // fade the old sound out
+  const old = AMB.voice;
+  if (old) {
+    old.gain.gain.cancelScheduledValues(ctx.currentTime);
+    old.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.4);
+    setTimeout(() => { try { old.src.stop(); } catch { /* already stopped */ } old.gain.disconnect(); }, 2500);
+  }
+  AMB.voice = null;
+  AMB.cur = want;
+  if (!want) return;
+  const buf = await ambBuffer(want);
+  if (!buf || AMB.want !== want || AMB.cur !== want || AMB.voice) return; // changed again while loading
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  const gain = ctx.createGain();
+  gain.gain.value = 0;
+  src.connect(gain).connect(AMB.master);
+  src.start(ctx.currentTime, Math.random() * buf.duration); // not always from the same second
+  gain.gain.setTargetAtTime(1, ctx.currentTime, 0.6);
+  AMB.voice = { src, gain };
+}
+/** 뇌우: a distant roll a moment after the flash (light travels faster than sound). */
+async function ambThunder() {
+  if (AMB.cur !== 'rain' || S.settings.bgAnim !== 'thunder' || !AMB.ctx) return;
+  const buf = await ambBuffer('thunder' + (1 + Math.floor(Math.random() * 3)));
+  if (!buf) return;
+  const ctx = AMB.ctx;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const gain = ctx.createGain();
+  gain.gain.value = 0.85 + Math.random() * 0.25;
+  src.connect(gain).connect(AMB.master);
+  src.start(ctx.currentTime + 0.4 + Math.random() * 1.4);
+  src.onended = () => gain.disconnect();
 }
 
 let BG = null;
@@ -6561,11 +6679,37 @@ function previewPrompt(kind, el) {
   return () => {};
 }
 
+/*
+ * Agents redraw a frame as "hide cursor … draw … show cursor". In a long conversation one frame is big and
+ * reaches us in several chunks; drawing a chunk that ends with the cursor still hidden shows a half-drawn
+ * frame with the cursor gone, so the cursor flickers. Hold such a chunk until the frame closes (the cursor
+ * is shown again) — at most 40 ms, so an app that keeps the cursor hidden is never held up for long.
+ */
+function writeFramed(tab, data) {
+  const buf = (tab.frameHeld || '') + data;
+  const open = buf.lastIndexOf('\x1b[?25l') > buf.lastIndexOf('\x1b[?25h');
+  if (open && buf.length < 1_000_000) {
+    tab.frameHeld = buf;
+    if (!tab.frameTimer) tab.frameTimer = setTimeout(() => flushFrame(tab), 40);
+    return;
+  }
+  clearTimeout(tab.frameTimer);
+  tab.frameTimer = 0;
+  tab.frameHeld = '';
+  tab.term.write(buf);
+}
+function flushFrame(tab) {
+  tab.frameTimer = 0;
+  const buf = tab.frameHeld || '';
+  tab.frameHeld = '';
+  if (buf) tab.term.write(buf);
+}
+
 window.mt.pty.onData((id, data) => {
   const tab = tabById(id);
   if (!tab) return;
   data = filterOutput(tab, data);
-  tab.term.write(data);
+  writeFramed(tab, data);
   const now = Date.now();
   tab.lastOut = now;
   if (tab.status === 'starting' && !tab.launch) setStatus(tab, 'shell');
@@ -6644,7 +6788,7 @@ function onAgentNotify(tab, text) {
   if (!tab.agent) return;
   const msg = cleanOscTitle(text) || text || '';
   const asks = /permission|approv|allow|confirm|권한|허용|승인|확인/i.test(msg);
-  if (tab.status === 'working' && !asks) {
+  if ((tab.status === 'working' || (tab.status === 'attention' && !tab.awaitChoice)) && !asks) {
     finishWork(tab, Math.max(Date.now(), tab.lastOut) - tab.workStart);
     return;
   }
@@ -6757,7 +6901,7 @@ setInterval(() => {
 setInterval(() => {
   const now = Date.now();
   for (const tab of S.tabs) {
-    if (!tab.agent || !tab.alive || tab.status === 'working' || tab.status === 'attention') continue;
+    if (!tab.agent || !tab.alive || tab.status === 'working' || (tab.status === 'attention' && tab.awaitChoice)) continue;
     if (now - tab.lastOut > 4000) continue; // a working agent animates its spinner constantly
     const b = tab.term.buffer.active;
     if (now < (tab.bannerHold || 0) || !screenSaysWorking(tab)) { tab.bannerSeen = 0; continue; }
@@ -7163,7 +7307,7 @@ function taskRowHtml(k) {
           ? choiceBubbleHtml()
           : `<span class="tk ${k.status}">${TASK_TEXT[k.status]}</span>${time}`}</span>
       </span>
-      ${live ? '' : `<span class="item-actions"><button class="icon-btn danger" data-a="forget" title="목록에서 지우기">${icon('x')}</button></span>`}
+      <span class="item-actions"><button class="icon-btn go-prompt" data-a="goto" title="이 작업의 프롬프트로 이동" hidden>${icon('arrowUp')}</button>${k.status === 'attention' ? `<button class="icon-btn" data-a="unflag" title="확인 필요 해제">${icon('check')}</button>` : ''}${live ? '' : `<button class="icon-btn danger" data-a="forget" title="목록에서 지우기">${icon('x')}</button>`}</span>
     </div>${live ? subagentRowsHtml(tabById(k.tabId)) : ''}`;
 }
 
@@ -7368,6 +7512,15 @@ function openProjectIconPicker(p) {
     const list = S.sessionCache.get(normP(row.dataset.cwd))?.list || [];
     return list.find((s) => s.id === row.dataset.s) || { id: row.dataset.s, agent: row.dataset.agent, title: '' };
   };
+  projects.addEventListener('mouseover', (e) => {
+    const row = e.target.closest('[data-task]');
+    if (!row || row === projects.hoverTask) return;
+    projects.hoverTask = row;
+    const task = taskById(row.dataset.task);
+    const btn = row.querySelector('[data-a="goto"]');
+    if (btn && task) canJumpToTask(task).then((ok) => { if (btn.isConnected) btn.hidden = !ok; });
+  });
+  projects.addEventListener('mouseleave', () => { projects.hoverTask = null; });
   projects.addEventListener('click', (e) => {
     const sec = e.target.closest('[data-sec]');
     if (sec) {
@@ -7386,6 +7539,8 @@ function openProjectIconPicker(p) {
       const task = taskById(taskRow.dataset.task);
       if (!task) return;
       if (e.target.closest('[data-a="forget"]')) { S.tasks = S.tasks.filter((k) => k !== task); saveTasks(); return renderProjects(); }
+      if (e.target.closest('[data-a="goto"]')) return gotoTaskPrompt(task);
+      if (e.target.closest('[data-a="unflag"]')) return unflagTask(task);
       return openTask(task);
     }
     const more = e.target.closest('[data-more]');
@@ -7934,6 +8089,123 @@ async function refineTask(tab, task) {
   if (real) task.text = real.slice(0, 200);
   saveTasks();
   renderSessions();
+}
+
+/*
+ * Jump to the prompt that started a task.
+ * - Normal screen (shells, Codex): the prompt line is in xterm's scrollback; scroll to it.
+ * - Claude Code draws full-screen (alternate screen): there is no scrollback, Claude scrolls its own
+ *   transcript with the mouse wheel. Wheel it up until the prompt shows, then mark it.
+ * Offered only while it can work: the tab is open, it's the same conversation (/clear starts a new one),
+ * and nothing was compacted since (a compact drops the earlier transcript from the screen).
+ */
+const promptNeedle = (task) => String(task.text || '').replace(/\s+/g, '').slice(0, 24);
+const flatText = (t) => t.replace(/\s+/g, '');
+
+/** Row of the prompt within the rows now on screen, or -1. */
+function visiblePromptRow(tab, needle) {
+  const buf = tab.term.buffer.active;
+  const top = buf.viewportY;
+  const lim = tab.term.rows - (buf.type === 'alternate' ? 3 : 0); // leave Claude's own input box out
+  for (let r = 0; r < lim; r++) {
+    const l = buf.getLine(top + r);
+    if (!l) continue;
+    let t = l.translateToString(true);
+    const n = buf.getLine(top + r + 1);
+    if (n && n.isWrapped) t += n.translateToString(true);
+    if (flatText(t).includes(needle)) return r;
+  }
+  return -1;
+}
+
+/** Normal screen: the scrollback line of the prompt (searched from the bottom), or null. */
+function findTaskPrompt(task) {
+  const tab = task.tabId && tabById(task.tabId);
+  if (!tab || !tab.alive || !tab.term) return null;
+  const buf = tab.term.buffer.active;
+  if (buf.type !== 'normal') return null;
+  const needle = promptNeedle(task);
+  if (needle.length < 4) return null;
+  const bottom = buf.baseY + buf.cursorY;
+  const lineText = (i) => { const l = buf.getLine(i); return l ? l.translateToString(true) : ''; };
+  for (let i = buf.length - 1; i >= 0; i--) {
+    if (task.status !== 'done' && task.status !== 'stopped' && i >= bottom - 1) continue; // the live input line
+    let joined = lineText(i);
+    for (let j = 1; j <= 3 && i + j < buf.length && buf.getLine(i + j) && buf.getLine(i + j).isWrapped; j++) joined += lineText(i + j);
+    if (flatText(joined).includes(needle)) return { tab, line: i };
+  }
+  return null;
+}
+
+/** Can the jump button be offered for this task? */
+async function canJumpToTask(task) {
+  const tab = task.tabId && tabById(task.tabId);
+  if (!tab || !tab.alive || !tab.term || promptNeedle(task).length < 4) return false;
+  const buf = tab.term.buffer.active;
+  if (buf.type === 'normal') return !!findTaskPrompt(task);
+  if (visiblePromptRow(tab, promptNeedle(task)) >= 0) return true;
+  if (tab.agent !== 'claude' || tab.term.modes.mouseTrackingMode === 'none') return false;
+  if (task.sessionId && tab.sessionId && task.sessionId !== tab.sessionId) return false; // /clear → another conversation
+  const sid = tab.sessionId || task.sessionId;
+  if (!sid) return false;
+  try { return !(await window.mt.agent.compactedSince(tab.agent, tab.cwd, sid, task.start)); } catch { return false; }
+}
+
+function markPromptRow(tab, row) {
+  const screen = tab.host.querySelector('.xterm-screen');
+  if (!screen) return;
+  const rowH = screen.clientHeight / tab.term.rows;
+  const mark = document.createElement('div');
+  mark.className = 'prompt-jump-mark';
+  mark.style.top = row * rowH + 'px';
+  mark.style.height = rowH + 'px';
+  screen.appendChild(mark);
+  setTimeout(() => mark.remove(), 1800);
+}
+
+async function gotoTaskPrompt(task) {
+  const tab = task.tabId && tabById(task.tabId);
+  const fail = () => { toast('프롬프트가 더 이상 화면 기록에 없습니다'); renderProjects(); };
+  if (!tab || !tab.alive) return fail();
+  activate(tab.id);
+  const needle = promptNeedle(task);
+  const buf = tab.term.buffer.active;
+  if (buf.type === 'normal') {
+    const hit = findTaskPrompt(task);
+    if (!hit) return fail();
+    tab.term.scrollToLine(Math.max(0, hit.line - 2));
+    return requestAnimationFrame(() => markPromptRow(tab, hit.line - tab.term.buffer.active.viewportY));
+  }
+  // full-screen agent: wheel its transcript up (then back down) until the prompt is on screen
+  if (tab.term.modes.mouseTrackingMode === 'none') return fail();
+  const col = Math.max(1, Math.floor(tab.term.cols / 2)), row = Math.max(1, Math.floor(tab.term.rows / 3));
+  const wheel = (up) => window.mt.pty.write(tab.id, '\x1b[<' + (up ? 64 : 65) + ';' + col + ';' + row + 'M');
+  const settle = () => new Promise((r) => setTimeout(r, 70));
+  let found = visiblePromptRow(tab, needle);
+  for (let i = 0; found < 0 && i < 160; i++) { wheel(true); wheel(true); await settle(); found = visiblePromptRow(tab, needle); }
+  for (let i = 0; found < 0 && i < 320; i++) { wheel(false); wheel(false); await settle(); found = visiblePromptRow(tab, needle); }
+  if (found < 0) return fail();
+  // bring it a little below the top so the answer under it shows too
+  if (found < 2) { wheel(false); await settle(); found = Math.max(0, visiblePromptRow(tab, needle)); }
+  markPromptRow(tab, found);
+}
+
+/** "확인 필요" that never cleared: look at the screen again and put the task where it really is. */
+function unflagTask(task) {
+  const tab = task.tabId && tabById(task.tabId);
+  tab && (tab.awaitChoice = false);
+  if (tab && tab.taskId === task.id && tab.status === 'attention') {
+    if (screenSaysWorking(tab)) { tab.armed = true; tab.armedAt = Date.now(); setStatus(tab, 'working'); }
+    else finishWork(tab, Math.max(Date.now(), tab.lastOut) - (tab.workStart || task.start));
+    if (tab.status === 'attention') setStatus(tab, 'ready'); // finishWork may decline (it still looks busy)
+    if (task.status === 'attention' && tab.status !== 'working') { task.status = 'done'; task.end = task.end || Date.now(); saveTasks(); }
+  } else if (task.status === 'attention') {
+    task.status = 'done';
+    task.end = task.end || Date.now();
+    saveTasks();
+  }
+  renderSessions();
+  renderProjects();
 }
 
 function openTask(task) {
@@ -8620,7 +8892,9 @@ function openSettings() {
       <div class="field"><div class="field-label"><b>배경 애니메이션</b><span>터미널 뒤에서 은은하게 움직임</span></div><div class="ctl-row">${pk('bgAnim')}${subBtn('bgAnim')}</div></div>
       ${subBox('bgAnim', `
         <div class="field" data-dep="bgAnim"><div class="field-label"><b>배경 밝기</b></div>
-          <div class="range"><input type="range" min="0.15" max="1" step="0.05" data-k="bgAnimLevel" value="${st.bgAnimLevel ?? 0.6}"><span class="range-val">${Math.round((st.bgAnimLevel ?? 0.6) * 100)}%</span></div></div>`)}
+          <div class="range"><input type="range" min="0.15" max="1" step="0.05" data-k="bgAnimLevel" value="${st.bgAnimLevel ?? 0.6}"><span class="range-val">${Math.round((st.bgAnimLevel ?? 0.6) * 100)}%</span></div></div>
+        <div class="field" data-dep="bgAnim"><div class="field-label"><b>배경 음악</b><span>배경에 어울리는 잔잔한 소리 · 0%면 꺼짐</span></div>
+          <div class="range vol-range${(st.bgMusicVolume ?? 0.25) > 0 ? '' : ' muted'}"><button type="button" class="icon-btn vol-mute" data-mute="bgMusicVolume" title="음소거">${icon((st.bgMusicVolume ?? 0.25) > 0 ? 'volume' : 'volumeX')}</button><input type="range" min="0" max="1" step="0.05" data-k="bgMusicVolume" value="${st.bgMusicVolume ?? 0.25}"><span class="range-val">${Math.round((st.bgMusicVolume ?? 0.25) * 100)}%</span></div></div>`)}
       <div class="field"><div class="field-label"><b>배경 이미지</b><span>원하는 그림을 터미널 뒤에 깔기</span></div>
         <div class="ctl-row"><div class="img-pick"><span class="img-thumb"></span><button type="button" class="btn small" data-img="pick">${icon('folderOpen')}선택</button><button type="button" class="btn small" data-img="clear" ${st.bgImage ? '' : 'disabled'}>제거</button></div>${subBtn('bgImage')}</div></div>
       ${subBox('bgImage', `
@@ -8798,6 +9072,18 @@ function openSettings() {
     key: 'typingSound', items: SOUND_KINDS, preview: previewSound,
     onPick: (v) => { depToggle('typingSound', v); playKeySound(v, false, true); applySettings(); },
   });
+  body.querySelectorAll('[data-mute]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const k = btn.dataset.mute;
+      const input = btn.parentElement.querySelector('input[type=range]');
+      const cur = Number(S.settings[k] ?? input.value) || 0;
+      // mute → 0 (remember the level); unmute → back to it
+      const next = cur > 0 ? 0 : (Number(S.settings[k + 'Prev']) || 0.25);
+      saveSettings(cur > 0 ? { [k]: 0, [k + 'Prev']: cur } : { [k]: next });
+      input.value = String(next);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  });
   body.querySelectorAll('[data-k]').forEach((el) => {
     el.addEventListener('keydown', (e) => e.stopPropagation());
     const commit = () => {
@@ -8811,7 +9097,8 @@ function openSettings() {
         applySettings();
         return;
       }
-      if (k === 'bgAnimLevel' || k === 'bgImageDim' || k === 'typingVolume') el.parentElement.querySelector('.range-val').textContent = `${Math.round(v * 100)}%`;
+      if (k === 'bgAnimLevel' || k === 'bgImageDim' || k === 'typingVolume' || k === 'bgMusicVolume') el.parentElement.querySelector('.range-val').textContent = `${Math.round(v * 100)}%`;
+      if (k === 'bgMusicVolume') { S.settings.bgMusicVolume = v; updateAmbient(); syncVolumeRange(el.parentElement, v); }
       if (k === 'bgImageBlur') el.parentElement.querySelector('.range-val').textContent = `${v}px`;
       if (k === 'typingVolume') { S.settings.typingVolume = v; playKeySound(S.settings.typingSound, false, true); }
       if (k === 'workGlow' || k === 'celebrate') body.querySelector(`[data-dep="${k}"]`)?.classList.toggle('disabled', !v);

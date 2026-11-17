@@ -106,3 +106,40 @@ Every clip below is **CC0 (public domain)** on freesound.org — free to use and
 
 ## 오케스트라 튜닝 (orch) — Freesound, CC0
 - 373908 (violin pizzicato) · 257996 (cello) · 372813 (cello spiccato) · 10662 (violin note) · 570804 (orchestra hit)
+
+## Background ambience (배경 음악): all CC0, from Freesound
+
+Cut into seamless 40-second loops (the end crossfaded into the start) and level-matched.
+
+| File | Freesound sound |
+|---|---|
+| night | [Night Crickets Back Porch.aiff](https://freesound.org/s/333221/) |
+| woods | [Night Woods](https://freesound.org/s/532301/) |
+| evening | [forest with small river birds and nature field recording](https://freesound.org/s/577623/) |
+| wind | [Soft Tonal Wind_01](https://freesound.org/s/397091/) |
+| rain | [Rain Slowly Passing TREATED LOOP_Edgewater_06192020.wav](https://freesound.org/s/525046/) |
+| winter | [Winter night - frozen trees](https://freesound.org/s/370266/) |
+| space | [spacedrone3.wav](https://freesound.org/s/20705/) |
+| void | [spacedrone1.wav](https://freesound.org/s/20703/) |
+| hum | [Computer Hum Noise](https://freesound.org/s/211994/) |
+| room | [Room_Tone_Ambience_Medium_Control_Low_Hum.wav](https://freesound.org/s/144046/) |
+| summer | [Lake at night 1.aif](https://freesound.org/s/412942/) |
+| spring | [Birds In Spring (Scotland)](https://freesound.org/s/463903/) |
+| city | [Ambience City Quiet Night Air Tone](https://freesound.org/s/427841/) |
+| ocean | [Seawash (calm) ](https://freesound.org/s/176617/) |
+| underwater | [Underwater [Loop] AMB.wav](https://freesound.org/s/366159/) |
+| deepsea | [Deep Sea Ambience](https://freesound.org/s/193822/) |
+| bubbles | [WATRUndwtr_Underwater Bubble Flow Loop_KOLBYR_FREE SOUNDS](https://freesound.org/s/852478/) |
+| fireworks | [Fireworks_Distant.WAV](https://freesound.org/s/552164/) |
+| drops | [Water drops](https://freesound.org/s/181890/) |
+| vinyl | [Vinyl Dust Loop Static 01](https://freesound.org/s/222684/) |
+| park | [Park ambience - mostly birds](https://freesound.org/s/274175/) |
+| campfire (fire) | [Campfire 02](https://freesound.org/s/729396/) |
+| campfire (people) | [180615 Party small outside voices kids laughing, chimney swifts.flac](https://freesound.org/s/572414/) |
+| thunder1 | [Distant Thunder 4](https://freesound.org/s/581125/) |
+| thunder2 | [Distant Thunder Clap_Gentle.wav](https://freesound.org/s/347562/) |
+| thunder3 | [thunder.rumble.ogg](https://freesound.org/s/486557/) |
+
+## Background video
+
+- 캠프파이어 (campfire.webm): [Fire آتش 07](https://commons.wikimedia.org/wiki/File:Fire_%D8%A2%D8%AA%D8%B4_07.ogv) by Mostafameraji, CC0 (Wikimedia Commons). Looped and restyled as a soft painting.

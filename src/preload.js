@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('mt', {
     lastPrompt: (agent, cwd, id) => ipcRenderer.invoke('agent:lastPrompt', agent, cwd, id),
     turn: (agent, cwd, id) => ipcRenderer.invoke('agent:turn', agent, cwd, id),
     subagents: (agent, cwd, id, since) => ipcRenderer.invoke('agent:subagents', agent, cwd, id, since),
+    compactedSince: (agent, cwd, id, since) => ipcRenderer.invoke('agent:compactedSince', agent, cwd, id, since),
   },
 
   store: {

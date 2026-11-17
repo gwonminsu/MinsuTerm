@@ -345,9 +345,10 @@
 [data-wg="ants"] .wg-run > em { rotate: 90deg; }
 
 /* 공사 중: caution tape scrolling, warning lights blinking at the corners */
-[data-wg="tape"]::before { padding: 5px; background: repeating-linear-gradient(45deg, #ffd43b 0 7px, #1d1d1d 7px 14px); background-size: 200% 200%; animation: wgTape 1s linear infinite; }
-.pv-pane[data-wg="tape"]::before { padding: 3px; background: repeating-linear-gradient(45deg, #ffd43b 0 4px, #1d1d1d 4px 8px); }
-@keyframes wgTape { from { background-position: 0 0; } to { background-position: 19.8px 0; } }
+/* one seamless stripe tile (side = 2√2 × stripe width) slid by exactly one tile: no seam anywhere along the ring */
+[data-wg="tape"]::before { --tape: 20px; padding: 5px; background: linear-gradient(45deg, #ffd43b 25%, #1d1d1d 25% 50%, #ffd43b 50% 75%, #1d1d1d 75%); background-size: var(--tape) var(--tape); animation: wgTape 1s linear infinite; }
+.pv-pane[data-wg="tape"]::before { --tape: 12px; padding: 3px; }
+@keyframes wgTape { from { background-position: 0 0; } to { background-position: var(--tape) 0; } }
 [data-wg="tape"] .wr-c { offset-path: none; position: absolute; font-size: calc(var(--wr) * 1.1); animation: wgBlink 1s steps(1) infinite; }
 [data-wg="tape"] .c0 { left: -4px; top: -6px; } [data-wg="tape"] .c1 { right: -4px; bottom: -6px; left: auto; top: auto; animation-delay: .5s; }
 [data-wg="tape"] .c2 { right: -4px; top: -6px; left: auto; animation: none; } [data-wg="tape"] .c3 { left: -4px; bottom: -6px; top: auto; animation: none; }

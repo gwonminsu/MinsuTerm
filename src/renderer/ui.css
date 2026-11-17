@@ -1062,3 +1062,19 @@ body.crt .term-host .xterm-screen { filter: drop-shadow(0 0 1.6px rgba(160, 200,
 .cb-comic::after { border-width: 3.4px; border-left: 0; left: -1.8px; bottom: calc(50% - 3.4px); }
 .cb-pixel::before { border-width: 5px; border-left: 0; left: -5px; bottom: calc(50% - 5px); }
 .cb-pixel::after { border-width: 3.4px; border-left: 0; left: -3.4px; bottom: calc(50% - 3.4px); }
+
+/* 프롬프트로 이동: a brief glow on the row the task's prompt is on */
+.prompt-jump-mark { position: absolute; left: 0; right: 0; pointer-events: none; z-index: 5; border-radius: 3px;
+  background: color-mix(in srgb, var(--violet) 28%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--violet) 60%, transparent);
+  animation: promptJump 1.8s ease-out both; }
+@keyframes promptJump { 0% { opacity: 0; } 12% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
+.item-actions .icon-btn.go-prompt:hover { color: var(--violet); }
+
+/* volume slider with a mute button on its left; at 0 % it looks switched off */
+.vol-range { gap: 6px; }
+.vol-range .vol-mute { width: 28px; height: 28px; flex: none; color: var(--text-2); }
+.vol-range .vol-mute .ico { width: 16px; height: 16px; }
+.vol-range .vol-mute:hover { color: var(--violet); }
+.vol-range.muted input[type=range] { opacity: .38; filter: grayscale(1); }
+.vol-range.muted .range-val { color: var(--dim); text-decoration: line-through; }
+.vol-range.muted .vol-mute { color: var(--dim); }
