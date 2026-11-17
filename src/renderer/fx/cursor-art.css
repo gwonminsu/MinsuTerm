@@ -1,0 +1,150 @@
+/* Styles and animations for the inline-SVG cursors (fx/cursor-art.js): 붓 · 후광 · 지옥불 · 핏방울.
+
+   .ca-box is a 20 x 40 drawing fitted to the character cell (20 % larger than the cell, so it reads at 8 x 18 px).
+   Every moving part is its own layer (.cl) and only transform and opacity are animated, so the compositor runs the
+   animation and the page is not repainted. Origins and distances are percentages of the box: x% = x * 5, y% = y * 2.5.
+   Edges that must not vanish at small sizes keep a fixed width in screen pixels. */
+
+.ca-defs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+.mt-cursor.kind-brush, .mt-cursor.kind-halo, .mt-cursor.kind-hellfire, .mt-cursor.kind-blood { container-type: size; }
+.ca-box { position: absolute; left: 50%; top: 50%; width: min(120cqw, 60cqh, 40px); aspect-ratio: 1 / 2; translate: -50% -50%; pointer-events: none; }
+.ca-box .cl { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+.mt-cursor.blurred .ca-box .cl { animation-play-state: paused !important; } /* unfocused: dimmed by .blurred, and still */
+
+:root {
+  --ca-edge: rgba(255, 255, 255, .5);    /* keeps the ink readable on a dark screen ... */
+  --ca-ink-a: #5b6073; --ca-ink-b: #2c2f3a; --ca-drop: #8e97b2; --ca-wet: rgba(226, 234, 255, .62); --ca-wood-edge: rgba(0, 0, 0, 0); /* ... where it is a wet slate grey, not black */
+  --ca-h-a: #fffef4; --ca-h-b: #ffe9a3; --ca-h-c: #ffc848; --ca-h-core: #ffffff; --ca-h-glow: #ffd66e; --ca-h-line: rgba(255, 196, 70, 0);
+  --ca-h-wr: #ffeebd; --ca-h-wt: #fffdf5; --ca-h-wline: rgba(240, 196, 96, .9); --ca-h-spark: #fff6cf;
+  --ca-bl-edge: rgba(255, 150, 140, .42);
+  --ca-hf-glow: 1;
+}
+:root[data-theme="light"] {
+  --ca-edge: rgba(74, 56, 30, .62);      /* and the pale hairs readable on a white page */
+  --ca-ink-a: #151518; --ca-ink-b: #020203; --ca-drop: #0c0c0f; --ca-wet: rgba(255, 255, 255, .34); --ca-wood-edge: rgba(70, 46, 14, .45);
+  --ca-h-a: #ffd466; --ca-h-b: #f3ad1c; --ca-h-c: #d98a06; --ca-h-core: #fff8dc; --ca-h-glow: #f2a81a; --ca-h-line: rgba(168, 100, 0, .8);
+  --ca-h-wr: #ffd67a; --ca-h-wt: #fff2c8; --ca-h-wline: rgba(184, 128, 20, .95); --ca-h-spark: #e09a0c;
+  --ca-bl-edge: rgba(74, 0, 0, .55);
+  --ca-hf-glow: .45;
+}
+
+/* ---------- 붓 ---------- */
+.ca-brush .b-tilt { transform-origin: 45% 76%; transition: transform .32s cubic-bezier(.3, 1.7, .5, 1); }
+.kind-brush.moving .ca-brush .b-tilt { transform: rotate(12deg); transition: transform .05s ease-out; } /* a stroke: the brush leans as it is drawn along ... */
+.ca-brush .b-sway { transform-origin: 45% 76%; animation: caBrushSway 3.6s ease-in-out infinite; }
+.ca-brush .b-loop { fill: none; stroke: #dc4a3e; stroke-width: 1; stroke-linecap: round; }
+.ca-brush .b-handle, .ca-brush .b-ferrule { stroke: var(--ca-wood-edge); stroke-width: .6px; vector-effect: non-scaling-stroke; }
+.ca-brush .b-cap { fill: #5a3a16; }
+.ca-brush .b-node { fill: none; stroke: #654516; stroke-width: .9; }
+.ca-brush .b-nodehi { fill: none; stroke: #fff1c9; stroke-opacity: .55; stroke-width: .5; }
+.ca-brush .b-ferrule { fill: #2b1a0d; }
+.ca-brush .b-band { fill: none; stroke: #dba743; stroke-width: .8; }
+.ca-brush .b-tuft { fill: none; stroke: var(--ca-edge); stroke-width: .8px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.ca-brush .b-bleed { fill: #5d5850; opacity: .5; }
+.ca-brush .b-hair { fill: none; stroke: #000; stroke-opacity: .28; stroke-width: .4; }
+.ca-brush .b-wet { fill: none; stroke: var(--ca-wet); stroke-width: .9; stroke-linecap: round; }
+.ca-brush .b-drop { transform-origin: 45% 75%; animation: caInkDrop 3.6s linear infinite; }
+.ca-brush .b-drop path, .ca-brush .b-blot ellipse, .ca-brush .b-stroke path { fill: var(--ca-drop); }
+.ca-brush .b-glint { fill: #fff; opacity: .6; }
+.ca-brush .b-blot { transform-origin: 45% 97.5%; animation: caInkBlot 3.6s linear infinite; }
+.ca-brush .b-stroke { opacity: 0; transition: opacity .7s ease-out .08s; }
+.kind-brush.moving .ca-brush .b-stroke { opacity: .9; transition: opacity .03s; } /* ... and leaves ink on the line it has just passed */
+@keyframes caBrushSway { 0%, 100% { transform: rotate(4deg); } 50% { transform: translateY(-1.5%) rotate(9deg); } }
+@keyframes caInkDrop { /* gathers, stretches, falls, and then the tip stays clean for a while */
+  0% { transform: scale(.1); opacity: 0; }
+  6% { opacity: 1; }
+  30% { transform: scale(1); opacity: 1; animation-timing-function: ease-in-out; }
+  38% { transform: translateY(1%) scale(.86, 1.16); opacity: 1; animation-timing-function: cubic-bezier(.6, 0, 1, .7); }
+  52% { transform: translateY(9.5%) scale(.9, 1.1); opacity: 1; }
+  53%, 100% { transform: translateY(9.5%) scale(.9, 1.1); opacity: 0; }
+}
+@keyframes caInkBlot {
+  0%, 51% { transform: scale(.7, .8); opacity: .45; }
+  57% { transform: scale(1.3, 1.3); opacity: 1; }
+  85%, 100% { transform: scale(.7, .8); opacity: .45; }
+}
+
+/* ---------- 후광 ---------- */
+.ca-halo .h-glow { animation: caHaloBreath 2.6s ease-in-out infinite alternate; }
+.ca-halo .h-bar { stroke: var(--ca-h-line); stroke-width: .8px; vector-effect: non-scaling-stroke; }
+.ca-halo .h-core { fill: var(--ca-h-core); opacity: .92; }
+.ca-halo .h-ring { transform-origin: 50% 10.75%; animation: caHaloBob 2.6s ease-in-out infinite alternate; }
+.ca-halo .h-rim { fill: none; stroke-width: 1.9; }
+.ca-halo .h-squash { transform: scaleY(.3333); transform-origin: 50% 10.75%; } /* a circle seen from the side: the light runs round it */
+.ca-halo .h-spin { transform-origin: 50% 10.75%; animation: caHaloSpin 2.2s linear infinite; }
+.ca-halo .h-spin path { fill: none; stroke: var(--ca-h-core); stroke-width: 2.3; stroke-linecap: round; }
+.ca-halo .h-wings { transform-origin: 50% 43.5%; transition: transform .3s ease-out; }
+.kind-halo.moving .ca-halo .h-wings { transform: scale(1.16, 1.08); transition: transform .05s; }
+.ca-halo .h-flip { transform: scaleX(-1); }
+.ca-halo .h-wing { transform-origin: 41% 43.5%; animation: caWing 1.9s ease-in-out infinite alternate; }
+.ca-halo .h-feather { stroke: var(--ca-h-wline); stroke-width: .8px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.ca-halo .h-vane { fill: none; stroke: var(--ca-h-wline); stroke-opacity: .7; stroke-width: .4; stroke-linecap: round; }
+.ca-halo .h-spark { animation: caSpark 2.6s ease-in-out infinite; }
+.ca-halo .h-spark path, .ca-halo .h-mote circle { fill: var(--ca-h-spark); }
+.ca-halo .h-mote { animation: caMote 3s linear infinite; }
+@keyframes caHaloBreath { from { opacity: .6; } to { opacity: 1; } }
+@keyframes caHaloBob { from { transform: translateY(1.25%) rotate(-5deg); } to { transform: translateY(-1.75%) rotate(5deg); } }
+@keyframes caHaloSpin { to { transform: rotate(360deg); } }
+@keyframes caWing { from { transform: rotate(9deg) scale(.96); } to { transform: rotate(-12deg) scale(1.04); } }
+@keyframes caSpark { 0%, 100% { transform: scale(0) rotate(0deg); opacity: 0; } 50% { transform: scale(1) rotate(45deg); opacity: 1; } }
+@keyframes caMote { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: .9; } 100% { transform: translateY(-67.5%); opacity: 0; } }
+
+/* ---------- 지옥불 ---------- */
+.ca-hell .hf-glow { opacity: var(--ca-hf-glow); }
+.ca-hell .hf-all { transform-origin: 50% 100%; transition: transform .32s ease-out; }
+.kind-hellfire.moving .ca-hell .hf-all { transform: skewX(10deg); transition: transform .05s; } /* the flames trail behind */
+/* two outer and two middle tongues of slightly different shape, each swaying to its own beat: together they lick and fork */
+.ca-hell .hf-o1, .ca-hell .hf-o2, .ca-hell .hf-m1, .ca-hell .hf-m2, .ca-hell .hf-i { transform-origin: 50% 100%; }
+.ca-hell .hf-o1 { animation: caHfO1 1.15s ease-in-out infinite; }
+.ca-hell .hf-o2 { animation: caHfO2 .83s ease-in-out infinite; }
+.ca-hell .hf-m1 { animation: caHfM1 .7s ease-in-out infinite; }
+.ca-hell .hf-m2 { animation: caHfM2 .52s ease-in-out infinite alternate; }
+.ca-hell .hf-i { animation: caHfI .44s ease-in-out infinite; }
+.ca-hell .hf-crack { fill: none; stroke: #a02408; stroke-opacity: .55; stroke-width: .4; stroke-linejoin: round; stroke-linecap: round; }
+.ca-hell .hf-core rect { fill: #fff; }
+.ca-hell .hf-core { animation: caHfCore .5s ease-in-out infinite alternate; }
+.ca-hell .hf-ember path { fill: #ffb648; }
+.ca-hell .hf-ember { animation: caEmber 1.9s linear infinite; }
+@keyframes caHfO1 { 0%, 100% { transform: scale(1, 1) skewX(0deg); } 28% { transform: scale(.95, 1.07) skewX(-3.5deg); } 62% { transform: scale(1.04, .93) skewX(3deg); } }
+@keyframes caHfO2 { 0%, 100% { transform: scale(1.03, .93) skewX(2.5deg); } 40% { transform: scale(.96, 1.05) skewX(-2deg); } 72% { transform: scale(1, 1.09) skewX(1deg); } }
+@keyframes caHfM1 { 0%, 100% { transform: scale(1, 1) skewX(0deg); } 35% { transform: scale(.93, 1.09) skewX(3deg); } 70% { transform: scale(1.05, .93) skewX(-3deg); } }
+@keyframes caHfM2 { from { transform: scale(.96, 1.05) skewX(-2deg); } to { transform: scale(1.05, .92) skewX(2.5deg); } }
+@keyframes caHfI { 0%, 100% { transform: scale(1, 1) skewX(0deg); } 30% { transform: scale(.9, 1.12) skewX(2deg); } 65% { transform: scale(1.08, .9) skewX(-2deg); } }
+@keyframes caHfCore { from { opacity: .15; } to { opacity: .75; } }
+@keyframes caEmber { 0% { transform: translate(0, 0) scale(1); opacity: 0; } 12% { opacity: 1; } 100% { transform: translate(var(--dx, 5%), -30%) scale(.25); opacity: 0; } }
+
+/* ---------- 핏방울 ---------- */
+.ca-blood .bl-run { stroke: var(--ca-bl-edge); stroke-width: .8px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.ca-blood .bl-shine { fill: none; stroke: #ffc0b6; stroke-opacity: .7; stroke-width: .7; stroke-linecap: round; }
+.ca-blood .bl-glint { fill: #ffe4df; opacity: .85; }
+.ca-blood .bl-pool ellipse { fill: #b0110c; stroke: var(--ca-bl-edge); stroke-width: .8px; vector-effect: non-scaling-stroke; }
+.ca-blood .bl-pool { transform-origin: 50% 97.5%; animation: caBlPool 3s linear infinite; }
+.ca-blood .bl-bead { transform-origin: 50% 15%; animation: caBlBead 3s linear infinite; }
+.ca-blood .bl-side { transform-origin: 23% 28.5%; animation: caBlSide 2.2s ease-in-out infinite alternate; }
+.ca-blood .bl-swing { transform-origin: 50% 50%; transition: transform .4s cubic-bezier(.3, 1.8, .5, 1); }
+.kind-blood.moving .ca-blood .bl-swing { transform: rotate(-14deg); transition: transform .05s; } /* the drop swings back */
+.ca-blood .bl-hang { transform-origin: 50% 50%; animation: caBlHang 3s linear infinite; }
+.ca-blood .bl-fall { transform-origin: 50% 75%; animation: caBlFall 3s linear infinite; }
+.ca-blood .bl-splash circle { fill: #d21b13; }
+.ca-blood .bl-splash { animation: caBlSplash 3s linear infinite; }
+@keyframes caBlHang {
+  0% { transform: scale(.5); animation-timing-function: ease-in-out; }
+  56% { transform: scale(1); animation-timing-function: ease-in; }
+  64% { transform: scale(.9, 1.2); }
+  67%, 100% { transform: scale(.5); }
+}
+@keyframes caBlFall {
+  0%, 63% { transform: translateY(0); opacity: 0; }
+  64% { transform: translateY(0); opacity: 1; animation-timing-function: cubic-bezier(.55, 0, 1, .6); }
+  80% { transform: translateY(13.5%) scale(.9, 1.15); opacity: 1; }
+  81%, 100% { transform: translateY(13.5%); opacity: 0; }
+}
+@keyframes caBlPool { 0%, 79% { transform: scale(.78, .88); } 84% { transform: scale(1.22, 1.3); } 100% { transform: scale(.78, .88); } }
+@keyframes caBlSplash { 0%, 80% { transform: translate(0, 0); opacity: 0; } 81% { opacity: 1; } 95%, 100% { transform: translate(var(--dx, 15%), -9%); opacity: 0; } }
+@keyframes caBlBead {
+  0% { transform: translateY(0) scale(.5); opacity: 0; }
+  8% { opacity: 1; }
+  50% { transform: translateY(32.5%) scale(1); opacity: 1; }
+  56%, 100% { transform: translateY(35%) scale(1); opacity: 0; }
+}
+@keyframes caBlSide { from { transform: scale(.7); } to { transform: scale(1.05); } }

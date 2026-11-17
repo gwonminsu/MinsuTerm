@@ -10,6 +10,8 @@ const on = (channel, fn) => {
 
 contextBridge.exposeInMainWorld('mt', {
   platform: process.platform, // 'win32' | 'darwin' | 'linux'
+  // Windows build number (19045 = Windows 10 22H2, 26100 = Windows 11 24H2 …); 0 elsewhere, or if it cannot be read
+  osBuild: process.platform === 'win32' ? parseInt(String(process.getSystemVersion ? process.getSystemVersion() : '').split('.')[2], 10) || 0 : 0,
   init: () => ipcRenderer.invoke('app:init'),
   onMenuEdit: (fn) => on('menu:edit', fn), // macOS Edit menu (⌘C / ⌘V / ⌘A) → the focused terminal
 
@@ -18,6 +20,8 @@ contextBridge.exposeInMainWorld('mt', {
     write: (id, data) => ipcRenderer.send('pty:write', id, data),
     resize: (id, cols, rows) => ipcRenderer.send('pty:resize', id, cols, rows),
     kill: (id) => ipcRenderer.send('pty:kill', id),
+    pause: (id) => ipcRenderer.send('pty:pause', id), // flow control: hold the pty's output back …
+    resume: (id) => ipcRenderer.send('pty:resume', id), // … and let it go on
     onData: (fn) => on('pty:data', fn),
     onExit: (fn) => on('pty:exit', fn),
     onAgent: (fn) => on('pty:agent', fn),

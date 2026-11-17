@@ -25,12 +25,13 @@
   let wild = null;
   const cache = new Map();
   const escRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, (c) => '\\' + c);
+  const SEP = / · | — | \| /; // what joins pieces of UI text (tr() translates them one by one)
   function wildList() {
     if (wild) return wild;
     wild = Object.keys(dict)
       .filter((k) => k.includes('#') && k.replace(/#/g, '').trim().length >= 2 && HANGUL.test(k))
       .sort((a, b) => b.replace(/#/g, '').length - a.replace(/#/g, '').length)
-      .map((k) => ({ k, re: new RegExp('^' + k.split('#').map(escRe).join('(.+?)') + '$') }));
+      .map((k) => ({ k, re: new RegExp('^' + k.split('#').map(escRe).join('(.+?)') + '$'), head: k.startsWith('#'), tail: k.endsWith('#') }));
     return wild;
   }
 
@@ -44,8 +45,14 @@
     let out = null;
     for (const w of wildList()) {
       const m = w.re.exec(n);
+      if (!m) continue;
       // a long Korean value in a slot means the pattern matched the wrong sentence
-      if (m && !m.slice(1).some((v) => HANGUL.test(v) && v.length > 12)) { out = fill(dict[w.k], m.slice(1)); break; }
+      if (m.slice(1).some((v) => HANGUL.test(v) && v.length > 12)) continue;
+      // so does an open slot (the pattern starts / ends with it) that reaches across a " · ": it swallowed the piece
+      // next to it ("#분 전" ← "12초 · 3분 전"), which would go out untranslated. tr() takes such text piece by piece.
+      if ((w.head && SEP.test(m[1])) || (w.tail && SEP.test(m[m.length - 1]))) continue;
+      out = fill(dict[w.k], m.slice(1));
+      break;
     }
     if (cache.size > 3000) cache.clear();
     cache.set(n, out);
@@ -178,6 +185,9 @@
   const flush = () => { queued = false; const list = pending; pending = new Set(); for (const n of list) if (n.isConnected) walk(n); };
   const mo = new MutationObserver((muts) => {
     for (const m of muts) {
+      // a DOM-rendered terminal rewrites its rows on every repaint, and nothing inside it is ever translated
+      const at = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+      if (at && at.closest('.xterm')) continue;
       if (m.type === 'childList') m.addedNodes.forEach((n) => pending.add(n));
       else if (m.type === 'characterData') pending.add(m.target);
       else if (m.type === 'attributes' && ATTRS.includes(m.attributeName)) pending.add(m.target);

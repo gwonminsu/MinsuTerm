@@ -1,9 +1,10 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, shell, Notification, clipboard, nativeTheme, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Notification, clipboard, nativeTheme, Menu, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { StringDecoder } = require('string_decoder');
 const { spawn, execFile } = require('child_process');
 const pty = require('@lydell/node-pty');
 
@@ -34,9 +35,17 @@ function buildMenu() {
   ]));
 }
 
-// Test harness (development only): MT_TEST=<dir> uses an isolated profile and writes screenshots there.
-const TEST_DIR = process.env.MT_TEST || '';
-if (TEST_DIR) app.setPath('userData', path.join(TEST_DIR, 'profile'));
+// Test harness (development only, ignored by a packaged build): MT_TEST=<dir> uses an isolated profile and writes
+// screenshots there.
+const TEST_DIR = app.isPackaged ? '' : (process.env.MT_TEST || '');
+if (TEST_DIR) {
+  app.setPath('userData', path.join(TEST_DIR, 'profile'));
+  // Several test runs may overlap on screen: keep every window rendering even when it is covered.
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
+  app.commandLine.appendSwitch('disable-background-timer-throttling');
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -112,6 +121,13 @@ const DEFAULT_STORE = {
   },
 };
 
+/** Moves a file whose contents make no sense out of the way, as <name>.bad-<time>. → false if it could not be moved */
+function setAside(file) {
+  try { fs.renameSync(file, `${file}.bad-${Date.now()}`); return true; } catch { return false; }
+}
+
+let storeUnreadable = false; // the store file is there but could not be read: nothing is saved over it
+
 function loadStore() {
   try {
     const raw = JSON.parse(fs.readFileSync(STORE_FILE, 'utf8'));
@@ -122,7 +138,14 @@ function loadStore() {
       layout: { ...DEFAULT_STORE.layout, ...(raw.layout || {}) },
       window: { ...DEFAULT_STORE.window, ...(raw.window || {}) },
     };
-  } catch {
+  } catch (err) {
+    // Only a missing file is a first run. Starting from the defaults after any other failure would let the first save
+    // wipe the user's projects, task history, settings and layout: a damaged file is set aside before the defaults
+    // take its place, and one that could not be read at all (locked, no permission) is left alone for this run.
+    if (!err || err.code !== 'ENOENT') {
+      console.error('store load failed', err);
+      if ((err && err.code) || !setAside(STORE_FILE)) storeUnreadable = true;
+    }
     return JSON.parse(JSON.stringify(DEFAULT_STORE));
   }
 }
@@ -158,6 +181,7 @@ function saveStore() {
 
 function saveStoreNow() {
   clearTimeout(saveTimer);
+  if (storeUnreadable) return; // see loadStore
   try {
     fs.mkdirSync(path.dirname(STORE_FILE), { recursive: true });
     const tmp = STORE_FILE + '.tmp';
@@ -257,8 +281,27 @@ function flushOutput() {
   outBuffers.clear();
 }
 
+/**
+ * A folder we may start a shell in, or open? A tab's folder is whatever a program printed (OSC 9;9 / OSC 7), so it is
+ * not trusted: a file there would be run by shell.openPath, and on Windows merely looking at \\host\share logs on to
+ * that host with the user's credentials. A network path therefore only counts inside a project the user added.
+ */
+function isFolder(p) {
+  if (typeof p !== 'string' || !p) return false;
+  if (IS_WIN && /^[\\/]{2}/.test(p)) {
+    const at = normPath(p).toLowerCase();
+    const wsl = /^\\\\wsl(\$|\.localhost)\\/.test(at); // WSL's own share is served by this machine: no network logon
+    const known = wsl || (Array.isArray(store.projects) ? store.projects : []).some((x) => {
+      const root = x && typeof x.path === 'string' && /^[\\/]{2}/.test(x.path) ? normPath(x.path).toLowerCase() : '';
+      return root && (at === root || at.startsWith(root + '\\'));
+    });
+    if (!known) return false;
+  }
+  try { return fs.statSync(p).isDirectory(); } catch { return false; }
+}
+
 function resolveCwd(cwd) {
-  if (cwd && exists(cwd)) return cwd;
+  if (isFolder(cwd)) return cwd;
   return HOME;
 }
 
@@ -276,16 +319,49 @@ function shellIntegrationDir() {
   try {
     fs.mkdirSync(zdir, { recursive: true });
     const src = (f) => `[ -f "\${MT_USER_ZDOTDIR:-$HOME}/${f}" ] && ZDOTDIR="\${MT_USER_ZDOTDIR:-$HOME}" . "\${MT_USER_ZDOTDIR:-$HOME}/${f}"\n`;
-    fs.writeFileSync(path.join(zdir, '.zshenv'), src('.zshenv'));
+    // .zshenv is where people point ZDOTDIR somewhere else (~/.config/zsh). An assignment in front of "." is undone
+    // when the file ends, so here ZDOTDIR is set and put back by hand, and a new value goes on in MT_USER_ZDOTDIR:
+    // the other startup files are then read from that folder.
+    fs.writeFileSync(path.join(zdir, '.zshenv'), [
+      '__mt_zdotdir="$ZDOTDIR"',
+      'ZDOTDIR="${MT_USER_ZDOTDIR:-$HOME}"',
+      '[ -f "$ZDOTDIR/.zshenv" ] && . "$ZDOTDIR/.zshenv"',
+      '[ "${ZDOTDIR-}" != "${MT_USER_ZDOTDIR:-$HOME}" ] && MT_USER_ZDOTDIR="${ZDOTDIR-}"',
+      'ZDOTDIR="$__mt_zdotdir"; unset __mt_zdotdir',
+      ''].join('\n'));
     fs.writeFileSync(path.join(zdir, '.zprofile'), src('.zprofile'));
+    // macOS /etc/zshrc has just set HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history, with our folder as ZDOTDIR: back to the
+    // user's own history file (their .zshrc, read next, may still choose another)
     fs.writeFileSync(path.join(zdir, '.zshrc'),
-      `${src('.zshrc')}__mt_cwd() { ${OSC_CWD_SH}; }\nautoload -Uz add-zsh-hook 2>/dev/null && add-zsh-hook precmd __mt_cwd || precmd_functions+=(__mt_cwd)\n`);
+      `[[ "\${HISTFILE-}" == "$ZDOTDIR"/* ]] && HISTFILE="\${MT_USER_ZDOTDIR:-$HOME}/.zsh_history"\n${src('.zshrc')}__mt_cwd() { ${OSC_CWD_SH}; }\nautoload -Uz add-zsh-hook 2>/dev/null && add-zsh-hook precmd __mt_cwd || precmd_functions+=(__mt_cwd)\n`);
     fs.writeFileSync(path.join(zdir, '.zlogin'), `${src('.zlogin')}ZDOTDIR="\${MT_USER_ZDOTDIR:-$HOME}"\n`);
+    // bash: what a login shell reads, /etc/profile first (on macOS it builds PATH from /etc/paths and /etc/paths.d)
     fs.writeFileSync(path.join(dir, 'bashrc'),
-      `if [ -f ~/.bash_profile ]; then . ~/.bash_profile; elif [ -f ~/.profile ]; then . ~/.profile; fi\n[ -f ~/.bashrc ] && . ~/.bashrc\n__mt_cwd() { ${OSC_CWD_SH}; }\nPROMPT_COMMAND="__mt_cwd\${PROMPT_COMMAND:+; $PROMPT_COMMAND}"\n`);
+      `[ -f /etc/profile ] && . /etc/profile\nif [ -f ~/.bash_profile ]; then . ~/.bash_profile; elif [ -f ~/.profile ]; then . ~/.profile; fi\n[ -f ~/.bashrc ] && . ~/.bashrc\n__mt_cwd() { ${OSC_CWD_SH}; }\nPROMPT_COMMAND="__mt_cwd\${PROMPT_COMMAND:+; $PROMPT_COMMAND}"\n`);
   } catch { /* integration is optional */ }
   return dir;
 }
+
+/**
+ * LANG for a shell that was given none (an app started from Finder has no locale, and without one non-ASCII text
+ * breaks): the system's own locale in UTF-8, "en-US" → en_US.UTF-8. macOS only knows the language / region pairs
+ * under /usr/share/locale (English in Korea, en_KR, is not one) and an unknown name would drop every tool to the
+ * C locale: then, and when the system does not say, en_US.UTF-8.
+ */
+function systemLang() {
+  const m = /^([a-z]{2,3})(?:-[A-Za-z]{4})?-([A-Za-z]{2})\b/.exec(app.getSystemLocale() || '');
+  const lang = m ? `${m[1]}_${m[2].toUpperCase()}.UTF-8` : '';
+  return lang && (!IS_MAC || exists(`/usr/share/locale/${lang}`)) ? lang : 'en_US.UTF-8';
+}
+
+/**
+ * Was MinsuTerm itself started from inside an agent session (run from Claude Code or Codex, as during development)?
+ * Only then is every CLAUDE_CODE_* / CODEX_* variable part of that session. For everyone else those are the user's own
+ * settings (CLAUDE_CODE_USE_BEDROCK, CLAUDE_CODE_GIT_BASH_PATH, CODEX_HOME …), which the agents in the tabs need.
+ */
+const INSIDE_AGENT = ['CLAUDECODE', 'CODEX_THREAD_ID', 'CODEX_SANDBOX', 'CODEX_SANDBOX_NETWORK_DISABLED', 'CODEX_MANAGED_PACKAGE_ROOT'].some((k) => process.env[k]);
+/** What points at one particular session even then (an editor's terminal sets the last two for its own claude). */
+const SESSION_MARKERS = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SSE_PORT'];
 
 /** spec: { id, shellId, cwd, agent, cols, rows } */
 function spawnPty(spec) {
@@ -302,13 +378,14 @@ function spawnPty(spec) {
   delete env.ELECTRON_RUN_AS_NODE;
   // never leak an outer agent session into the user's shells
   for (const k of Object.keys(env)) {
-    if (k === 'CLAUDECODE' || k.startsWith('CLAUDE_CODE_') || k.startsWith('CODEX_') || k.startsWith('MT_TEST')) delete env[k];
+    const session = INSIDE_AGENT ? k === 'CLAUDECODE' || k.startsWith('CLAUDE_CODE_') || k.startsWith('CODEX_') : SESSION_MARKERS.includes(k);
+    if (session || k.startsWith('MT_TEST')) delete env[k];
   }
 
   let args = [];
   let writeLater = '';
   if (!IS_WIN) {
-    env.LANG = env.LANG || 'ko_KR.UTF-8'; // apps launched from Finder get no locale: keep Korean text intact
+    env.LANG = env.LANG || systemLang(); // apps launched from Finder get no locale: keep non-ASCII text intact
     const integ = shellIntegrationDir();
     if (sh.type === 'zsh') {
       if (process.env.ZDOTDIR) env.MT_USER_ZDOTDIR = process.env.ZDOTDIR;
@@ -324,7 +401,9 @@ function spawnPty(spec) {
     writeLater = initCmd;
   } else if (sh.type === 'cmd') {
     env.PROMPT = '$E]9;9;$P$E\\' + (process.env.PROMPT || '$P$G');
-    args = initCmd ? ['/K', initCmd] : [];
+    // node-pty quotes an argument list itself and writes an inner quote as \", which cmd hands on as it is
+    // ("be brief" would arrive as "be and brief"): a command with quotes goes to cmd as the raw command line.
+    args = !initCmd ? [] : initCmd.includes('"') ? `/K ${initCmd}` : ['/K', initCmd];
   } else if (sh.type === 'ps') {
     args = ['-NoLogo', '-NoExit', '-Command', initCmd ? `${PS_PROMPT_HOOK}; ${initCmd}` : PS_PROMPT_HOOK];
   } else if (sh.type === 'bash') {
@@ -352,6 +431,12 @@ function spawnPty(spec) {
   });
   p.onExit(({ exitCode }) => {
     flushOutput();
+    // Windows: node-pty frees a pty only in kill(). A shell that ended by itself (one we killed is no longer in the
+    // map) would keep its output worker thread and its console host until the app quits: release both. Not with
+    // kill(): that looks the console's processes up by the shell's pid, which Windows may have given away by now.
+    if (IS_WIN && ptys.get(spec.id) === rec) {
+      try { p._agent._conoutSocketWorker.dispose(); p._agent._inSocket.destroy(); } catch { /* node-pty changed inside */ }
+    }
     ptys.delete(spec.id);
     send('pty:exit', spec.id, exitCode);
   });
@@ -391,27 +476,55 @@ const PROBE_SCRIPT = [
 let probe = null;
 let probeBuf = '';
 let probeBusy = false;
-let probeTimer = null;
+let probeTimer = null; // gives up on a query that gets no answer
+let probeFails = 0; // failures in a row
+let probeAfter = 0; // no new probe before this time
+const PROBE_TIMEOUT = 15000; // a query takes ~200 ms; the first one also has to start PowerShell
+
+/**
+ * The probe gave no answer, died or could not be started: drop it. The next one starts after a pause that grows while
+ * it keeps failing (PowerShell blocked by a policy, WMI out of order) instead of with every query.
+ */
+function probeFailed(ps) {
+  if (ps && probe !== ps) return; // an earlier one, dropped already
+  clearTimeout(probeTimer);
+  probe = null;
+  probeBusy = false;
+  probeBuf = '';
+  probeFails++;
+  probeAfter = Date.now() + Math.min(300000, 1000 * 2 ** probeFails); // 2 s, 4 s, 8 s … 5 min
+  try { ps.kill(); } catch { /* never started, or gone */ }
+}
 
 function startProbe() {
-  if (probe) return;
+  if (probe || Date.now() < probeAfter) return;
   const sys = process.env.SystemRoot || 'C:\\Windows';
   const encoded = Buffer.from(PROBE_SCRIPT, 'utf16le').toString('base64');
-  probe = spawn(path.join(sys, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
-    { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
-  probe.stdout.setEncoding('utf8');
-  probe.stdout.on('data', (d) => {
-    probeBuf += d;
-    const end = probeBuf.indexOf('<<END>>');
-    if (end >= 0) {
-      const snap = probeBuf.slice(0, end);
-      probeBuf = probeBuf.slice(end + 7);
-      probeBusy = false;
-      analyze(snap);
-    }
-  });
-  probe.on('exit', () => { probe = null; probeBusy = false; probeBuf = ''; });
+  let ps = null;
+  try {
+    ps = probe = spawn(path.join(sys, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
+      { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
+    // without these listeners a PowerShell that is blocked, or that dies while it is written to, is an uncaught
+    // error (Electron shows a dialog for it)
+    ps.on('error', () => probeFailed(ps));
+    ps.on('exit', () => probeFailed(ps));
+    ps.stdin.on('error', () => {});
+    ps.stdout.setEncoding('utf8');
+    ps.stdout.on('data', (d) => {
+      if (probe !== ps) return;
+      probeBuf += d;
+      const end = probeBuf.indexOf('<<END>>');
+      if (end >= 0) {
+        const snap = probeBuf.slice(0, end);
+        probeBuf = probeBuf.slice(end + 7);
+        probeBusy = false;
+        probeFails = 0;
+        clearTimeout(probeTimer);
+        analyze(snap);
+      }
+    });
+  } catch { probeFailed(ps); }
 }
 
 function classify(name, cmdline) {
@@ -446,7 +559,9 @@ function analyze(snap) {
   for (const [tabId, rec] of ptys) {
     let found = null;
     const root = rec.p.pid || rec.pid; // ConPTY assigns the pid asynchronously
-    if (!root) continue;
+    // a snapshot without the tab's own shell is not a whole one (a failed query comes back empty): it must not
+    // take the tab's agent, and with it the session id, away
+    if (!root || !info.has(root)) continue;
     const stack = [...(children.get(root) || [])];
     const seen = new Set();
     while (stack.length && !found) {
@@ -486,7 +601,10 @@ function runProbe() {
   startProbe();
   if (!probe || probeBusy) return;
   probeBusy = true;
-  try { probe.stdin.write('x\n'); } catch { probeBusy = false; }
+  const ps = probe;
+  clearTimeout(probeTimer);
+  probeTimer = setTimeout(() => probeFailed(ps), PROBE_TIMEOUT); // a hung WMI call would end agent detection for good
+  try { ps.stdin.write('x\n'); } catch { probeFailed(ps); }
 }
 
 /**
@@ -509,8 +627,10 @@ setInterval(runProbe, 10000);
 /* Session history: Claude (~/.claude/projects) and Codex (~/.codex)   */
 /* ------------------------------------------------------------------ */
 
-const CLAUDE_PROJECTS = path.join(HOME, '.claude', 'projects');
-const CODEX_HOME = path.join(HOME, '.codex');
+// the folders the agents in the tabs use: theirs can be moved with CLAUDE_CONFIG_DIR / CODEX_HOME (the latter does not
+// reach the tabs when MinsuTerm runs inside an agent session, see spawnPty)
+const CLAUDE_PROJECTS = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(HOME, '.claude'), 'projects');
+const CODEX_HOME = (!INSIDE_AGENT && process.env.CODEX_HOME) || path.join(HOME, '.codex');
 const parseCache = new Map(); // file -> { mtimeMs, info }
 
 const normPath = (p) => {
@@ -546,8 +666,33 @@ function readHead(file, size, max) {
   }
 }
 
+/**
+ * Text without its <tag>…</tag> blocks, whitespace squeezed. One pass, with exactly the result of
+ * replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, ' '): that pattern reads on to the end of the text from every "<…>" that has
+ * no closing tag after it, which held the main thread for seconds on a pasted stack trace.
+ */
 function cleanText(text) {
-  return String(text || '').replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const s = String(text || '');
+  let out = '';
+  let from = 0; // start of what is not copied yet
+  let pos = 0;
+  for (;;) {
+    const lt = s.indexOf('<', pos);
+    const gt = lt < 0 ? -1 : s.indexOf('>', lt + 1);
+    if (gt < 0) break; // no "<…>" left
+    if (gt === lt + 1) { pos = gt; continue; } // "<>" opens nothing
+    let end = 0; // where the first closing tag after it ends
+    for (let c = s.indexOf('</', gt + 1); c >= 0; c = s.indexOf('</', c + 2)) {
+      const h = s.indexOf('>', c + 2);
+      if (h === c + 2) continue; // "</>" closes nothing
+      end = h + 1; // stays 0 when no ">" follows
+      break;
+    }
+    if (!end) break; // no closing tag left for this "<…>", so none for a later one either
+    out += s.slice(from, lt) + ' ';
+    from = pos = end;
+  }
+  return (out + s.slice(from)).replace(/\s+/g, ' ').trim();
 }
 
 function cached(file, stat, parse) {
@@ -632,6 +777,22 @@ function codexFiles(maxDays = 120) {
   };
   walk(root, 0);
   return out.sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
+}
+
+/**
+ * The transcript of one Codex session. Finding it is a walk of the whole sessions tree, and a working tab asks several
+ * times a second: where it was found is remembered (only that file is looked at again), and so is, for a few seconds,
+ * that it was not found.
+ */
+const codexFileCache = new Map(); // session id → { file, at }
+function codexFile(id) {
+  const key = String(id).toLowerCase();
+  const c = codexFileCache.get(key);
+  if (c && (c.file ? exists(c.file) : Date.now() - c.at < 5000)) return c.file;
+  const hit = codexFiles(30).find(({ file }) => path.basename(file).toLowerCase().includes(key));
+  if (codexFileCache.size > 200) codexFileCache.clear();
+  codexFileCache.set(key, { file: hit ? hit.file : '', at: Date.now() });
+  return hit ? hit.file : '';
 }
 
 let codexIndex = { mtimeMs: 0, map: new Map() };
@@ -747,12 +908,18 @@ function hasSession(agent, cwd, id) {
 /* IPC                                                                 */
 /* ------------------------------------------------------------------ */
 
-ipcMain.handle('app:init', () => ({
-  store,
-  shells: SHELLS.map(({ id, name, type }) => ({ id, name, type })),
-  home: HOME,
-  version: app.getVersion(),
-}));
+ipcMain.handle('app:init', () => {
+  // A page that is starting has no pty yet: one that is alive belongs to a page that crashed or was reloaded. Its
+  // shell and agent would run on unseen, next to the ones this page starts when it restores the layout.
+  killAll();
+  outBuffers.clear();
+  return {
+    store,
+    shells: SHELLS.map(({ id, name, type }) => ({ id, name, type })),
+    home: HOME,
+    version: app.getVersion(),
+  };
+});
 
 ipcMain.handle('pty:create', (_e, spec) => {
   try {
@@ -770,6 +937,15 @@ ipcMain.on('pty:kill', (_e, id) => {
   const r = ptys.get(id);
   if (r) { try { r.p.kill(); } catch { /* ignore */ } ptys.delete(id); }
 });
+/*
+ * Flow control: while it is in view, the window pauses a pty whose output it is behind on drawing, and resumes it
+ * once it has caught up (the program printing just waits, as on any slow terminal). Not on Windows before 11 24H2 (build
+ * 26100): closing a pseudoconsole there waits until its output has been read, and a paused pty is not being
+ * read — closing such a tab would hang the app. There the output simply keeps coming, as it always did.
+ */
+const CAN_PAUSE_PTY = !IS_WIN || (parseInt(os.release().split('.')[2], 10) || 0) >= 26100;
+ipcMain.on('pty:pause', (_e, id) => { const r = ptys.get(id); if (r && CAN_PAUSE_PTY) { try { r.p.pause(); } catch { /* ignore */ } } });
+ipcMain.on('pty:resume', (_e, id) => { const r = ptys.get(id); if (r) { try { r.p.resume(); } catch { /* ignore */ } } });
 ipcMain.on('agent:probe', (_e, delays) => {
   const list = Array.isArray(delays) ? delays.filter((d) => Number.isFinite(d) && d >= 0 && d < 20000).slice(0, 5) : [450];
   scheduleProbe(list.length ? list : [450]);
@@ -784,7 +960,7 @@ function lastPrompt(agent, cwd, id) {
   if (!UUID_RE.test(String(id || ''))) return '';
   let file = '';
   if (agent === 'claude') file = path.join(claudeDirFor(cwd), `${id}.jsonl`);
-  else if (agent === 'codex') file = (codexFiles(30).find(({ file: f }) => path.basename(f).toLowerCase().includes(id.toLowerCase())) || {}).file || '';
+  else if (agent === 'codex') file = codexFile(id);
   if (!file || !exists(file)) return '';
   try {
     const size = fs.statSync(file).size;
@@ -801,10 +977,11 @@ function lastPrompt(agent, cwd, id) {
       try { o = JSON.parse(line); } catch { continue; }
       if (agent === 'claude' && o.type === 'user' && !o.isMeta && !o.isSidechain && o.message && typeof o.message.content === 'string') {
         const t = cleanText(o.message.content);
-        if (t && !t.startsWith('Caveat:')) return t.slice(0, 300);
+        if (t && !t.startsWith('Caveat:') && !t.startsWith('/')) return { text: t.slice(0, 300), ts: Date.parse(o.timestamp || '') || 0 }; // with its time: the caller checks it belongs to the task
       }
       if (agent === 'codex' && o.type === 'event_msg' && o.payload && o.payload.type === 'user_message' && o.payload.message) {
-        return cleanText(o.payload.message).slice(0, 300);
+        const t = cleanText(o.payload.message);
+        if (t && !t.startsWith('/')) return { text: t.slice(0, 300), ts: Date.parse(o.timestamp || '') || 0 };
       }
     }
   } catch { /* ignore */ }
@@ -820,7 +997,7 @@ function turnState(agent, cwd, id) {
   if (!UUID_RE.test(String(id || ''))) return 'unknown';
   let file = '';
   if (agent === 'claude') file = path.join(claudeDirFor(cwd), `${id}.jsonl`);
-  else if (agent === 'codex') file = (codexFiles(30).find(({ file: f }) => path.basename(f).toLowerCase().includes(id.toLowerCase())) || {}).file || '';
+  else if (agent === 'codex') file = codexFile(id);
   if (!file || !exists(file)) return 'unknown';
   try {
     const size = fs.statSync(file).size;
@@ -848,98 +1025,166 @@ function turnState(agent, cwd, id) {
   return 'unknown';
 }
 /**
- * Sub-agents the agent launched in the current turn, read from its transcript (newest 1 MB).
+ * Sub-agents the agent launched, read from its transcript.
  *  Claude: an Agent / Task tool call (subagent_type + a short description). It ends with its tool result —
  *          unless it was launched in the background (isAsync), then with a <task-notification> naming it.
  *  Codex:  SubAgentActivity items (kind started / completed) with an agent_path like "/root/list_files".
- * → [{ id, kind, name, status: 'running' | 'done' | 'failed', start }]
+ * → [{ id, kind, name, status: 'running' | 'done' | 'failed', start }]: those launched or finished since `since`,
+ *   and every one still running (a background sub-agent outlives the turn that launched it).
+ *
+ * The place in each transcript is kept between calls and only what was appended is read. A long session writes
+ * megabytes between two polls (screenshots, tool output), so re-reading a fixed-size tail would lose sub-agents
+ * that are still running.
  */
+const SUB_TAIL = 16 * 1024 * 1024; // how far back the first look at a transcript goes
+const SUB_LOST = 30 * 60 * 1000;   // a background sub-agent whose own transcript has been still this long is gone
+const subCache = new Map();        // session id → { file, pos, carry, dec, map, skip, live }
+
+function subagentLine(agent, c, line) {
+  if (!line || line[0] !== '{') return;
+  const map = c.map;
+  if (agent !== 'claude') {
+    if (!line.includes('SubAgentActivity')) return;
+    let o;
+    try { o = JSON.parse(line); } catch { return; }
+    if (o.type !== 'event_msg' || !o.payload || o.payload.type !== 'item_completed') return;
+    const it = o.payload.item || {};
+    if (it.type !== 'SubAgentActivity' || !it.agent_thread_id) return;
+    const key = it.agent_thread_id;
+    if (it.kind === 'started') {
+      const nm = String(it.agent_path || '').split('/').filter(Boolean).pop() || 'agent';
+      map.set(key, { id: key, kind: nm.replace(/[_-]+/g, ' '), name: '', status: 'running', start: Date.parse(o.timestamp || '') || 0, end: 0 });
+    } else if (map.has(key)) {
+      const x = map.get(key);
+      x.status = it.kind === 'completed' ? 'done' : 'failed'; x.end = c.live ? Date.now() : 0;
+    }
+    return;
+  }
+  // a background sub-agent finishing: <task-notification> … <tool-use-id>X</tool-use-id> … <status>S</status>,
+  // recorded as a queued message and / or a user message — read it from any entry
+  if (map.size && line.includes('task-notification')) {
+    const seen = new Set();
+    const end = (id, st) => { const x = map.get(id); if (!x || x.status !== 'running') return; x.status = st === 'completed' ? 'done' : 'failed'; x.end = c.live ? Date.now() : 0; };
+    const re = /<tool-use-id>([^<]+)<\/tool-use-id>[\s\S]{0,4000}?<status>([^<]+)<\/status>/g;
+    let m;
+    while ((m = re.exec(line))) { seen.add(m[1]); end(m[1], m[2]); }
+    const re2 = /<tool-use-id>([^<]+)<\/tool-use-id>/g;
+    while ((m = re2.exec(line))) if (!seen.has(m[1])) end(m[1], 'completed');
+  }
+  // The main agent answering again means every foreground call of its earlier message is over. One still marked
+  // running lost its result (the app or the tab was closed in the middle of it): forget it, or it would hold the
+  // tab in "working" for good.
+  if (map.size && line.includes('"type":"assistant"') && !line.includes('"isSidechain":true')) {
+    const m = /"id":"(msg_[A-Za-z0-9_-]+)"/.exec(line);
+    if (m) for (const x of map.values()) if (x.status === 'running' && !x.bg && x.msg && x.msg !== m[1]) map.delete(x.id);
+  }
+  // only two kinds of entry matter: a launch, and the result of a launch we know (lines can be megabytes long)
+  const launch = line.includes('"tool_use"') && (line.includes('"Agent"') || line.includes('"Task"'));
+  let result = false;
+  if (!launch && map.size && line.includes('"tool_use_id"')) {
+    const re = /"tool_use_id":\s*"([^"]+)"/g;
+    let m;
+    while ((m = re.exec(line))) if (map.has(m[1])) { result = true; break; }
+  }
+  if (!launch && !result) return;
+  let o;
+  try { o = JSON.parse(line); } catch { return; }
+  if (o.isSidechain) return;
+  const content = o.message && o.message.content;
+  if (!Array.isArray(content)) return;
+  if (o.type === 'assistant') {
+    for (const q of content) {
+      if (q.type !== 'tool_use' || (q.name !== 'Agent' && q.name !== 'Task')) continue;
+      const inp = q.input || {};
+      map.set(q.id, { id: q.id, kind: inp.subagent_type || 'agent', name: String(inp.description || '').slice(0, 60), status: 'running', start: Date.parse(o.timestamp || '') || 0, end: 0, msg: String((o.message && o.message.id) || '') });
+    }
+  } else if (o.type === 'user') {
+    for (const q of content) {
+      if (q.type !== 'tool_result' || !map.has(q.tool_use_id)) continue;
+      const x = map.get(q.tool_use_id), r = o.toolUseResult || {};
+      if (r.isAsync) { x.bg = true; x.agentId = String(r.agentId || ''); } // launched in the background: it goes on
+      else { x.status = q.is_error ? 'failed' : 'done'; x.end = c.live ? Date.now() : 0; }
+    }
+  }
+}
+
 function subagents(agent, cwd, id, since = 0) {
   if (!UUID_RE.test(String(id || ''))) return [];
   let file = '';
   if (agent === 'claude') file = path.join(claudeDirFor(cwd), `${id}.jsonl`);
   else if (agent === 'codex') file = (codexFiles(30).find(({ file: f }) => path.basename(f).toLowerCase().includes(String(id).toLowerCase())) || {}).file || '';
   if (!file || !exists(file)) return [];
-  const map = new Map();
+  let c = subCache.get(id);
   try {
-    const size = fs.statSync(file).size;
-    const len = Math.min(size, 1024 * 1024);
-    const fd = fs.openSync(file, 'r');
-    const buf = Buffer.alloc(len);
-    fs.readSync(fd, buf, 0, len, size - len);
-    fs.closeSync(fd);
-    for (const line of buf.toString('utf8').split('\n')) {
-      if (!line || line[0] !== '{') continue;
-      let o;
-      try { o = JSON.parse(line); } catch { continue; }
-      const ts = Date.parse(o.timestamp || '') || 0;
-      if (agent === 'claude') {
-        if (o.isSidechain) continue;
-        // a background sub-agent finishing: <task-notification> … <tool-use-id>X</tool-use-id> … <status>S</status>,
-        // recorded as a queued message (queue-operation) and/or a user message — read it from any entry
-        if (line.includes('task-notification')) {
-          const re = /<tool-use-id>([^<]+)<\/tool-use-id>[\s\S]*?<status>([^<]+)<\/status>/g;
-          let m;
-          while ((m = re.exec(line))) if (map.has(m[1])) map.get(m[1]).status = m[2] === 'completed' ? 'done' : 'failed';
-        }
-        const content = o.message && o.message.content;
-        if (o.type === 'assistant' && Array.isArray(content)) {
-          if (ts && ts < since) continue;
-          for (const p of content) {
-            if (p.type === 'tool_use' && (p.name === 'Agent' || p.name === 'Task')) {
-              const inp = p.input || {};
-              map.set(p.id, { id: p.id, kind: inp.subagent_type || 'agent', name: String(inp.description || '').slice(0, 60), status: 'running', start: ts });
-            }
-          }
-        } else if (o.type === 'user') {
-          const parts = Array.isArray(content) ? content : [{ type: 'text', text: typeof content === 'string' ? content : '' }];
-          for (const p of parts) {
-            if (p.type === 'tool_result' && map.has(p.tool_use_id)) {
-              const r = o.toolUseResult || {};
-              if (!r.isAsync) map.get(p.tool_use_id).status = p.is_error ? 'failed' : 'done';
-            }
-            const txt = p.type === 'text' ? String(p.text || '') : '';
-            if (txt.includes('<task-notification>')) {
-              const tid = (/<tool-use-id>([^<]+)<\/tool-use-id>/.exec(txt) || [])[1];
-              const st = (/<status>([^<]+)<\/status>/.exec(txt) || [])[1] || 'completed';
-              if (tid && map.has(tid)) map.get(tid).status = st === 'completed' ? 'done' : 'failed';
-            }
-          }
-        }
-      } else if (o.type === 'event_msg' && o.payload && o.payload.type === 'item_completed') {
-        const it = o.payload.item || {};
-        if (it.type !== 'SubAgentActivity' || !it.agent_thread_id) continue;
-        const key = it.agent_thread_id;
-        if (it.kind === 'started') {
-          if (ts && ts < since) continue;
-          const nm = String(it.agent_path || '').split('/').filter(Boolean).pop() || 'agent';
-          map.set(key, { id: key, kind: nm.replace(/[_-]+/g, ' '), name: '', status: 'running', start: ts });
-        } else if (map.has(key)) {
-          map.get(key).status = it.kind === 'completed' ? 'done' : 'failed';
-        }
-      }
+    const stt = fs.statSync(file), size = stt.size;
+    if (!c || c.file !== file || size < c.pos) { // first look (or the file was replaced): start from the tail
+      c = { file, pos: Math.max(0, size - SUB_TAIL), carry: '', dec: new StringDecoder('utf8'), map: new Map(), skip: size > SUB_TAIL, live: false };
+      subCache.delete(id); subCache.set(id, c);
+      if (subCache.size > 24) subCache.delete(subCache.keys().next().value);
     }
+    if (size > c.pos) {
+      const fd = fs.openSync(file, 'r');
+      try {
+        const buf = Buffer.alloc(Math.min(4 * 1024 * 1024, size - c.pos));
+        while (c.pos < size) {
+          const n = fs.readSync(fd, buf, 0, Math.min(buf.length, size - c.pos), c.pos);
+          if (n <= 0) break;
+          c.pos += n;
+          const lines = (c.carry + c.dec.write(buf.subarray(0, n))).split('\n');
+          c.carry = lines.pop(); // an entry still being written: finish it next time
+          if (c.skip && lines.length) { lines.shift(); c.skip = false; } // a tail starts in the middle of an entry
+          for (const line of lines) subagentLine(agent, c, line);
+        }
+      } finally { fs.closeSync(fd); }
+    }
+    c.live = true; // from here on, whatever finishes finishes now
+    c.mtime = stt.mtimeMs;
   } catch { /* ignore */ }
-  return [...map.values()].slice(-12);
+  if (!c) return [];
+  const now = Date.now(), out = [];
+  for (const x of c.map.values()) {
+    if (x.status === 'running' && x.bg && x.agentId) { // still writing its own transcript?
+      try {
+        if (now - fs.statSync(path.join(path.dirname(file), id, 'subagents', `agent-${x.agentId}.jsonl`)).mtimeMs > SUB_LOST) { c.map.delete(x.id); continue; }
+      } catch { /* not there (yet) */ }
+    }
+    if (x.status === 'running' && agent !== 'claude' && now - (c.mtime || now) > SUB_LOST) { c.map.delete(x.id); continue; } // Codex: no end was ever written
+    if (x.status !== 'running' && x.start < since && x.end < since) { if (now - Math.max(x.start, x.end) > 3600000) c.map.delete(x.id); continue; }
+    out.push({ id: x.id, kind: x.kind, name: x.name, status: x.status, start: x.start });
+  }
+  return out.slice(-12);
 }
 ipcMain.handle('agent:subagents', (_e, agent, cwd, id, since) => subagents(agent, cwd, id, since));
 
 /** Was a Claude conversation compacted at or after `since`? (its earlier screen history is gone then) */
-const compactCache = new Map();
+const compactCache = new Map(); // file → { pos, carry, dec, times }: the place in the transcript is kept, like subagents() does
 ipcMain.handle('agent:compactedSince', (_e, agent, cwd, id, since) => {
   if (agent !== 'claude' || !UUID_RE.test(String(id || ''))) return false;
   const file = path.join(claudeDirFor(cwd), `${id}.jsonl`);
   try {
-    const mt = fs.statSync(file).mtimeMs;
+    const size = fs.statSync(file).size;
     let rec = compactCache.get(file);
-    if (!rec || rec.mt !== mt) {
-      const times = [];
-      for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
-        if (!line.includes('compact_boundary')) continue;
-        try { const o = JSON.parse(line); if (o.subtype === 'compact_boundary') times.push(Date.parse(o.timestamp || '') || 0); } catch { /* partial line */ }
-      }
-      rec = { mt, times };
+    if (!rec || size < rec.pos) { // first look (or the file was replaced): from the start
+      rec = { pos: 0, carry: '', dec: new StringDecoder('utf8'), times: [] };
       compactCache.set(file, rec);
+      if (compactCache.size > 50) compactCache.delete(compactCache.keys().next().value);
+    }
+    if (size > rec.pos) { // only what was appended: this is asked on mouse-over, and a transcript can be 100 MB
+      const fd = fs.openSync(file, 'r');
+      try {
+        const buf = Buffer.alloc(Math.min(4 * 1024 * 1024, size - rec.pos));
+        while (rec.pos < size) {
+          const n = fs.readSync(fd, buf, 0, Math.min(buf.length, size - rec.pos), rec.pos);
+          if (n <= 0) break;
+          rec.pos += n;
+          const lines = (rec.carry + rec.dec.write(buf.subarray(0, n))).split('\n');
+          rec.carry = lines.pop(); // an entry still being written: finished next time
+          for (const line of lines) {
+            if (!line.includes('compact_boundary')) continue;
+            try { const o = JSON.parse(line); if (o.subtype === 'compact_boundary') rec.times.push(Date.parse(o.timestamp || '') || 0); } catch { /* not an entry */ }
+          }
+        }
+      } finally { fs.closeSync(fd); }
     }
     return rec.times.some((t) => t >= since - 2000);
   } catch { return false; }
@@ -949,7 +1194,7 @@ ipcMain.handle('agent:turn', (_e, agent, cwd, id) => {
   const state = turnState(agent, cwd, id);
   let mtime = 0;
   try {
-    const f = agent === 'claude' ? path.join(claudeDirFor(cwd), `${id}.jsonl`) : (codexFiles(30).find(({ file }) => path.basename(file).toLowerCase().includes(String(id).toLowerCase())) || {}).file;
+    const f = agent === 'claude' ? path.join(claudeDirFor(cwd), `${id}.jsonl`) : codexFile(id);
     if (f) mtime = fs.statSync(f).mtimeMs;
   } catch { /* ignore */ }
   return { state, mtime };
@@ -965,11 +1210,20 @@ const TRASH_DIR = path.join(app.getPath('userData'), 'trash');
 const TRASH_INDEX = path.join(TRASH_DIR, 'index.json');
 
 function readTrash() {
-  try { return JSON.parse(fs.readFileSync(TRASH_INDEX, 'utf8')); } catch { return []; }
+  try {
+    const list = JSON.parse(fs.readFileSync(TRASH_INDEX, 'utf8'));
+    if (Array.isArray(list)) return list;
+  } catch (err) {
+    if (err && err.code) return []; // no index yet, or it cannot be read right now
+  }
+  setAside(TRASH_INDEX); // a damaged index is kept instead of being written over by the next change
+  return [];
 }
 function writeTrash(list) {
   fs.mkdirSync(TRASH_DIR, { recursive: true });
-  fs.writeFileSync(TRASH_INDEX, JSON.stringify(list, null, 2), 'utf8');
+  const tmp = TRASH_INDEX + '.tmp'; // written whole, then swapped in (like the store): a crash cannot cut the index short
+  fs.writeFileSync(tmp, JSON.stringify(list, null, 2), 'utf8');
+  fs.renameSync(tmp, TRASH_INDEX);
 }
 function movePath(from, to) {
   fs.mkdirSync(path.dirname(to), { recursive: true });
@@ -1185,13 +1439,19 @@ ipcMain.handle('clip:read', () => ({ text: clipboard.readText(), hasImage: !clip
 ipcMain.on('clip:write', (_e, text) => clipboard.writeText(String(text)));
 
 ipcMain.on('open:external', (_e, url) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); });
-ipcMain.on('open:folder', (_e, dir) => { if (dir && exists(dir)) shell.openPath(dir); });
+ipcMain.on('open:folder', (_e, dir) => { if (isFolder(dir)) shell.openPath(dir); });
 ipcMain.on('open:userdata', () => shell.openPath(app.getPath('userData')));
 ipcMain.on('win:devtools', () => { if (win) win.webContents.toggleDevTools(); });
 
+// A Notification nothing refers to is garbage-collected, and a later click on it then no longer focuses the tab:
+// each one is kept until it closes ('close' is not reported in every case, so only the latest few are kept).
+const notifications = new Set();
 ipcMain.on('notify', (_e, { title, body, tabId }) => {
   if (!Notification.isSupported()) return;
   const n = new Notification({ title, body, icon: ICON, silent: false });
+  notifications.add(n);
+  if (notifications.size > 20) notifications.delete(notifications.values().next().value);
+  n.on('close', () => notifications.delete(n));
   n.on('click', () => {
     if (!win) return;
     if (win.isMinimized()) win.restore();
@@ -1213,11 +1473,14 @@ ipcMain.on('attention', () => {
 
 function createWindow() {
   const w = store.window;
+  // the saved position counts only while a display still shows part of it (a monitor may have been unplugged since)
+  const shown = Number.isFinite(w.x) && Number.isFinite(w.y) && screen.getAllDisplays().some(({ workArea: a }) => (
+    w.x < a.x + a.width && w.x + w.width > a.x && w.y < a.y + a.height && w.y + w.height > a.y));
   win = new BrowserWindow({
     width: w.width,
     height: w.height,
-    x: w.x,
-    y: w.y,
+    x: shown ? w.x : undefined, // no position: centred
+    y: shown ? w.y : undefined,
     minWidth: 640,
     minHeight: 400,
     show: true, // appear immediately (dark background, no flash) instead of waiting for first paint
@@ -1243,9 +1506,22 @@ function createWindow() {
   win.once('ready-to-show', () => { if (!win.isVisible()) win.show(); });
   // never leave an invisible window behind if the first paint is slow or stalls
   setTimeout(() => { if (win && !win.isDestroyed() && !win.isVisible()) win.show(); }, 3000);
+  // A page that dies is loaded again (app:init then reaps its ptys) — unless it keeps dying: one that crashes while
+  // it starts would be reloaded for ever.
+  let crashes = [];
   win.webContents.on('render-process-gone', (_e, details) => {
     console.error('renderer gone', details);
-    if (win && !win.isDestroyed()) win.reload();
+    if (!win || win.isDestroyed()) return;
+    const now = Date.now();
+    crashes = crashes.filter((t) => now - t < 60000).concat(now);
+    if (crashes.length < 3) { win.reload(); return; }
+    dialog.showMessageBox(win, {
+      type: 'error',
+      title: 'MinsuTerm',
+      message: T('화면이 계속 멈춰서 다시 불러오지 않았습니다. MinsuTerm을 종료한 뒤 다시 실행해 주세요.'),
+      detail: `${details.reason} (${details.exitCode})`,
+      noLink: true,
+    }).catch(() => {});
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 

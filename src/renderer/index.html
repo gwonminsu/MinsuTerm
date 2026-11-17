@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;" />
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none';" />
   <title>MinsuTerm</title>
   <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css" />
   <link rel="stylesheet" href="styles.css" />
@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="folders.css" />
   <link rel="stylesheet" href="glow.css" />
   <link rel="stylesheet" href="cursors.css" />
+  <link rel="stylesheet" href="fx/cursor-art.css" />
   <link rel="stylesheet" href="prompt.css" />
   <link rel="stylesheet" href="donetext.css" />
   <link rel="stylesheet" href="mac.css" />
@@ -77,7 +78,7 @@
       <main id="stage">
         <div id="gridbar" class="viewbar" hidden>
           <span data-icon="grid"></span>
-          <span class="gb-title"></span>
+          <span class="gb-title no-i18n"></span>
           <span class="gb-sub"></span>
           <button class="btn small" id="gridbar-exit" title="Ctrl+Shift+G">한 탭만 보기</button>
         </div>
@@ -119,7 +120,7 @@
     <footer id="statusbar">
       <div class="st-left">
         <span id="st-kind" class="st-item st-kind"></span>
-        <span id="st-cwd" class="st-item st-cwd"></span>
+        <span id="st-cwd" class="st-item st-cwd no-i18n"></span>
       </div>
       <div class="st-right">
         <span id="st-status" class="st-item"></span>
@@ -144,6 +145,25 @@
   <script src="samples.js"></script>
   <script src="i18n-data.js"></script>
   <script src="i18n.js"></script>
+  <script src="fx/cursor-art.js"></script>
+  <script src="fx/effects.js"></script>
   <script src="app.js"></script>
+  <script src="scenes/core.js"></script>
+  <script src="scenes/haunted.js"></script>
+  <script src="scenes/heaven.js"></script>
+  <script src="scenes/castle.js"></script>
+  <script src="scenes/hell.js"></script>
+  <script src="scenes/cyber.js"></script>
+  <script src="scenes/korea.js"></script>
+  <script src="scenes/steam.js"></script>
+  <script src="scenes/analog.js"></script>
+  <script src="scenes/backrooms.js"></script>
+  <script src="scenes/waves.js"></script>
+  <script src="scenes/pond.js"></script>
+  <script src="scenes/jellyfish.js"></script>
+  <script src="scenes/aquarium.js"></script>
+  <script src="scenes/sakura.js"></script>
+  <script src="scenes/snow.js"></script>
+  <script src="scenes/circuit.js"></script>
 </body>
 </html>

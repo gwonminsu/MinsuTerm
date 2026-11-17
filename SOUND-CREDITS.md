@@ -154,7 +154,10 @@ Each background has its own loop: cut into a seamless loop (whole bars for rhyth
 | hell | [Drone Horror Music 03](https://freesound.org/s/465858/) + [fire roar and crackle](https://freesound.org/s/386560/) |
 | cyberpunk | [Cyberpunk Beat](https://freesound.org/s/525290/) |
 | korea | Original gugak-style piece (gayageum and daegeum), generated for MinsuTerm with ACE-Step 1.5 |
+| steampunk | [Tick-Tock - Pendulum Family Clock](https://freesound.org/s/797574/) + [Mechanical alarm clock is ticking (SLAVA).wav](https://freesound.org/s/171043/) + [FactoryHum.wav](https://freesound.org/s/478640/) + [steam.WAV](https://freesound.org/s/672248/) |
+| analog | [VHS VCR Magnetic Tape Cassette Background White Noise Hiss](https://freesound.org/s/719880/) + [square wave drone running through tape deck - 001](https://freesound.org/s/824177/), slowed down |
+| backrooms | [Fluorescent Ballast Buzz - Room Tone](https://freesound.org/s/273625/) |
 
 ## Background video
 
-- 캠프파이어 (campfire.webm): [Fire آتش 07](https://commons.wikimedia.org/wiki/File:Fire_%D8%A2%D8%AA%D8%B4_07.ogv) by Mostafameraji, CC0 (Wikimedia Commons). Looped and repainted in the app's night palette.
+- 캠프파이어 (campfire.webm): [Fire آتش 07](https://commons.wikimedia.org/wiki/File:Fire_%D8%A2%D8%AA%D8%B4_07.ogv) by Mostafameraji, CC0 (Wikimedia Commons). Looped, repainted in soft flat tones and cut out: only the fire, its light and the shapes of the camp are kept (VP9 with an alpha channel), so the theme's own background shows through.

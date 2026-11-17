@@ -177,6 +177,8 @@ const activeTab = () => S.tabs.find((t) => t.id === S.activeId) || null;
 const tabById = (id) => S.tabs.find((t) => t.id === id) || null;
 const projectFor = (cwd) => S.projects.find((p) => samePath(p.path, cwd)) || null;
 const agentTabs = () => S.tabs.filter((t) => t.agent);
+/** The tab showing a conversation — also one still starting up (its agent is only detected about a second after launch). */
+const tabOfSession = (id) => (id && S.tabs.find((t) => t.sessionId === id || (t.launch && t.launch.sessionId === id))) || null;
 
 function cleanOscTitle(t) {
   const s = String(t || '').replace(/^[^\p{L}\p{N}]+/u, '').trim();
@@ -375,7 +377,7 @@ function applyAppearance() {
     t.term.options.theme = theme;
     t.term.options.cursorStyle = cursorPreset().style;
     t.term.options.cursorWidth = cursorPreset().width;
-    t.term.options.letterSpacing = Number(st.letterSpacing) || 0;
+    t.term.options.letterSpacing = clampLetterSpacing(st.letterSpacing);
     // light mode on a solid background: xterm darkens any text that would be too faint to read
     t.term.options.minimumContrastRatio = isLight() && !needsClearTerminal() ? 4.5 : 1;
   }
@@ -446,13 +448,15 @@ const FX_KINDS = [
   ['balloonpop', '풍선 펑', '작은 풍선이 부풀다가 "펑!" (재미있는)'],
   ['raindrop', '빗방울', '위에서 빗방울이 똑 떨어져 물결이 퍼짐'],
   ['meteors', '별똥별', '작은 별똥별이 사선으로 쏟아져 반짝'],
-  ['movable', '금속활자', '청동 활자가 탁 찍히고 붉은 인주 자국이 번졌다 사라짐'],
+  ['movable', '금속활자', '청동 활자가 탁 찍혀 한지에 먹 글자를 남김 · Enter는 붉은 낙관'],
   ['holy', '천상의 빛', '금빛 빛줄기가 퍼지고 깃털이 내려앉음'],
   ['hellfire', '지옥불', '검붉은 불길이 솟고 불씨가 흩날림'],
   ['blood', '핏자국', '피가 튀어 흘러내림 · Enter는 할퀸 자국'],
   ['magiccircle', '마법진', '커서 아래 빛나는 마법진이 돌며 피어남'],
 ];
 
+/* Scene backgrounds (src/renderer/scenes/): drawn in ink and haze over the theme's own background. */
+const SCENE_BGS = ['haunted', 'heaven', 'castle', 'hell', 'cyberpunk', 'korea', 'steampunk', 'analog', 'backrooms'];
 const BG_KINDS = [
   ['none', '없음', '배경 애니메이션 없음'],
   ['stars', '별밤', '천천히 흐르는 별들'],
@@ -479,6 +483,9 @@ const BG_KINDS = [
   ['hell', '지옥', '끓어오르는 용암과 타오르는 불씨, 자욱한 연기'],
   ['cyberpunk', '사이버펑크', '비 내리는 네온 도시와 날아다니는 차들'],
   ['korea', '한국의 밤', '보름달 아래 수묵 산수, 소나무와 처마, 날아가는 학'],
+  ['steampunk', '스팀펑크', '맞물려 도는 황동 톱니와 시계탑, 증기 속을 떠가는 비행선'],
+  ['analog', '아날로그 호러', '낡은 비디오테이프 화면, 잡음 사이로 무언가가 스쳐 지나간다'],
+  ['backrooms', '백룸', '끝없이 이어지는 누런 방과 웅웅거리는 형광등'],
   ['constellation', '별자리', '별들이 하나씩 이어져 별자리를 그렸다 사라짐'],
   ['lavalamp', '라바 램프', '말랑한 빛 덩어리가 천천히 오르내림'],
   ['dna', 'DNA 나선', '이중 나선이 천천히 회전'],
@@ -523,9 +530,10 @@ function createFx(canvas) {
   };
   fx.burst = (kind, x, y, o) => { addBurst(fx, kind, x, y, o); if (!fx.raf) fx.raf = requestAnimationFrame(fx.loop); };
   fx.loop = (now) => {
+    fx.raf = 0;
     if (now - (fx.last || 0) < 15) { fx.raf = requestAnimationFrame(fx.loop); return; } // ~60 fps on high-refresh screens
     fx.last = now;
-    drawFx(fx);
+    try { drawFx(fx); } catch (e) { console.error(e); fx.parts = []; } // one bad particle must not stop the effects for good
     fx.raf = fx.parts.length ? requestAnimationFrame(fx.loop) : 0;
     if (!fx.raf) fx.ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
@@ -534,12 +542,18 @@ function createFx(canvas) {
   return fx;
 }
 
+/** Run fn whenever the display scale changes (the window moved to a screen with another scale). */
+function onDprChange(fn) {
+  const arm = () => window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`).addEventListener('change', () => { fn(); arm(); }, { once: true });
+  arm();
+}
+
 /** What a key looks like as a flying glyph: the character itself, or a symbol for keys that aren't one. */
 const KEY_GLYPHS = { '\x7f': '←', '\b': '←', Backspace: '←', Delete: '⌦', '\r': '↵', '\n': '↵', Enter: '↵', '\t': '⇥', Tab: '⇥', ' ': '␣', '\x1b': 'esc', Escape: 'esc' };
 function typedGlyphs(text) {
   if (text == null || text === '') return [];
   if (KEY_GLYPHS[text]) return [KEY_GLYPHS[text]];
-  return [...String(text)].map((c) => KEY_GLYPHS[c] ?? c).filter((c) => c.length > 1 || c.charCodeAt(0) >= 32);
+  return [...String(text).slice(0, 64)].map((c) => KEY_GLYPHS[c] ?? c).filter((c) => c.length > 1 || c.charCodeAt(0) >= 32);
 }
 
 /** o: { enter, k (intensity), cw, ch (cell size), text (what was typed) } */
@@ -556,6 +570,8 @@ function addBurst(fx, kind, x, y, o) {
   const P = fx.parts;
   const rnd = (a, b) => a + Math.random() * (b - a);
 
+  const ext = window.FX_EXT && window.FX_EXT[kind]; // effects kept in their own module (fx/effects.js)
+  if (ext) { ext.burst({ fx, P, x, y, o, enter, k, sz, cw, ch, cols, pick, alpha, n, rnd }); return; }
   switch (kind) {
     case 'glow':
       P.push({ t: 'glow', x, y, r: ch * (enter ? 3.2 : 1.7) * sz, a: alpha, life: 1, decay: enter ? 0.035 : 0.06, c: cols[0] });
@@ -595,30 +611,6 @@ function addBurst(fx, kind, x, y, o) {
         P.push({ t: 'px', x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1, s: Math.round(rnd(2, 4) * sz), a: 1, life: 1, decay: rnd(0.025, 0.055), c: pick() });
       }
       break;
-    case 'movable': { // 금속활자: a bronze type block stamps the character, leaving a vermilion print
-      const g = typedGlyphs(o.text)[0] || '字';
-      P.push({ t: 'mtype', x, y: y - ch * 0.45, g, s: ch * (enter ? 1.9 : 1.25) * sz, age: 0, a: 1, life: 1, decay: enter ? 0.009 : 0.013, c: [200, 55, 45] });
-      break;
-    }
-    case 'holy': { // 천상의 빛
-      const gold = [[255, 226, 140], [255, 244, 200], [255, 200, 90]];
-      for (let i = 0, m = n(7, 14); i < m; i++) P.push({ t: 'hray', x, y: y - ch * 0.4, ang: (i / m) * Math.PI * 2 + rnd(-0.1, 0.1), len: ch * rnd(0.9, enter ? 3.2 : 1.8) * sz, a: alpha, life: 1, decay: rnd(0.035, 0.06), c: gold[i % 3] });
-      for (let i = 0, m = n(1, 4); i < m; i++) P.push({ t: 'feather', x: x + rnd(-0.5, 0.5) * cw, y: y - ch * 0.6, vx: rnd(-0.6, 0.6), vy: rnd(-1.2, -0.3) * sz, rot: rnd(-1, 1), ph: Math.random() * 6, s: ch * rnd(0.35, 0.55) * sz, a: 1, life: 1, decay: rnd(0.008, 0.014), c: [255, 250, 235] });
-      for (let i = 0, m = n(3, 8); i < m; i++) P.push({ t: 'hspark', x: x + rnd(-1.5, 1.5) * cw, y: y - ch * rnd(0, 1.5), s: rnd(1.5, 3.5) * sz, a: 1, life: 1, decay: rnd(0.03, 0.05), c: gold[(Math.random() * 3) | 0] });
-      break;
-    }
-    case 'hellfire': { // 지옥불
-      for (let i = 0, m = n(6, 16); i < m; i++) P.push({ t: 'hflame', x: x + rnd(-0.6, 0.6) * cw, y: y - ch * 0.1, vx: rnd(-0.3, 0.3), vy: -rnd(0.8, enter ? 3 : 2) * sz, s: ch * rnd(0.25, 0.5) * sz, ph: Math.random() * 6, a: 1, life: 1, decay: rnd(0.025, 0.045), c: [255, 90, 20] });
-      for (let i = 0, m = n(3, 9); i < m; i++) P.push({ t: 'ember', x: x + rnd(-0.5, 0.5) * cw, y, vx: rnd(-0.6, 0.6), vy: -rnd(1, enter ? 3.4 : 2.4) * sz, s: rnd(0.8, 2) * sz, ph: Math.random() * 6, a: 1, life: 1, decay: rnd(0.02, 0.035), c: [255, 60 + ((Math.random() * 60) | 0), 20] });
-      if (enter) P.push({ t: 'ring', x, y, r: 2, grow: 2.2 * sz, w: 2.4, a: 0.9, life: 1, decay: 0.03, c: [190, 20, 10] });
-      break;
-    }
-    case 'blood': { // 핏자국
-      for (let i = 0, m = n(4, 12); i < m; i++) { const ang = -Math.PI / 2 + rnd(-1.4, 1.4); const sp = rnd(1, enter ? 4 : 2.6) * sz; P.push({ t: 'bdrop', x, y: y - ch * 0.3, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, s: rnd(1, 2.6) * sz, a: 1, life: 1, decay: rnd(0.012, 0.022), c: [150, 8, 8] }); }
-      P.push({ t: 'bdrip', x: x + rnd(-0.3, 0.3) * cw, y: y + ch * 0.1, len: 0, sp: rnd(0.25, 0.6) * sz, w: rnd(1.4, 2.4) * sz, a: 1, life: 1, decay: 0.008, c: [140, 6, 6] });
-      if (enter) P.push({ t: 'claw', x, y: y - ch * 0.4, s: ch * 2.4 * sz, a: 1, life: 1, decay: 0.012, c: [120, 4, 4] });
-      break;
-    }
     case 'ember': {
       const warm = [[255, 168, 76], [255, 104, 56], [255, 214, 102]];
       for (let i = 0, m = n(6, 16); i < m; i++) {
@@ -813,6 +805,7 @@ function drawFx(fx) {
   ctx.globalCompositeOperation = 'lighter';
   fx.parts = fx.parts.filter((p) => (p.life -= p.decay) > 0);
   for (const p of fx.parts) {
+    if (p.draw) { p.draw(ctx, p, fx); continue; } // a particle that paints itself (fx/effects.js)
     const [r, g, b] = p.c;
     const A = (m) => `rgba(${r},${g},${b},${Math.max(0, m)})`;
     switch (p.t) {
@@ -851,108 +844,6 @@ function drawFx(fx) {
         ctx.fillStyle = A(p.life);
         ctx.fillRect(Math.round(p.x), Math.round(p.y), p.s, p.s);
         break;
-      case 'mtype': { // 금속활자
-        p.age++;
-        ctx.save();
-        ctx.globalCompositeOperation = 'source-over';
-        const k = Math.min(1, p.age / 7);
-        // the print, left once the block has struck
-        if (p.age >= 7) {
-          ctx.globalAlpha = Math.min(1, p.life * 1.4);
-          ctx.fillStyle = 'rgba(' + p.c.join(',') + ',0.9)';
-          ctx.font = '700 ' + Math.round(p.s * 0.78) + 'px "Batang", "Gungsuh", serif';
-          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.shadowColor = 'rgba(' + p.c.join(',') + ',0.6)'; ctx.shadowBlur = 2;
-          ctx.fillText(p.g, p.x, p.y); ctx.fillText(p.g, p.x + 0.6, p.y + 0.4); // a slightly uneven impression
-          ctx.shadowBlur = 0;
-          ctx.strokeStyle = 'rgba(' + p.c.join(',') + ',0.75)'; ctx.lineWidth = Math.max(1, p.s * 0.05);
-          ctx.strokeRect(p.x - p.s * 0.55, p.y - p.s * 0.55, p.s * 1.1, p.s * 1.1);
-        }
-        // the bronze block: comes down, strikes, lifts away
-        if (p.age < 16) {
-          const lift = p.age < 7 ? 0 : (p.age - 7) / 9;
-          const sc2 = p.age < 7 ? 1.6 - k * 0.6 : 1 + lift * 0.15;
-          const S = p.s * sc2, bx = p.x, by = p.y - lift * p.s * 0.8;
-          ctx.globalAlpha = 1 - lift;
-          const gr = ctx.createLinearGradient(bx - S / 2, by - S / 2, bx + S / 2, by + S / 2);
-          gr.addColorStop(0, '#d7b26a'); gr.addColorStop(0.5, '#a07b3c'); gr.addColorStop(1, '#5e4220');
-          ctx.fillStyle = gr; ctx.fillRect(bx - S / 2, by - S / 2, S, S);
-          ctx.strokeStyle = 'rgba(255,235,180,0.6)'; ctx.lineWidth = 1; ctx.strokeRect(bx - S / 2 + 1, by - S / 2 + 1, S - 2, S - 2);
-          ctx.save(); ctx.translate(bx, by); ctx.scale(-1, 1); // type is cast in mirror image
-          ctx.fillStyle = '#3a2810'; ctx.font = '700 ' + Math.round(S * 0.72) + 'px "Batang", "Gungsuh", serif';
-          ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.g, 0, 0);
-          ctx.restore();
-        }
-        ctx.restore();
-        break;
-      }
-      case 'hray': {
-        const d = p.len * (1 - p.life * 0.6);
-        const g2 = ctx.createLinearGradient(p.x, p.y, p.x + Math.cos(p.ang) * d, p.y + Math.sin(p.ang) * d);
-        g2.addColorStop(0, A(p.a * p.life)); g2.addColorStop(1, A(0));
-        ctx.strokeStyle = g2; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(p.ang) * d, p.y + Math.sin(p.ang) * d); ctx.stroke();
-        break;
-      }
-      case 'feather': {
-        p.ph += 0.06; p.vy = Math.min(p.vy + 0.03, 0.7); p.x += p.vx + Math.sin(p.ph) * 0.5; p.y += p.vy; p.rot = Math.sin(p.ph) * 0.7;
-        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-        ctx.fillStyle = A(0.85 * p.life);
-        ctx.beginPath(); ctx.moveTo(0, -p.s); ctx.quadraticCurveTo(p.s * 0.45, -p.s * 0.2, 0, p.s); ctx.quadraticCurveTo(-p.s * 0.45, -p.s * 0.2, 0, -p.s); ctx.fill();
-        ctx.strokeStyle = 'rgba(255,215,130,' + 0.7 * p.life + ')'; ctx.lineWidth = 0.8;
-        ctx.beginPath(); ctx.moveTo(0, -p.s); ctx.lineTo(0, p.s * 1.15); ctx.stroke();
-        ctx.restore();
-        break;
-      }
-      case 'hspark': {
-        const r2 = p.s * (0.6 + p.life);
-        ctx.fillStyle = A(p.life);
-        ctx.beginPath(); ctx.moveTo(p.x, p.y - r2); ctx.lineTo(p.x + r2 * 0.25, p.y); ctx.lineTo(p.x, p.y + r2); ctx.lineTo(p.x - r2 * 0.25, p.y); ctx.closePath(); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(p.x - r2, p.y); ctx.lineTo(p.x, p.y + r2 * 0.25); ctx.lineTo(p.x + r2, p.y); ctx.lineTo(p.x, p.y - r2 * 0.25); ctx.closePath(); ctx.fill();
-        break;
-      }
-      case 'hflame': {
-        p.ph += 0.2; p.x += p.vx + Math.sin(p.ph) * 0.4; p.y += p.vy; p.vy *= 0.97;
-        const k2 = p.life;
-        const r3 = p.s * (0.5 + (1 - k2) * 0.8);
-        const g3 = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r3);
-        g3.addColorStop(0, k2 > 0.6 ? 'rgba(255,200,90,' + k2 + ')' : 'rgba(230,50,15,' + k2 + ')');
-        g3.addColorStop(0.5, 'rgba(170,15,5,' + 0.6 * k2 + ')'); g3.addColorStop(1, 'rgba(60,0,0,0)');
-        ctx.fillStyle = g3; ctx.beginPath(); ctx.ellipse(p.x, p.y, r3 * 0.7, r3 * 1.3, 0, 0, Math.PI * 2); ctx.fill();
-        break;
-      }
-      case 'bdrop': {
-        ctx.save(); ctx.globalCompositeOperation = 'source-over';
-        p.vy += 0.18; p.x += p.vx; p.y += p.vy; p.vx *= 0.97;
-        ctx.fillStyle = 'rgba(' + p.c.join(',') + ',' + Math.min(1, p.life * 1.5) + ')';
-        ctx.beginPath(); ctx.ellipse(p.x, p.y, p.s * 0.8, p.s * (1 + Math.min(1.5, Math.abs(p.vy) * 0.15)), Math.atan2(p.vy, p.vx) - Math.PI / 2, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-        break;
-      }
-      case 'bdrip': {
-        ctx.save(); ctx.globalCompositeOperation = 'source-over';
-        p.len = Math.min(p.len + p.sp, 40);
-        const al = Math.min(1, p.life * 1.4);
-        ctx.strokeStyle = 'rgba(' + p.c.join(',') + ',' + 0.85 * al + ')'; ctx.lineWidth = p.w; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, p.y + p.len); ctx.stroke();
-        ctx.fillStyle = 'rgba(' + p.c.join(',') + ',' + al + ')';
-        ctx.beginPath(); ctx.ellipse(p.x, p.y + p.len + p.w * 0.4, p.w * 0.9, p.w * 1.2, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-        break;
-      }
-      case 'claw': { // three scratches torn across, slowly fading
-        ctx.save(); ctx.globalCompositeOperation = 'source-over';
-        const prog = Math.min(1, (1 - p.life) * 6);
-        ctx.strokeStyle = 'rgba(' + p.c.join(',') + ',' + 0.8 * Math.min(1, p.life * 1.3) + ')'; ctx.lineCap = 'round';
-        for (let i = -1; i <= 1; i++) {
-          ctx.lineWidth = Math.max(1.5, p.s * 0.035) * (1 - Math.abs(i) * 0.25);
-          const x0 = p.x - p.s * 0.45 + i * p.s * 0.16, y0 = p.y - p.s * 0.35 - i * p.s * 0.05;
-          ctx.beginPath(); ctx.moveTo(x0, y0);
-          ctx.quadraticCurveTo(x0 + p.s * 0.4 * prog, y0 + p.s * 0.2 * prog, x0 + p.s * 0.85 * prog, y0 + p.s * 0.7 * prog); ctx.stroke();
-        }
-        ctx.restore();
-        break;
-      }
       case 'ember': {
         p.ph += 0.15; p.x += p.vx + Math.sin(p.ph) * 0.35; p.y += p.vy; p.vy *= 0.985;
         const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.s * 3);
@@ -1757,6 +1648,7 @@ function stageFx() {
   FX = createFx(canvas);
   const size = () => FX.size(stageEl.clientWidth, stageEl.clientHeight);
   new ResizeObserver(size).observe(stageEl);
+  onDprChange(size);
   size();
   return FX;
 }
@@ -1771,6 +1663,7 @@ function frontFx() {
   FRONT_FX = createFx(canvas);
   const size = () => FRONT_FX.size(window.innerWidth, window.innerHeight);
   window.addEventListener('resize', size);
+  onDprChange(size);
   size();
   return FRONT_FX;
 }
@@ -1911,7 +1804,7 @@ function placeParts(fx, pts, scale, opt = {}) {
 /** Plays one celebration on an effect engine. scale shrinks it for previews. */
 function runCelebration(fx, kind, x, y, w, scale = 1) {
   const B = (k, xx, yy, kk = 1.6) => fx.burst(k, xx, yy, { enter: true, k: kk * scale, cw: 8 * scale, ch: 16 * scale });
-  const later = (ms, f) => setTimeout(f, ms);
+  const later = (ms, f) => setTimeout(() => { f(); fx.kick(); }, ms); // what arrives late wakes the loop itself
   switch (kind) {
     case 'fireworks':
       for (let i = 0; i < 5; i++) {
@@ -2285,7 +2178,7 @@ function showDoneText(box, text, front = false) {
   text = tr(text).slice(0, DONE_TEXT_MAX); // the default phrases in the chosen language (the letters are split up below, so translate first)
   const style = st.doneTextStyle || 'pop';
   const secs = Math.max(1, Math.min(10, Number(st.doneTextTime) || 3));
-  const el = h('div', `done-text dt-${style} dt-${st.doneTextPos || 'center'}`);
+  const el = h('div', `done-text no-i18n dt-${style} dt-${st.doneTextPos || 'center'}`); // no-i18n: already translated above, the page translator must not redo it letter by letter
   const size = Math.max(16, Math.min(Number(st.doneTextSize) || 48, box.w / Math.max(4, [...text].length) * 1.6)); // fits the pane
   if (style === 'stardust') { stardustText(box, text, size, secs, front); return; }
   el.style.cssText = `left:${box.x}px;top:${box.y}px;width:${box.w}px;height:${box.h}px;--dt-size:${size}px;--dt-font:${doneTextFont(st.doneTextFont)};--dt-time:${secs}s`;
@@ -2385,7 +2278,7 @@ function stardustText(box, text, size, secs, front) {
 function celebrate(tab) {
   if ((!S.settings.celebrate && !S.settings.doneText) || !tab.host) return;
   // finished in a tab that isn't on screen: keep it for when that tab is opened
-  const onScreen = tab.host.classList.contains('active') || tab.host.classList.contains('tiled');
+  const onScreen = (tab.host.classList.contains('active') || tab.host.classList.contains('tiled')) && !document.hidden;
   if (!onScreen) { tab.pendingCelebrate = true; return; }
   tab.pendingCelebrate = false;
   const r = tab.host.getBoundingClientRect();
@@ -2396,6 +2289,11 @@ function celebrate(tab) {
   if (S.settings.celebrate) runCelebration(stageFx(), S.settings.celebrateStyle || 'party', x, y, r.width, 1.25);
   if (S.settings.doneText) showDoneText({ x: r.left - sr.left, y: r.top - sr.top, w: r.width, h: r.height });
 }
+
+document.addEventListener('visibilitychange', () => { // back from minimised / covered: what finished meanwhile celebrates now
+  if (document.hidden) return;
+  for (const tab of S.tabs) if (tab.pendingCelebrate && tab.host && (tab.host.classList.contains('active') || tab.host.classList.contains('tiled'))) setTimeout(() => celebrate(tab), 250);
+});
 
 /* ---------- custom cursors ---------- */
 
@@ -2425,9 +2323,9 @@ const CURSOR_KINDS = [
   ['saber', '광선검', '하얀 심지에 웅웅 떨리는 빛의 칼날'],
   ['candle', '촛불', '작은 초 위에서 일렁이는 불꽃'],
   ['brush', '붓', '먹을 머금은 대나무 붓'],
-  ['halo', '후광', '금빛 후광이 도는 빛의 막대'],
+  ['halo', '후광', '금빛 고리와 작은 날개를 단 빛기둥'],
   ['hellfire', '지옥불', '검붉은 불길에 휩싸인 막대'],
-  ['blood', '핏방울', '피가 맺혀 뚝뚝 떨어지는 막대'],
+  ['blood', '핏방울', '흘러내린 피가 방울져 뚝 떨어짐'],
   ['equalizer', '이퀄라이저', '음악에 맞춰 춤추는 막대 세 개'],
   ['hologram', '홀로그램', '주사선이 흐르며 지직거리는 투명 블록'],
   ['cat', '고양이', '뾰족 귀 고양이 얼굴 · 눈을 깜빡이고 움직이면 폴짝'],
@@ -2464,6 +2362,25 @@ let cursorMoveTimer = null;
 function scheduleCursor() {
   if (!cursorRaf) cursorRaf = requestAnimationFrame(() => { cursorRaf = 0; updateCursor(); });
 }
+/*
+ * Nobody watches an idle screen. After 30 s without a key, the mouse or terminal output, animated cursors hold
+ * still (body.idle, see cursors.css): a running CSS animation makes the compositor draw every refresh, which on a
+ * 144 Hz display is a quarter of a CPU core in the GPU process for a cursor.
+ */
+let lastActive = Date.now();
+const wakeUp = () => { lastActive = Date.now(); if (document.body.classList.contains('idle')) document.body.classList.remove('idle'); };
+for (const ev of ['keydown', 'mousemove', 'mousedown', 'wheel']) window.addEventListener(ev, wakeUp, { capture: true, passive: true });
+setInterval(() => {
+  const out = S.tabs.reduce((m, t) => Math.max(m, t.lastOut || 0), 0);
+  document.body.classList.toggle('idle', Date.now() - Math.max(lastActive, out) > 30000);
+}, 5000);
+
+/** Cursors drawn as inline SVG (fx/cursor-art.js) get their markup once per kind. */
+function cursorArt(el, kind) {
+  if (el.dataset.art === kind) return;
+  el.dataset.art = kind;
+  el.innerHTML = (window.CURSOR_ART && window.CURSOR_ART[kind]) || '';
+}
 function updateCursor() {
   if (!cursorEl) { cursorEl = h('div', 'mt-cursor'); cursorEl.hidden = true; $('#stage').appendChild(cursorEl); }
   const kind = S.settings.cursorStyle;
@@ -2481,7 +2398,8 @@ function updateCursor() {
   if (comp && comp.textContent) geo.left += comp.getBoundingClientRect().width;
   const focused = !!(document.activeElement && t.host.contains(document.activeElement)) && S.winFocused;
   const blink = S.settings.cursorBlink && !SELF_ANIMATED_CURSORS.includes(kind);
-  cursorEl.className = `mt-cursor kind-${kind}${focused ? '' : ' blurred'}${blink ? ' blink' : ''}`;
+  cursorEl.className = `mt-cursor kind-${kind}${focused ? '' : ' blurred'}${blink ? ' blink' : ''}${cursorEl.classList.contains('moving') ? ' moving' : ''}`;
+  cursorArt(cursorEl, kind);
   cursorEl.hidden = false;
   cursorEl.style.width = `${geo.cw}px`;
   cursorEl.style.height = `${geo.ch}px`;
@@ -2516,41 +2434,23 @@ function createBg(canvas) {
     if (k === 'stars') bg.items = Array.from({ length: Math.round(40 * area) }, () => ({ x: R() * w, y: R() * h, z: R(), ph: R() * 6 }));
     else if (k === 'thunder') {
       bg.items = Array.from({ length: Math.round(32 * area) }, () => ({ x: R() * w, y: R() * h, v: 6 + R() * 6, l: 12 + R() * 16, a: 0.5 + R() * 0.5 }));
-      bg.storm = { next: 90 + R() * 150, flash: -999, bolt: null };
+      bg.storm = { next: bg.t + 90 + R() * 150, flash: -999, bolt: null }; // counted from now: a resize reseeds, and must not strike
     } else if (k === 'rain') bg.items = Array.from({ length: Math.round(22 * area) }, () => ({ x: R() * w, y: R() * h, v: 4 + R() * 5, l: 8 + R() * 14 }));
-    else if (k === 'snow') bg.items = Array.from({ length: Math.round(24 * area) }, () => ({ x: R() * w, y: R() * h, v: 0.3 + R() * 0.8, r: 0.8 + R() * 2.2, ph: R() * 6 }));
     else if (k === 'network') bg.items = Array.from({ length: Math.min(70, Math.round(14 * area)) }, () => ({ x: R() * w, y: R() * h, vx: (R() - 0.5) * 0.35, vy: (R() - 0.5) * 0.35 }));
     else if (k === 'fireflies') bg.items = Array.from({ length: Math.round(9 * area) + 6 }, () => ({ x: R() * w, y: R() * h, vx: (R() - 0.5) * 0.3, vy: (R() - 0.5) * 0.3, ph: R() * 6, sp: 0.02 + R() * 0.03, r: 1.2 + R() * 1.6 }));
-    else if (k === 'sakura') bg.items = Array.from({ length: Math.round(8 * area) + 6 }, () => ({ x: R() * w, y: R() * h, v: 0.35 + R() * 0.6, s: 3 + R() * 4, rot: R() * 6, vr: (R() - 0.5) * 0.04, ph: R() * 6, tint: R() }));
     else if (k === 'bokeh') bg.items = Array.from({ length: Math.round(3 * area) + 6 }, () => ({ x: R() * w, y: R() * h, vx: (R() - 0.5) * 0.12, vy: -0.05 - R() * 0.12, r: 18 + R() * 46, c: (R() * 3) | 0, a: 0.05 + R() * 0.09, ph: R() * 6 }));
     else if (k === 'shooting') { bg.items = Array.from({ length: Math.round(30 * area) }, () => ({ x: R() * w, y: R() * h * 0.85, z: R(), ph: R() * 6 })); bg.meteors = []; }
     else if (k === 'sunset') bg.items = Array.from({ length: Math.round(20 * area) }, () => ({ x: R() * w, y: R() * h * 0.45, z: R(), ph: R() * 6 }));
     else if (k === 'blackhole') bg.items = Array.from({ length: Math.min(260, Math.round(60 * area) + 80) }, () => ({ r: 0.1 + R() * 0.9, a: R() * Math.PI * 2, z: R(), c: (R() * 3) | 0 }));
     else if (k === 'warp') bg.items = Array.from({ length: 160 }, () => ({ x: (R() - 0.5) * 2, y: (R() - 0.5) * 2, z: R(), pz: 0 }));
-    else if (k === 'jellyfish') bg.items = Array.from({ length: Math.min(9, Math.round(0.25 * area) + 4) }, () => ({ x: R() * w, y: R() * h, s: (16 + R() * 26) * sc, ph: R() * 6, v: 0.15 + R() * 0.25, c: (R() * 3) | 0 }));
     else if (k === 'campfire') { bg.items = []; campfireVideo(); }
-    else if (['haunted', 'heaven', 'castle', 'hell', 'cyberpunk', 'korea'].includes(k)) { bg.items = []; bg.eyes = []; bg.ghost = null; bg.flick = 0; bg.scene = null; bg.petals = []; }
+    else if (SCENE_BGS.includes(k)) { bg.items = []; bg.eyes = []; bg.ghost = null; bg.flick = 0; bg.scene = null; bg.st = null; bg.petals = []; }
     else if (k === 'lanterns') bg.items = Array.from({ length: Math.min(26, Math.round(0.6 * area) + 10) }, () => { const z = 0.25 + R() * 0.75; return { z, x: R() * w, y: R() * h * 1.1, v: (0.1 + z * 0.32) * Math.max(0.5, sc), s: (5 + z * 13) * sc, ph: R() * 6, sw: R() * 6 }; }).sort((a, b) => a.z - b.z);
     else if (k === 'constellation') { bg.items = Array.from({ length: Math.round(30 * area) }, () => ({ x: R() * w, y: R() * h, z: R(), ph: R() * 6 })); bg.cons = []; }
     else if (k === 'lavalamp') bg.items = Array.from({ length: 7 }, (_, i) => ({ x: (0.15 + R() * 0.7) * w, y: R() * h, r: (50 + R() * 70) * sc, vy: (R() < 0.5 ? -1 : 1) * (0.15 + R() * 0.25) * Math.max(0.4, sc), ph: R() * 6, c: i % 3 }));
-    else if (k === 'pond') { bg.items = []; bg.lilies = Array.from({ length: 3 }, () => ({ x: R() * w, y: R() * h, r: (14 + R() * 12) * sc, rot: R() * 6 })); }
     else if (k === 'code') { const fs = Math.max(8, 14 * sc); bg.fs = fs; bg.items = Array.from({ length: Math.ceil(w / (fs * 1.6)) }, (_, i) => ({ x: i * fs * 1.6 + R() * fs * 0.4, y: R() * h, v: (0.6 + R() * 1.6) * sc + 0.3, len: 6 + ((R() * 14) | 0), chars: [], t: 0 })); }
-    else if (k === 'circuit') {
-      const g = Math.max(14, 36 * sc); bg.g = g;
-      bg.items = []; // traces: random orthogonal paths on a grid
-      for (let n = 0; n < Math.round(10 * area) + 6; n++) {
-        let x = Math.round((R() * w) / g) * g; let y = Math.round((R() * h) / g) * g;
-        const pts = [[x, y]];
-        for (let s = 0; s < 3 + ((R() * 4) | 0); s++) { if (R() < 0.5) x += (R() < 0.5 ? -1 : 1) * g * (1 + ((R() * 3) | 0)); else y += (R() < 0.5 ? -1 : 1) * g * (1 + ((R() * 3) | 0)); pts.push([x, y]); }
-        bg.items.push({ pts, p: R(), v: 0.004 + R() * 0.008 });
-      }
-    }
     else if (k === 'tunnel') bg.items = Array.from({ length: 14 }, (_, i) => ({ z: i / 14, rot: R() * 6 }));
     else if (k === 'deepsea') bg.items = Array.from({ length: Math.round(10 * area) + 10 }, () => ({ x: R() * w, y: R() * h, r: (1 + R() * 3) * Math.max(0.5, sc), v: (0.2 + R() * 0.6) * Math.max(0.4, sc), ph: R() * 6, glow: R() < 0.35 }));
-    else if (k === 'aquarium') {
-      bg.items = Array.from({ length: Math.min(12, Math.round(1.2 * area) + 4) }, () => { const dir = R() < 0.5 ? -1 : 1; return { x: R() * w, y: h * (0.1 + R() * 0.8), dir, v: (0.3 + R() * 0.6) * Math.max(0.5, sc), s: (8 + R() * 10) * sc, ph: R() * 6, c: (R() * 4) | 0 }; });
-      bg.bubbles = [];
-    }
     else if (k === 'life') {
       const cs = Math.max(6, Math.round(13 * sc)); bg.cs = cs; bg.gw = Math.ceil(w / cs); bg.gh = Math.ceil(h / cs);
       bg.grid = new Uint8Array(bg.gw * bg.gh).map(() => (R() < 0.22 ? 1 : 0)); bg.age = new Float32Array(bg.gw * bg.gh); bg.gen = 0;
@@ -2564,11 +2464,11 @@ function createBg(canvas) {
   bg.set = (kind) => {
     bg.kind = kind || 'none';
     // 뇌우 draws its own light-mode colours (a lightning flash must stay a flash, not get inverted into a dark flicker)
-    bg.canvas.classList.toggle('bg-own-light', ['thunder', 'balloonsky', 'campfire', 'lanterns', 'haunted', 'heaven', 'castle', 'hell', 'cyberpunk', 'korea'].includes(bg.kind));
+    bg.canvas.classList.toggle('bg-own-light', ['thunder', 'balloonsky', 'campfire', 'lanterns', ...SCENE_BGS].includes(bg.kind) || !!(window.BG_OWN_LIGHT && window.BG_OWN_LIGHT.has(bg.kind)));
     bg.seed();
     cancelAnimationFrame(bg.raf);
     bg.raf = 0;
-    bg.ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (bg.ctx.reset) bg.ctx.reset(); else bg.ctx.clearRect(0, 0, canvas.width, canvas.height); // nothing carries over from the previous background
     if (bg.kind !== 'none') bg.raf = requestAnimationFrame(bg.frame);
   };
   bg.frame = (now) => {
@@ -2588,6 +2488,8 @@ function drawBg(bg) {
   const A = (c, m) => `rgba(${c[0]},${c[1]},${c[2]},${m})`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
+  const ext = window.BG_EXT && window.BG_EXT[bg.kind]; // a background kept in its own module (scenes/)
+  if (ext) { ext(bg, ctx, w, h, t); return; }
   switch (bg.kind) {
     case 'stars':
       for (const s of bg.items) {
@@ -2678,14 +2580,6 @@ function drawBg(bg) {
       }
       ctx.stroke();
       break;
-    case 'snow':
-      ctx.fillStyle = 'rgba(235,240,255,0.55)';
-      for (const f of bg.items) {
-        f.ph += 0.02; f.y += f.v; f.x += Math.sin(f.ph) * 0.4;
-        if (f.y > h + 4) { f.y = -4; f.x = Math.random() * w; }
-        ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.fill();
-      }
-      break;
     case 'grid': {
       const hz = h * 0.55;
       const g = ctx.createLinearGradient(0, hz - 60, 0, hz + 10);
@@ -2742,23 +2636,6 @@ function drawBg(bg) {
       }
       ctx.globalCompositeOperation = 'source-over';
       break;
-    case 'sakura':
-      for (const p of bg.items) {
-        p.ph += 0.02; p.rot += p.vr;
-        p.y += p.v; p.x += Math.sin(p.ph) * 0.6 + 0.25;
-        if (p.y > h + 10) { p.y = -10; p.x = Math.random() * w; }
-        if (p.x > w + 10) p.x = -10;
-        ctx.save();
-        ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.scale(1, 0.55 + 0.45 * Math.abs(Math.sin(p.ph * 1.7)));
-        ctx.fillStyle = p.tint > 0.5 ? 'rgba(255, 183, 206, 0.75)' : 'rgba(255, 214, 228, 0.7)';
-        ctx.beginPath();
-        ctx.moveTo(0, -p.s);
-        ctx.bezierCurveTo(p.s * 0.9, -p.s * 0.6, p.s * 0.7, p.s * 0.7, 0, p.s);
-        ctx.bezierCurveTo(-p.s * 0.7, p.s * 0.7, -p.s * 0.9, -p.s * 0.6, 0, -p.s);
-        ctx.fill();
-        ctx.restore();
-      }
-      break;
     case 'bokeh': {
       const cols = [a0, a1, a2];
       ctx.globalCompositeOperation = 'lighter';
@@ -2775,19 +2652,6 @@ function drawBg(bg) {
         ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalCompositeOperation = 'source-over';
-      break;
-    }
-    case 'waves': {
-      const layers = [[a0, 0.16, 0.78, 18, 0.008, 0.012], [a1, 0.13, 0.84, 14, 0.011, -0.016], [a2, 0.1, 0.9, 10, 0.015, 0.02]];
-      for (const [c, al, base, amp, freq, speed] of layers) {
-        ctx.fillStyle = A(c, al);
-        ctx.beginPath();
-        ctx.moveTo(0, h);
-        for (let x = 0; x <= w; x += 8) ctx.lineTo(x, h * base + Math.sin(x * freq + t * speed) * amp + Math.sin(x * freq * 2.3 + t * speed * 1.7) * amp * 0.35);
-        ctx.lineTo(w, h);
-        ctx.closePath();
-        ctx.fill();
-      }
       break;
     }
     case 'shooting':
@@ -2867,31 +2731,6 @@ function drawBg(bg) {
       }
       break;
     }
-    case 'jellyfish':
-      ctx.globalCompositeOperation = 'lighter';
-      for (const j of bg.items) {
-        j.ph += 0.035;
-        const pulse = Math.sin(j.ph);
-        j.y -= j.v * (1.2 + Math.max(0, pulse)); // pushes on each contraction
-        j.x += Math.sin(j.ph * 0.3) * 0.15;
-        if (j.y < -j.s * 4) { j.y = h + j.s * 2; j.x = Math.random() * w; }
-        const c = [a0, a1, a2][j.c];
-        const bw = j.s * (1 + 0.12 * pulse), bh = j.s * (0.75 - 0.1 * pulse);
-        const g = ctx.createRadialGradient(j.x, j.y, 0, j.x, j.y, bw * 1.8);
-        g.addColorStop(0, A(c, 0.12)); g.addColorStop(1, A(c, 0));
-        ctx.fillStyle = g; ctx.fillRect(j.x - bw * 2, j.y - bw * 2, bw * 4, bw * 4);
-        ctx.fillStyle = A(c, 0.16); ctx.strokeStyle = A(c, 0.4); ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.ellipse(j.x, j.y, bw, bh, 0, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
-        for (let k = 0; k < 5; k++) { // tentacles
-          const tx = j.x - bw * 0.7 + (k / 4) * bw * 1.4;
-          ctx.strokeStyle = A(c, 0.22);
-          ctx.beginPath(); ctx.moveTo(tx, j.y);
-          for (let s = 1; s <= 8; s++) ctx.lineTo(tx + Math.sin(j.ph * 1.3 - s * 0.6 + k) * s * 0.9, j.y + s * j.s * 0.28);
-          ctx.stroke();
-        }
-      }
-      ctx.globalCompositeOperation = 'source-over';
-      break;
     case 'lanterns': { // 풍등: paper sky lanterns lit from inside, swaying up into the night, near ones big and bright
       const L = isLight();
       const spr = lanternSprite();
@@ -2993,27 +2832,6 @@ function drawBg(bg) {
       }
       break;
     }
-    case 'pond': {
-      if (Math.random() < 0.06) bg.items.push({ x: Math.random() * w, y: Math.random() * h, r: 0, life: 1 });
-      for (const l of bg.lilies) { // lily pads drifting
-        l.rot += 0.001; l.x += 0.05;
-        if (l.x > w + 40) l.x = -40;
-        ctx.fillStyle = 'rgba(80,160,110,0.13)';
-        ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.arc(l.x, l.y, l.r, l.rot + 0.3, l.rot + Math.PI * 2 - 0.3); ctx.closePath(); ctx.fill();
-      }
-      for (const d of bg.items) {
-        d.r += 0.7 * (bg.sc || 1); d.life -= 0.009;
-        for (let k = 0; k < 3; k++) {
-          const r = d.r - k * 9 * (bg.sc || 1);
-          if (r <= 0) continue;
-          ctx.strokeStyle = A(k === 0 ? a2 : a1, Math.max(0, d.life * (0.32 - k * 0.09)));
-          ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.ellipse(d.x, d.y, r, r * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
-        }
-      }
-      bg.items = bg.items.filter((d) => d.life > 0);
-      break;
-    }
     case 'code': { // columns of faint glyphs falling, the head brightest
       const GL = '01アイウエオカキクケコサシスセソ{}[]<>/=+*#$%&;:ABCDEF';
       ctx.font = `${Math.round(bg.fs)}px 'Cascadia Mono', Consolas, Menlo, monospace`;
@@ -3028,32 +2846,6 @@ function drawBg(bg) {
           const al = i === 0 ? 0.55 : 0.28 * (1 - i / c.len);
           ctx.fillStyle = i === 0 ? `rgba(220,255,230,${al})` : A(a0, al);
           ctx.fillText(c.chars[i], c.x, yy);
-        }
-      }
-      break;
-    }
-    case 'circuit': { // copper traces with signal pulses racing along them
-      for (const tr of bg.items) {
-        ctx.strokeStyle = 'rgba(140,160,200,0.10)'; ctx.lineWidth = 1.2;
-        ctx.beginPath(); tr.pts.forEach(([x, y], i) => ctx[i ? 'lineTo' : 'moveTo'](x, y)); ctx.stroke();
-        ctx.fillStyle = 'rgba(160,180,220,0.18)';
-        for (const [x, y] of [tr.pts[0], tr.pts[tr.pts.length - 1]]) { ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill(); } // pads
-        tr.p += tr.v; if (tr.p > 1) tr.p = 0;
-        // where along the polyline is the pulse?
-        let total = 0; const segs = [];
-        for (let i = 1; i < tr.pts.length; i++) { const d = Math.hypot(tr.pts[i][0] - tr.pts[i - 1][0], tr.pts[i][1] - tr.pts[i - 1][1]); segs.push(d); total += d; }
-        let at = tr.p * total;
-        for (let i = 0; i < segs.length; i++) {
-          if (at <= segs[i]) {
-            const f = segs[i] ? at / segs[i] : 0;
-            const px = tr.pts[i][0] + (tr.pts[i + 1][0] - tr.pts[i][0]) * f;
-            const py = tr.pts[i][1] + (tr.pts[i + 1][1] - tr.pts[i][1]) * f;
-            const g = ctx.createRadialGradient(px, py, 0, px, py, 9);
-            g.addColorStop(0, A(a2, 0.7)); g.addColorStop(1, A(a2, 0));
-            ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py, 9, 0, Math.PI * 2); ctx.fill();
-            break;
-          }
-          at -= segs[i];
         }
       }
       break;
@@ -3123,26 +2915,6 @@ function drawBg(bg) {
       bg.sparks = bg.sparks.filter((p) => p.life > 0);
       break;
     }
-    case 'aquarium': { // fish wiggling their tails across, bubbles rising
-      const FISH = [[255, 160, 80], [120, 200, 255], [255, 220, 100], a1];
-      for (const f of bg.items) {
-        f.ph += 0.18; f.x += f.v * f.dir; f.y += Math.sin(f.ph * 0.2) * 0.25;
-        if (f.x < -40) f.x = w + 40; if (f.x > w + 40) f.x = -40;
-        const c = FISH[f.c];
-        ctx.save(); ctx.translate(f.x, f.y); ctx.scale(f.dir, 1);
-        ctx.fillStyle = A(c, 0.32);
-        ctx.beginPath(); ctx.ellipse(0, 0, f.s, f.s * 0.5, 0, 0, Math.PI * 2); ctx.fill(); // body
-        const wag = Math.sin(f.ph) * f.s * 0.3;
-        ctx.beginPath(); ctx.moveTo(-f.s * 0.85, 0); ctx.lineTo(-f.s * 1.6, -f.s * 0.5 + wag); ctx.lineTo(-f.s * 1.6, f.s * 0.5 + wag); ctx.closePath(); ctx.fill(); // tail
-        ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.beginPath(); ctx.arc(f.s * 0.5, -f.s * 0.12, f.s * 0.11, 0, Math.PI * 2); ctx.fill(); // eye
-        ctx.restore();
-        if (Math.random() < 0.006) bg.bubbles.push({ x: f.x + f.dir * f.s, y: f.y, r: 1 + Math.random() * 2 });
-      }
-      ctx.strokeStyle = 'rgba(190,230,255,0.3)'; ctx.lineWidth = 1;
-      for (const b of bg.bubbles) { b.y -= 0.6; b.x += Math.sin(b.y * 0.05) * 0.3; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.stroke(); }
-      bg.bubbles = bg.bubbles.filter((b) => b.y > -5);
-      break;
-    }
     case 'life': { // Conway's Game of Life, a generation every few frames; reseeded if it dies down
       const { gw, gh, cs } = bg;
       if (t % 7 === 0) {
@@ -3184,11 +2956,14 @@ function drawBg(bg) {
       const p = bg.items[0];
       const ph = Math.max(20, h * 0.16); const pw = Math.max(3, w * 0.008); const m = Math.max(8, w * 0.03);
       p.x += p.vx; p.y += p.vy;
-      if (p.y < 4 || p.y > h - 4) { p.vy *= -1; if (bg.canvas.classList.contains('bg-layer')) ambSfx('wall'); }
+      if (p.y < 4 || p.y > h - 4) { // put it back inside and send it away from the wall
+        p.vy = p.y < 4 ? Math.abs(p.vy) : -Math.abs(p.vy); p.y = Math.max(4, Math.min(h - 4, p.y));
+        if (bg.canvas.classList.contains('bg-layer')) ambSfx('wall');
+      }
       const wasVx = p.vx;
       p.l += (p.y - p.l) * 0.06; p.r += (p.y - p.r) * 0.06;
-      if (p.x < m + pw && Math.abs(p.y - p.l) < ph / 2) { p.vx = Math.abs(p.vx); p.vy += (p.y - p.l) * 0.03; }
-      if (p.x > w - m - pw && Math.abs(p.y - p.r) < ph / 2) { p.vx = -Math.abs(p.vx); p.vy += (p.y - p.r) * 0.03; }
+      if (p.vx < 0 && p.x < m + pw && Math.abs(p.y - p.l) < ph / 2) { p.vx = Math.abs(p.vx); p.vy += (p.y - p.l) * 0.03; }
+      if (p.vx > 0 && p.x > w - m - pw && Math.abs(p.y - p.r) < ph / 2) { p.vx = -Math.abs(p.vx); p.vy += (p.y - p.r) * 0.03; }
       if (Math.sign(wasVx) !== Math.sign(p.vx) && bg.canvas.classList.contains('bg-layer')) ambSfx('paddle'); // only when the ball really turns
       if (p.x < 0 || p.x > w) { if (p.x < 0) p.sr++; else p.sl++; p.x = w / 2; p.y = h / 2; p.vy = (Math.random() - 0.5) * 3; } // a point!
       p.vy = Math.max(-4, Math.min(4, p.vy));
@@ -3201,16 +2976,26 @@ function drawBg(bg) {
       ctx.textAlign = 'start';
       break;
     }
-    case 'campfire': { // 캠프파이어: footage of a fire by the tents (CC0), painted into soft flat colours, looped without a seam
+    case 'campfire': { // 캠프파이어: footage of a fire by the tents (CC0), painted into soft flat tones and cut out — only the fire, its light and the camp's shapes are drawn, the theme's background stays
       const v = campfireVideo();
-      if (v.readyState >= 2 && v.videoWidth) {
-        const k = Math.max(w / v.videoWidth, h / v.videoHeight);
-        const dw = v.videoWidth * k, dh = v.videoHeight * k;
-        if (isLight()) ctx.filter = 'saturate(0.7) brightness(1.25)'; // light mode: a paler painting under dark text
-        ctx.drawImage(v, (w - dw) * 0.4, h - dh, dw, dh); // keep the fire (left of centre, low) in view
-        ctx.filter = 'none';
+      if (!(v.readyState >= 2 && v.videoWidth)) break;
+      const k = Math.max(w / v.videoWidth, h / v.videoHeight);
+      const dw = v.videoWidth * k, dh = v.videoHeight * k, dx = (w - dw) * 0.4, dy = h - dh; // keep the fire (left of centre, low) in view
+      ctx.drawImage(v, dx, dy, dw, dh);
+      // sparks leaping up from the fire
+      const L = isLight(), fx = dx + dw * 0.3, fy = dy + dh * 0.57;
+      if (bg.items.length < Math.max(3, Math.min(24, Math.round(dh / 30))) && Math.random() < 0.3) {
+        bg.items.push({ x: fx + (Math.random() - 0.5) * dh * 0.2, y: fy + (Math.random() - 0.3) * dh * 0.12, vx: (Math.random() - 0.35) * dh * 0.0014, vy: -(0.0022 + Math.random() * 0.004) * dh, life: 1, d: 0.006 + Math.random() * 0.012, r: dh * (0.0015 + Math.random() * 0.002), ph: Math.random() * 6 });
       }
-      if (isLight()) { ctx.fillStyle = 'rgba(250,248,245,0.58)'; ctx.fillRect(0, 0, w, h); } // light mode: a strong light wash so dark text reads
+      ctx.globalCompositeOperation = L ? 'source-over' : 'lighter';
+      for (const sp of bg.items) {
+        sp.ph += 0.2; sp.x += sp.vx + Math.sin(sp.ph) * dh * 0.0004; sp.y += sp.vy; sp.vy *= 0.992; sp.life -= sp.d;
+        const al = Math.max(0, sp.life) * (0.6 + 0.4 * Math.sin(sp.ph * 2.3));
+        ctx.fillStyle = L ? `rgba(226,96,24,${al * 0.9})` : `rgba(255,${Math.round(150 + 70 * sp.life)},${Math.round(60 + 60 * sp.life)},${al})`;
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, Math.max(0.5, sp.r * (0.6 + 0.4 * sp.life)), 0, Math.PI * 2); ctx.fill();
+      }
+      bg.items = bg.items.filter((sp) => sp.life > 0);
+      ctx.globalCompositeOperation = 'source-over';
       break;
     }
     case 'haunted': drawHaunted(bg, ctx, w, h, t); break;
@@ -3219,6 +3004,9 @@ function drawBg(bg) {
     case 'hell': drawHell(bg, ctx, w, h, t); break;
     case 'cyberpunk': drawCyber(bg, ctx, w, h, t); break;
     case 'korea': drawKorea(bg, ctx, w, h, t); break;
+    case 'steampunk': drawSteampunk(bg, ctx, w, h, t); break;
+    case 'analog': drawAnalog(bg, ctx, w, h, t); break;
+    case 'backrooms': drawBackrooms(bg, ctx, w, h, t); break;
     case 'balloonsky': { // latex balloons drifting up on curly strings, near ones big and crisp, far ones small and hazy
       const L = isLight();
       const spr = bg.balloonSprites || (bg.balloonSprites = BALLOON_COLS.map((c) => balloonSprite(c)));
@@ -3253,523 +3041,6 @@ function drawBg(bg) {
     default:
       break;
   }
-}
-
-/* ---------- scene backgrounds (으스스한 숲 · 천상 · 마왕성 · 지옥 · 사이버펑크 · 한국의 밤) ---------- */
-/* Built from silhouettes, light and soft noise: the still scenery is painted once into an offscreen canvas,
-   fog / clouds come from pre-made noise textures, and only light, particles and creatures move. */
-const SCENE_CACHE = {};
-function noiseTexture(key, W, H, cell, oct, lo = 0.32, hi = 0.85) {
-  if (SCENE_CACHE[key]) return SCENE_CACHE[key];
-  const gw = Math.ceil(W / cell) + 2, gh = Math.ceil(H / cell) + 2;
-  const grids = Array.from({ length: oct }, (_, o) => { const m = 1 << o; return Array.from({ length: (gw * m + 1) * (gh * m + 1) }, () => Math.random()); });
-  const sm = (t) => t * t * (3 - 2 * t);
-  const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const x = c.getContext('2d');
-  const img = x.createImageData(W, H);
-  for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
-    let v = 0, amp = 0.5, tot = 0;
-    for (let o = 0; o < oct; o++) {
-      const m = 1 << o, cw = cell / m, gx = px / cw, gy = py / cw, ix = Math.floor(gx), iy = Math.floor(gy), fx = sm(gx - ix), fy = sm(gy - iy);
-      const row = gw * m + 1, gr = grids[o];
-      // wrap horizontally so the texture tiles when it scrolls
-      const wx = (ix % (gw * m - 2)), wx1 = ((ix + 1) % (gw * m - 2));
-      const a = gr[iy * row + wx], b = gr[iy * row + wx1], cc = gr[(iy + 1) * row + wx], d = gr[(iy + 1) * row + wx1];
-      v += amp * (a + (b - a) * fx + (cc - a) * fy + (a - b - cc + d) * fx * fy); tot += amp; amp *= 0.5;
-    }
-    v /= tot;
-    const env = Math.pow(Math.sin(Math.PI * (py + 0.5) / H), 0.9); // soft top and bottom: the band has no visible edge
-    const al = Math.max(0, Math.min(1, (v - lo) / (hi - lo))) * env;
-    const i = (py * W + px) * 4;
-    img.data[i] = img.data[i + 1] = img.data[i + 2] = 255; img.data[i + 3] = Math.round(al * 255);
-  }
-  x.putImageData(img, 0, 0);
-  return (SCENE_CACHE[key] = c);
-}
-function tinted(tex, color, key) {
-  const k = key + '|' + color;
-  if (SCENE_CACHE[k]) return SCENE_CACHE[k];
-  const c = document.createElement('canvas'); c.width = tex.width; c.height = tex.height;
-  const x = c.getContext('2d'); x.drawImage(tex, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = color; x.fillRect(0, 0, c.width, c.height);
-  return (SCENE_CACHE[k] = c);
-}
-/** A horizontally scrolling band of fog / cloud. */
-function fogBand(ctx, tex, w, y, hh, off, alpha) {
-  const tw = w * 1.4;
-  const o = ((off % tw) + tw) % tw;
-  ctx.globalAlpha = alpha;
-  ctx.drawImage(tex, -o, y, tw, hh); ctx.drawImage(tex, tw - o, y, tw, hh);
-  ctx.globalAlpha = 1;
-}
-/** A gnarled, branching tree (silhouette). */
-function sceneTree(c, x, y, len, ang, wid, depth, spread = 0.55) {
-  const x2 = x + Math.cos(ang) * len, y2 = y + Math.sin(ang) * len;
-  const bend = (Math.random() - 0.5) * len * 0.25;
-  c.lineWidth = Math.max(0.6, wid);
-  c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo((x + x2) / 2 + bend, (y + y2) / 2 + bend * 0.3, x2, y2); c.stroke();
-  if (depth <= 0) return;
-  const n = Math.random() < 0.35 ? 3 : 2;
-  for (let i = 0; i < n; i++) sceneTree(c, x2, y2, len * (0.62 + Math.random() * 0.18), ang + (i - (n - 1) / 2) * spread + (Math.random() - 0.5) * 0.45, wid * 0.66, depth - 1, spread);
-}
-function sceneCanvas(w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; }
-const lightWash = (ctx, w, h, a = 0.55) => { if (isLight()) { ctx.fillStyle = 'rgba(250,248,245,' + a + ')'; ctx.fillRect(0, 0, w, h); } };
-
-/* 으스스한 숲 */
-function hauntedScene(w, h) {
-  const L = isLight(), c = sceneCanvas(w, h), x = c.getContext('2d'), sc = Math.min(w, h);
-  const sky = x.createLinearGradient(0, 0, 0, h);
-  if (L) { sky.addColorStop(0, '#c9ccce'); sky.addColorStop(1, '#e6e7e6'); } else { sky.addColorStop(0, '#03050a'); sky.addColorStop(0.6, '#0a1214'); sky.addColorStop(1, '#0d1612'); }
-  x.fillStyle = sky; x.fillRect(0, 0, w, h);
-  // the moon
-  const mx = w * 0.72, my = h * 0.2, mr = sc * 0.06;
-  const halo = x.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * 5);
-  halo.addColorStop(0, L ? 'rgba(255,255,255,0.55)' : 'rgba(200,215,210,0.22)'); halo.addColorStop(1, 'rgba(200,215,210,0)');
-  x.fillStyle = halo; x.fillRect(0, 0, w, h);
-  x.fillStyle = L ? '#f7f7f4' : '#cdd8d2'; x.beginPath(); x.arc(mx, my, mr, 0, Math.PI * 2); x.fill();
-  x.fillStyle = L ? 'rgba(150,155,150,0.25)' : 'rgba(90,105,100,0.35)';
-  for (const [dx, dy, r] of [[-0.3, -0.2, 0.22], [0.25, 0.15, 0.16], [-0.05, 0.38, 0.12]]) { x.beginPath(); x.arc(mx + dx * mr, my + dy * mr, r * mr, 0, Math.PI * 2); x.fill(); }
-  // far tree line, then near dead trees
-  x.lineCap = 'round';
-  for (let i = 0; i < Math.ceil(w / (sc * 0.07)); i++) {
-    x.strokeStyle = L ? 'rgba(120,125,125,0.55)' : 'rgba(18,28,26,0.95)';
-    sceneTree(x, (i + Math.random()) * sc * 0.07, h * 0.78, sc * (0.07 + Math.random() * 0.06), -Math.PI / 2, sc * 0.008, 5, 0.5);
-  }
-  x.fillStyle = L ? 'rgba(120,125,125,0.55)' : '#0a120f'; x.fillRect(0, h * 0.78, w, h * 0.22);
-  for (const [px, s] of [[0.04, 1.2], [0.16, 0.9], [0.86, 1.1], [0.97, 0.85], [0.6, 0.7]]) {
-    x.strokeStyle = L ? 'rgba(40,42,44,0.92)' : '#020303';
-    sceneTree(x, px * w, h * 1.02, sc * 0.2 * s, -Math.PI / 2 + (Math.random() - 0.5) * 0.15, sc * 0.028 * s, 7, 0.62);
-  }
-  return c;
-}
-function drawHaunted(bg, ctx, w, h, t) {
-  const L = isLight();
-  if (!bg.scene || bg.sceneLight !== L) { bg.scene = hauntedScene(w, h); bg.sceneLight = L; }
-  ctx.drawImage(bg.scene, 0, 0);
-  const sc = Math.min(w, h);
-  const cloud = tinted(noiseTexture('cloud', 256, 96, 40, 4, 0.4, 0.9), L ? '#8a8f92' : '#05080a', 'cloud');
-  fogBand(ctx, cloud, w, h * 0.06, h * 0.32, t * 0.25, L ? 0.55 : 0.85); // clouds drifting over the moon
-  // eyes in the dark between the trees
-  if (Math.random() < 0.006 && bg.eyes.length < 3) bg.eyes.push({ x: w * (0.08 + Math.random() * 0.84), y: h * (0.68 + Math.random() * 0.2), s: sc * (0.004 + Math.random() * 0.004), life: 0, dur: 300 + Math.random() * 300 });
-  for (const e of bg.eyes) {
-    e.life++;
-    const k = e.life / e.dur, a = Math.min(1, k * 6, (1 - k) * 6);
-    const blink = (e.life % 170) < 7 ? 0.1 : 1;
-    ctx.fillStyle = 'rgba(255,40,30,' + 0.85 * a * blink + ')';
-    ctx.shadowColor = 'rgba(255,20,10,0.9)'; ctx.shadowBlur = e.s * 4;
-    for (const d of [-1, 1]) { ctx.beginPath(); ctx.ellipse(e.x + d * e.s * 2.4, e.y, e.s, e.s * 0.6, 0, 0, Math.PI * 2); ctx.fill(); }
-    ctx.shadowBlur = 0;
-  }
-  bg.eyes = bg.eyes.filter((e) => e.life < e.dur);
-  // a figure standing far off in the fog, now and then
-  if (!bg.ghost && Math.random() < 0.0012) bg.ghost = { x: w * (0.25 + Math.random() * 0.5), life: 0, dur: 520 };
-  if (bg.ghost) {
-    const g = bg.ghost; g.life++;
-    const k = g.life / g.dur, a = Math.min(1, k * 4, (1 - k) * 4) * (L ? 0.55 : 0.5);
-    const fh = sc * 0.14, fx = g.x, fy = h * 0.79;
-    ctx.fillStyle = L ? 'rgba(40,40,44,' + a + ')' : 'rgba(0,0,0,' + a * 1.6 + ')';
-    ctx.beginPath(); ctx.arc(fx, fy - fh, fh * 0.09, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(fx - fh * 0.09, fy - fh * 0.9); ctx.quadraticCurveTo(fx - fh * 0.16, fy - fh * 0.3, fx - fh * 0.12, fy); ctx.lineTo(fx + fh * 0.12, fy); ctx.quadraticCurveTo(fx + fh * 0.16, fy - fh * 0.3, fx + fh * 0.09, fy - fh * 0.9); ctx.closePath(); ctx.fill();
-    if (g.life >= g.dur) bg.ghost = null;
-  }
-  // ground fog in three drifting layers
-  const fog = tinted(noiseTexture('fog', 256, 80, 32, 4, 0.3, 0.85), L ? '#ffffff' : '#9fb0aa', 'fog');
-  fogBand(ctx, fog, w, h * 0.6, h * 0.3, t * 0.35, L ? 0.55 : 0.16);
-  fogBand(ctx, fog, w, h * 0.72, h * 0.3, -t * 0.55 + 400, L ? 0.6 : 0.2);
-  fogBand(ctx, fog, w, h * 0.82, h * 0.22, t * 0.8 + 900, L ? 0.65 : 0.24);
-  // a flicker now and then, like a dying light
-  if (bg.flick > 0) { ctx.fillStyle = L ? 'rgba(30,30,32,' + 0.25 * bg.flick + ')' : 'rgba(0,0,0,' + 0.5 * bg.flick + ')'; ctx.fillRect(0, 0, w, h); bg.flick -= 0.12; }
-  else if (Math.random() < 0.0025) bg.flick = 1;
-  // vignette
-  const v = ctx.createRadialGradient(w / 2, h / 2, sc * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
-  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, L ? 'rgba(40,40,44,0.35)' : 'rgba(0,0,0,0.7)');
-  ctx.fillStyle = v; ctx.fillRect(0, 0, w, h);
-}
-
-/* 천상 */
-function angelSprite(L) {
-  const key = 'angel' + L;
-  if (SCENE_CACHE[key]) return SCENE_CACHE[key];
-  const W = 220, H = 200, c = sceneCanvas(W, H), x = c.getContext('2d'), cx = W / 2;
-  const body = L ? 'rgba(255,252,240,0.98)' : 'rgba(255,250,235,0.95)';
-  x.shadowColor = L ? 'rgba(220,170,60,0.8)' : 'rgba(255,230,160,0.9)'; x.shadowBlur = 14;
-  // wings: layered feathers fanning out
-  x.strokeStyle = body; x.lineCap = 'round';
-  for (const side of [-1, 1]) {
-    for (let r = 0; r < 3; r++) {
-      for (let i = 0; i < 9; i++) {
-        const a = -0.15 - i * 0.13 - r * 0.05, len = 70 - r * 16 - i * 2.4;
-        const bx = cx + side * 10, by = 92 + r * 8;
-        x.lineWidth = 7 - r * 1.6;
-        x.beginPath(); x.moveTo(bx, by);
-        x.quadraticCurveTo(bx + side * Math.cos(a) * len * 0.6, by + Math.sin(a) * len * 0.3 - 8, bx + side * Math.cos(a) * len, by + Math.sin(a) * len * 0.55 + 18);
-        x.stroke();
-      }
-    }
-  }
-  // robe and head
-  x.fillStyle = body;
-  x.beginPath(); x.moveTo(cx - 9, 86); x.quadraticCurveTo(cx - 26, 150, cx - 22, 190); x.quadraticCurveTo(cx, 182, cx + 22, 190); x.quadraticCurveTo(cx + 26, 150, cx + 9, 86); x.closePath(); x.fill();
-  x.beginPath(); x.arc(cx, 72, 11, 0, Math.PI * 2); x.fill();
-  // halo
-  x.shadowColor = 'rgba(255,200,80,1)'; x.shadowBlur = 10;
-  x.strokeStyle = 'rgba(255,214,120,0.95)'; x.lineWidth = 3;
-  x.beginPath(); x.ellipse(cx, 56, 15, 4.5, 0, 0, Math.PI * 2); x.stroke();
-  // soften the whole figure: an angel should read as light, not as a shape
-  const s = sceneCanvas(W, H), sx = s.getContext('2d');
-  sx.filter = 'blur(1.4px)'; sx.drawImage(c, 0, 0);
-  return (SCENE_CACHE[key] = s);
-}
-function drawHeaven(bg, ctx, w, h, t) {
-  const L = isLight(), sc = Math.min(w, h), cx = w / 2, cy = h * 0.2;
-  const sky = ctx.createLinearGradient(0, 0, 0, h);
-  if (L) { sky.addColorStop(0, '#fff7e0'); sky.addColorStop(1, '#fbf3e6'); } else { sky.addColorStop(0, '#120f22'); sky.addColorStop(0.55, '#1d1730'); sky.addColorStop(1, '#2a2132'); }
-  ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
-  ctx.globalCompositeOperation = L ? 'source-over' : 'lighter';
-  // light pouring down: slow-turning rays from the throne of light
-  for (let i = 0; i < 14; i++) {
-    const a = Math.PI / 2 + (i - 6.5) * 0.13 + Math.sin(t * 0.003 + i) * 0.03;
-    const len = Math.max(w, h) * 1.3, wd = 0.035 + (i % 3) * 0.015;
-    const g = ctx.createLinearGradient(cx, cy, cx + Math.cos(a) * len, cy + Math.sin(a) * len);
-    const al = (L ? 0.16 : 0.1) * (0.6 + 0.4 * Math.sin(t * 0.01 + i * 1.7));
-    g.addColorStop(0, 'rgba(255,236,170,' + al + ')'); g.addColorStop(1, 'rgba(255,236,170,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + Math.cos(a - wd) * len, cy + Math.sin(a - wd) * len); ctx.lineTo(cx + Math.cos(a + wd) * len, cy + Math.sin(a + wd) * len); ctx.closePath(); ctx.fill();
-  }
-  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, sc * 0.5);
-  core.addColorStop(0, L ? 'rgba(255,250,225,1)' : 'rgba(255,245,210,0.8)'); core.addColorStop(0.18, L ? 'rgba(255,225,150,0.55)' : 'rgba(255,215,130,0.35)'); core.addColorStop(1, 'rgba(255,200,120,0)');
-  ctx.fillStyle = core; ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = 'rgba(255,215,130,' + (L ? 0.5 : 0.35) * (0.8 + 0.2 * Math.sin(t * 0.02)) + ')'; ctx.lineWidth = Math.max(1, sc * 0.004);
-  ctx.beginPath(); ctx.ellipse(cx, cy, sc * 0.11, sc * 0.11, 0, 0, Math.PI * 2); ctx.stroke();
-  ctx.globalCompositeOperation = 'source-over';
-  // angels attending on both sides
-  const spr = angelSprite(L);
-  for (let i = 0; i < 6; i++) {
-    const side = i < 3 ? -1 : 1, k = i % 3;
-    const ax = cx + side * sc * (0.28 + k * 0.22), ay = cy + sc * (0.12 + k * 0.12) + Math.sin(t * 0.02 + i) * sc * 0.012;
-    const s = sc * (0.24 - k * 0.04) / spr.height;
-    ctx.save(); ctx.translate(ax, ay); ctx.scale(-side * s, s); // facing the light
-    ctx.globalAlpha = (L ? 0.85 : 0.7) - k * 0.12;
-    ctx.drawImage(spr, -spr.width / 2, -spr.height / 2);
-    ctx.restore();
-  }
-  ctx.globalAlpha = 1;
-  // a floor of golden clouds
-  const cloud = tinted(noiseTexture('hcloud', 256, 96, 36, 4, 0.28, 0.8), L ? '#fff4d8' : '#e8d6a8', 'hcloud');
-  fogBand(ctx, cloud, w, h * 0.66, h * 0.36, t * 0.18, L ? 0.85 : 0.32);
-  fogBand(ctx, cloud, w, h * 0.78, h * 0.3, -t * 0.28 + 500, L ? 0.95 : 0.42);
-  // feathers drifting down, and glints
-  if (Math.random() < 0.05) bg.items.push({ x: Math.random() * w, y: -10, vx: (Math.random() - 0.5) * 0.3, vy: 0.3 + Math.random() * 0.4, r: Math.random() * 6, life: 1 });
-  for (const f of bg.items) {
-    f.r += 0.03; f.x += f.vx + Math.sin(f.r) * 0.6; f.y += f.vy;
-    ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(Math.sin(f.r) * 0.8);
-    ctx.fillStyle = L ? 'rgba(210,180,110,0.55)' : 'rgba(255,248,230,0.55)';
-    ctx.beginPath(); ctx.ellipse(0, 0, sc * 0.004, sc * 0.012, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  }
-  bg.items = bg.items.filter((f) => f.y < h + 20);
-}
-
-/* 마왕성 */
-function castleScene(w, h) {
-  const c = sceneCanvas(w, h), x = c.getContext('2d'), sc = Math.min(w, h);
-  const sky = x.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, '#0c0206'); sky.addColorStop(0.55, '#3a070b'); sky.addColorStop(1, '#5a0f0c');
-  x.fillStyle = sky; x.fillRect(0, 0, w, h);
-  // a blood moon behind the keep
-  const mx = w * 0.58, my = h * 0.3, mr = sc * 0.13;
-  const halo = x.createRadialGradient(mx, my, mr, mx, my, mr * 3.2);
-  halo.addColorStop(0, 'rgba(255,80,40,0.35)'); halo.addColorStop(1, 'rgba(255,60,30,0)');
-  x.fillStyle = halo; x.fillRect(0, 0, w, h);
-  const mg = x.createRadialGradient(mx - mr * 0.3, my - mr * 0.3, mr * 0.1, mx, my, mr);
-  mg.addColorStop(0, '#ff9a60'); mg.addColorStop(1, '#a8241a');
-  x.fillStyle = mg; x.beginPath(); x.arc(mx, my, mr, 0, Math.PI * 2); x.fill();
-  // jagged mountains
-  x.fillStyle = '#16050a';
-  x.beginPath(); x.moveTo(0, h);
-  for (let px = 0; px <= w; px += sc * 0.03) x.lineTo(px, h * 0.7 - Math.abs(Math.sin(px * 0.013)) * h * 0.12 - Math.random() * h * 0.04);
-  x.lineTo(w, h); x.closePath(); x.fill();
-  // the castle on its crag
-  const base = h * 0.78, cx = mx;
-  x.fillStyle = '#050104';
-  x.beginPath(); x.moveTo(cx - sc * 0.42, h); x.lineTo(cx - sc * 0.28, base); x.lineTo(cx + sc * 0.3, base); x.lineTo(cx + sc * 0.46, h); x.closePath(); x.fill();
-  const tower = (tx, tw, th, spire) => {
-    x.fillRect(tx - tw / 2, base - th, tw, th + 2);
-    for (let i = 0; i < 3; i++) x.fillRect(tx - tw / 2 + i * tw / 2.5, base - th - tw * 0.12, tw / 5, tw * 0.13); // battlements
-    x.beginPath(); x.moveTo(tx - tw * 0.6, base - th); x.lineTo(tx, base - th - spire); x.lineTo(tx + tw * 0.6, base - th); x.closePath(); x.fill();
-    x.fillRect(tx - 0.6, base - th - spire - sc * 0.03, 1.2, sc * 0.03); // flagpole
-  };
-  x.fillRect(cx - sc * 0.22, base - sc * 0.16, sc * 0.44, sc * 0.17); // the hall
-  tower(cx, sc * 0.07, sc * 0.36, sc * 0.16); // the keep
-  tower(cx - sc * 0.13, sc * 0.05, sc * 0.25, sc * 0.11); tower(cx + sc * 0.14, sc * 0.05, sc * 0.27, sc * 0.12);
-  tower(cx - sc * 0.24, sc * 0.04, sc * 0.17, sc * 0.08); tower(cx + sc * 0.25, sc * 0.04, sc * 0.19, sc * 0.09);
-  // windows (lit later, flickering) – remember where they are
-  c.windows = Array.from({ length: 22 }, () => ({ x: cx + (Math.random() - 0.5) * sc * 0.48, y: base - Math.random() * sc * 0.3, s: sc * 0.006 }));
-  return c;
-}
-function drawCastle(bg, ctx, w, h, t) {
-  if (!bg.scene) bg.scene = castleScene(w, h);
-  ctx.drawImage(bg.scene, 0, 0);
-  const sc = Math.min(w, h);
-  const cloud = tinted(noiseTexture('ccloud', 256, 96, 36, 4, 0.35, 0.9), '#2a0508', 'ccloud');
-  fogBand(ctx, cloud, w, h * 0.02, h * 0.34, t * 0.4, 0.75);
-  fogBand(ctx, cloud, w, h * 0.2, h * 0.3, -t * 0.25 + 300, 0.45);
-  for (const wn of bg.scene.windows) {
-    const f = 0.6 + 0.4 * Math.sin(t * 0.07 + wn.x);
-    ctx.fillStyle = 'rgba(255,' + Math.round(170 + 40 * f) + ',60,' + 0.85 * f + ')';
-    ctx.fillRect(wn.x, wn.y, wn.s, wn.s * 1.6);
-  }
-  // lightning onto the spires
-  if (t >= (bg.next || 0)) { bg.next = t + 300 + Math.random() * 500; bg.flash = t; bg.boltX = w * (0.45 + Math.random() * 0.25); }
-  const age = t - (bg.flash ?? -999);
-  if (age >= 0 && age < 20) {
-    ctx.fillStyle = 'rgba(200,150,255,' + (age < 4 ? 0.22 : 0.08) + ')'; ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = 'rgba(235,215,255,' + (1 - age / 20) + ')'; ctx.lineWidth = Math.max(1.2, sc * 0.003);
-    ctx.shadowColor = 'rgba(190,140,255,0.9)'; ctx.shadowBlur = sc * 0.02;
-    ctx.beginPath(); let lx = bg.boltX, ly = 0; ctx.moveTo(lx, ly);
-    const rnd = (n) => Math.sin(bg.flash * 13.1 + n * 7.7) * 0.5;
-    for (let i = 0; i < 12; i++) { lx += rnd(i) * sc * 0.06; ly += h * 0.04; ctx.lineTo(lx, ly); }
-    ctx.stroke(); ctx.shadowBlur = 0;
-  }
-  // bats
-  if (Math.random() < 0.02) bg.items.push({ x: -20, y: h * (0.1 + Math.random() * 0.4), v: 1.4 + Math.random() * 1.6, ph: Math.random() * 6, s: sc * (0.008 + Math.random() * 0.008) });
-  ctx.fillStyle = '#050104';
-  for (const b of bg.items) {
-    b.x += b.v; b.ph += 0.45; b.y += Math.sin(b.ph * 0.3) * 0.6;
-    const fl = Math.sin(b.ph) * b.s;
-    ctx.beginPath(); ctx.moveTo(b.x, b.y);
-    ctx.quadraticCurveTo(b.x - b.s * 1.2, b.y - fl - b.s * 0.3, b.x - b.s * 2.2, b.y - fl * 0.4);
-    ctx.quadraticCurveTo(b.x - b.s * 1.1, b.y + b.s * 0.2, b.x, b.y + b.s * 0.3);
-    ctx.quadraticCurveTo(b.x + b.s * 1.1, b.y + b.s * 0.2, b.x + b.s * 2.2, b.y - fl * 0.4);
-    ctx.quadraticCurveTo(b.x + b.s * 1.2, b.y - fl - b.s * 0.3, b.x, b.y); ctx.fill();
-  }
-  bg.items = bg.items.filter((b) => b.x < w + 40);
-  lightWash(ctx, w, h);
-}
-
-/* 지옥 */
-function hellScene(w, h) {
-  const c = sceneCanvas(w, h), x = c.getContext('2d'), sc = Math.min(w, h);
-  const sky = x.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, '#070101'); sky.addColorStop(0.5, '#2c0603'); sky.addColorStop(0.85, '#8a1d05'); sky.addColorStop(1, '#ff6a10');
-  x.fillStyle = sky; x.fillRect(0, 0, w, h);
-  const spires = (col, baseY, hmax, n) => {
-    x.fillStyle = col;
-    x.beginPath(); x.moveTo(0, h);
-    for (let i = 0; i <= n; i++) {
-      const px = (i / n) * w, hh = hmax * (0.3 + Math.random() * 0.7) * (0.6 + 0.4 * Math.abs(Math.sin(i * 1.7)));
-      const tipX = px + (Math.random() - 0.5) * w / n * 0.3, l0 = px - w / n * 0.35, r0 = px + w / n * 0.35;
-      x.lineTo(l0, baseY);
-      for (let k = 1; k < 7; k++) { const f = k / 7; x.lineTo(l0 + (tipX - l0) * f + (Math.random() - 0.5) * w / n * 0.12 * (1 - f), baseY - hh * f + (Math.random() - 0.5) * hh * 0.05); }
-      x.lineTo(tipX, baseY - hh);
-      for (let k = 6; k > 0; k--) { const f = k / 7; x.lineTo(r0 + (tipX - r0) * f + (Math.random() - 0.5) * w / n * 0.12 * (1 - f), baseY - hh * f + (Math.random() - 0.5) * hh * 0.05); }
-      x.lineTo(r0, baseY);
-    }
-    x.lineTo(w, h); x.closePath(); x.fill();
-  };
-  spires('#3a0904', h * 0.82, h * 0.3, 9);
-  spires('#170302', h * 0.9, h * 0.4, 6);
-  // two great horns of rock framing the view
-  x.fillStyle = '#060000';
-  x.beginPath(); x.moveTo(0, h); x.lineTo(0, h * 0.25); x.quadraticCurveTo(sc * 0.18, h * 0.45, sc * 0.26, h); x.closePath(); x.fill();
-  x.beginPath(); x.moveTo(w, h); x.lineTo(w, h * 0.3); x.quadraticCurveTo(w - sc * 0.2, h * 0.5, w - sc * 0.28, h); x.closePath(); x.fill();
-  return c;
-}
-function drawHell(bg, ctx, w, h, t) {
-  if (!bg.scene) bg.scene = hellScene(w, h);
-  ctx.drawImage(bg.scene, 0, 0);
-  const sc = Math.min(w, h);
-  // a river of lava below, flowing and pulsing
-  ctx.globalCompositeOperation = 'lighter';
-  const lava = tinted(noiseTexture('lava', 256, 64, 18, 4, 0.25, 0.8), '#ff7a18', 'lava');
-  fogBand(ctx, lava, w, h * 0.9, h * 0.12, t * 0.6, 0.55 + 0.15 * Math.sin(t * 0.03));
-  const lava2 = tinted(noiseTexture('lava2', 256, 64, 12, 3, 0.45, 0.9), '#ffd060', 'lava2');
-  fogBand(ctx, lava2, w, h * 0.93, h * 0.08, -t * 0.9, 0.4);
-  // embers rising in the heat
-  if (Math.random() < 0.6) bg.items.push({ x: Math.random() * w, y: h * (0.88 + Math.random() * 0.1), vx: (Math.random() - 0.5) * 0.4, vy: -(0.6 + Math.random() * 1.6), life: 1, s: 0.8 + Math.random() * 1.8, ph: Math.random() * 6 });
-  for (const e of bg.items) {
-    e.ph += 0.06; e.x += e.vx + Math.sin(e.ph) * 0.5; e.y += e.vy; e.life -= 0.005;
-    ctx.fillStyle = 'rgba(255,' + Math.round(120 + 100 * e.life) + ',40,' + Math.max(0, e.life) + ')';
-    ctx.beginPath(); ctx.arc(e.x, e.y, e.s, 0, Math.PI * 2); ctx.fill();
-  }
-  bg.items = bg.items.filter((e) => e.life > 0 && e.y > -10);
-  ctx.globalCompositeOperation = 'source-over';
-  // smoke rolling overhead
-  const smoke = tinted(noiseTexture('smoke', 256, 96, 40, 4, 0.35, 0.9), '#0a0202', 'smoke');
-  fogBand(ctx, smoke, w, 0, h * 0.45, t * 0.3, 0.8);
-  fogBand(ctx, smoke, w, h * 0.15, h * 0.35, -t * 0.45 + 700, 0.5);
-  // the glow throbbing up from below
-  const glow = ctx.createLinearGradient(0, h, 0, h * 0.4);
-  glow.addColorStop(0, 'rgba(255,90,20,' + (0.18 + 0.08 * Math.sin(t * 0.025)) + ')'); glow.addColorStop(1, 'rgba(255,60,10,0)');
-  ctx.fillStyle = glow; ctx.fillRect(0, 0, w, h);
-  lightWash(ctx, w, h);
-}
-
-/* 사이버펑크 */
-function cyberScene(w, h) {
-  const c = sceneCanvas(w, h), x = c.getContext('2d'), sc = Math.min(w, h);
-  const sky = x.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, '#05030e'); sky.addColorStop(0.6, '#140726'); sky.addColorStop(1, '#3a0d3e');
-  x.fillStyle = sky; x.fillRect(0, 0, w, h);
-  const layer = (col, minH, maxH, bw, win, winCol) => {
-    let px = -bw;
-    while (px < w + bw) {
-      const bwi = bw * (0.6 + Math.random() * 0.9), bh = minH + Math.random() * (maxH - minH);
-      x.fillStyle = col; x.fillRect(px, h - bh, bwi, bh);
-      if (Math.random() < 0.3) x.fillRect(px + bwi * 0.45, h - bh - sc * 0.05, 1.5, sc * 0.05); // antenna
-      if (win) for (let wy = h - bh + 6; wy < h - 4; wy += win * 2.2) for (let wx = px + 4; wx < px + bwi - 4; wx += win * 1.8) {
-        if (Math.random() < 0.28) { x.fillStyle = winCol[(Math.random() * winCol.length) | 0]; x.fillRect(wx, wy, win, win); }
-      }
-      px += bwi + 2;
-    }
-  };
-  layer('#1a0c2c', h * 0.35, h * 0.7, sc * 0.08, Math.max(1, sc * 0.004), ['rgba(255,80,200,0.35)', 'rgba(80,220,255,0.35)', 'rgba(255,220,120,0.25)']);
-  layer('#0e0619', h * 0.25, h * 0.55, sc * 0.12, Math.max(1.5, sc * 0.006), ['rgba(255,60,190,0.6)', 'rgba(60,230,255,0.55)', 'rgba(255,210,120,0.45)']);
-  layer('#06030c', h * 0.12, h * 0.38, sc * 0.18, 0, null);
-  return c;
-}
-function drawCyber(bg, ctx, w, h, t) {
-  if (!bg.scene) { bg.scene = cyberScene(w, h); bg.signs = Array.from({ length: 7 }, () => ({ x: Math.random() * w, y: h * (0.55 + Math.random() * 0.3), w: Math.min(w, h) * (0.03 + Math.random() * 0.06), h: Math.min(w, h) * (0.012 + Math.random() * 0.03), c: ['#ff2fb4', '#2ff0ff', '#b44dff', '#ffe14a'][(Math.random() * 4) | 0], ph: Math.random() * 100 })); }
-  ctx.drawImage(bg.scene, 0, 0);
-  const sc = Math.min(w, h);
-  // neon signs, flickering
-  for (const s of bg.signs) {
-    s.ph++;
-    const off = (s.ph % 240) < 6 && ((s.ph >> 1) & 1);
-    if (off) continue;
-    ctx.shadowColor = s.c; ctx.shadowBlur = sc * 0.025;
-    ctx.strokeStyle = s.c; ctx.lineWidth = Math.max(1.2, sc * 0.003);
-    ctx.strokeRect(s.x, s.y, s.w, s.h);
-    ctx.globalAlpha = 0.25; ctx.fillStyle = s.c; ctx.fillRect(s.x, s.y, s.w, s.h); ctx.globalAlpha = 1;
-  }
-  ctx.shadowBlur = 0;
-  // flying cars: light pairs gliding between the towers
-  if (Math.random() < 0.03) { const dir = Math.random() < 0.5 ? 1 : -1; bg.items.push({ x: dir > 0 ? -20 : w + 20, y: h * (0.2 + Math.random() * 0.45), v: dir * (1.5 + Math.random() * 3), c: dir > 0 ? '255,70,70' : '255,240,200' }); }
-  for (const car of bg.items) {
-    car.x += car.v;
-    const g = ctx.createLinearGradient(car.x - car.v * 14, 0, car.x, 0);
-    g.addColorStop(0, 'rgba(' + car.c + ',0)'); g.addColorStop(1, 'rgba(' + car.c + ',0.7)');
-    ctx.strokeStyle = g; ctx.lineWidth = Math.max(1, sc * 0.003);
-    ctx.beginPath(); ctx.moveTo(car.x - car.v * 14, car.y); ctx.lineTo(car.x, car.y); ctx.stroke();
-  }
-  bg.items = bg.items.filter((car) => car.x > -60 && car.x < w + 60);
-  // rain and a pink haze over the streets
-  ctx.strokeStyle = 'rgba(150,220,255,0.18)'; ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let i = 0; i < 90; i++) { const rx = ((i * 97.13 + t * 6) % (w + 40)) - 20, ry = ((i * 53.7 + t * 14) % (h + 40)) - 20; ctx.moveTo(rx, ry); ctx.lineTo(rx - 3, ry + 14); }
-  ctx.stroke();
-  const haze = ctx.createLinearGradient(0, h, 0, h * 0.55);
-  haze.addColorStop(0, 'rgba(255,60,190,0.18)'); haze.addColorStop(1, 'rgba(255,60,190,0)');
-  ctx.fillStyle = haze; ctx.fillRect(0, 0, w, h);
-  lightWash(ctx, w, h);
-}
-
-/* 한국의 밤: 보름달 · 소나무 · 학, ink-wash mountains and a hanok eave (an old auspicious composition) */
-function craneSprite(L, up) {
-  const key = 'crane' + L + up;
-  if (SCENE_CACHE[key]) return SCENE_CACHE[key];
-  const W = 120, H = 70, c = sceneCanvas(W, H), x = c.getContext('2d');
-  const white = L ? '#fbfaf6' : '#e9ecef', ink = L ? '#1b1b1b' : '#0b0d10';
-  x.lineCap = 'round'; x.lineJoin = 'round';
-  const wy = up ? -22 : 14;
-  for (const side of [-1, 1]) { // wings, black-tipped
-    x.fillStyle = white;
-    x.beginPath(); x.moveTo(60, 36); x.quadraticCurveTo(60 + side * 22, 36 + wy, 60 + side * 50, 34 + wy * 1.2); x.quadraticCurveTo(60 + side * 30, 40, 60, 40); x.fill();
-    x.fillStyle = ink;
-    x.beginPath(); x.moveTo(60 + side * 36, 36 + wy * 0.9); x.quadraticCurveTo(60 + side * 44, 35 + wy * 1.1, 60 + side * 50, 34 + wy * 1.2); x.quadraticCurveTo(60 + side * 42, 38 + wy * 0.6, 60 + side * 34, 39); x.fill();
-  }
-  x.fillStyle = white; x.beginPath(); x.ellipse(60, 38, 14, 5, 0, 0, Math.PI * 2); x.fill(); // body
-  x.strokeStyle = ink; x.lineWidth = 2.4; x.beginPath(); x.moveTo(72, 36); x.quadraticCurveTo(86, 30, 98, 32); x.stroke(); // neck
-  x.fillStyle = '#d6322b'; x.beginPath(); x.arc(98, 31, 2.2, 0, Math.PI * 2); x.fill(); // red crown
-  x.strokeStyle = ink; x.lineWidth = 1.4; x.beginPath(); x.moveTo(100, 32); x.lineTo(109, 34); x.stroke(); // beak
-  x.strokeStyle = L ? '#555' : '#888'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(46, 39); x.lineTo(24, 44); x.stroke(); // legs trailing
-  return (SCENE_CACHE[key] = c);
-}
-function koreaScene(w, h) {
-  const L = isLight(), c = sceneCanvas(w, h), x = c.getContext('2d'), sc = Math.min(w, h);
-  const paper = x.createLinearGradient(0, 0, 0, h);
-  if (L) { paper.addColorStop(0, '#f3ecda'); paper.addColorStop(1, '#ebe2cc'); } else { paper.addColorStop(0, '#0b0e16'); paper.addColorStop(1, '#141824'); }
-  x.fillStyle = paper; x.fillRect(0, 0, w, h);
-  // the full moon
-  const mx = w * 0.74, my = h * 0.24, mr = sc * 0.1;
-  const halo = x.createRadialGradient(mx, my, mr * 0.9, mx, my, mr * 3);
-  halo.addColorStop(0, L ? 'rgba(220,120,70,0.18)' : 'rgba(240,230,200,0.18)'); halo.addColorStop(1, 'rgba(240,230,200,0)');
-  x.fillStyle = halo; x.fillRect(0, 0, w, h);
-  x.fillStyle = L ? '#e0623f' : '#efe6cc'; x.beginPath(); x.arc(mx, my, mr, 0, Math.PI * 2); x.fill();
-  // ink-wash ridges, paler far away, each fading into mist at its foot
-  const ridges = L ? ['rgba(60,60,60,0.18)', 'rgba(50,50,50,0.28)', 'rgba(40,40,40,0.4)', 'rgba(25,25,25,0.6)'] : ['rgba(120,135,160,0.18)', 'rgba(95,110,135,0.28)', 'rgba(60,72,95,0.45)', 'rgba(25,30,42,0.85)'];
-  ridges.forEach((col, i) => {
-    const baseY = h * (0.5 + i * 0.1), amp = h * (0.22 - i * 0.03), f1 = 0.004 + Math.random() * 0.003, ph = Math.random() * 10;
-    const g = x.createLinearGradient(0, baseY - amp, 0, baseY + h * 0.12);
-    g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
-    x.fillStyle = g;
-    x.beginPath(); x.moveTo(0, h);
-    for (let px = 0; px <= w; px += 4) {
-      const y = baseY - amp * (0.5 + 0.5 * Math.sin(px * f1 + ph)) * (0.6 + 0.4 * Math.sin(px * f1 * 2.7 + ph * 2)) - Math.random() * 2;
-      x.lineTo(px, y);
-    }
-    x.lineTo(w, h); x.closePath(); x.fill();
-  });
-  // a pine leaning in from the left: crooked trunk, layered needle clouds dabbed in ink
-  const ink = L ? 'rgba(20,20,20,' : 'rgba(5,7,10,';
-  x.strokeStyle = ink + '0.95)'; x.lineCap = 'round';
-  const tx = sc * 0.06, ty = h;
-  for (const [lw, off] of [[sc * 0.045, 0], [sc * 0.03, sc * 0.006], [sc * 0.018, -sc * 0.006]]) { // trunk, with a little bark texture
-    x.lineWidth = lw;
-    x.beginPath(); x.moveTo(tx + off, ty); x.bezierCurveTo(tx + sc * 0.05 + off, h * 0.75, tx - sc * 0.02 + off, h * 0.55, tx + sc * 0.14, h * 0.4); x.stroke();
-  }
-  x.lineWidth = sc * 0.012;
-  x.beginPath(); x.moveTo(tx + sc * 0.06, h * 0.6); x.quadraticCurveTo(tx + sc * 0.18, h * 0.55, tx + sc * 0.3, h * 0.5); x.stroke();
-  x.beginPath(); x.moveTo(tx + sc * 0.1, h * 0.46); x.quadraticCurveTo(tx + sc * 0.2, h * 0.38, tx + sc * 0.26, h * 0.3); x.stroke();
-  x.filter = 'blur(1.2px)';
-  for (const [nx, ny, nw] of [[0.3, 0.49, 0.13], [0.27, 0.29, 0.11], [0.14, 0.38, 0.12], [0.08, 0.56, 0.09], [0.2, 0.44, 0.08]]) {
-    for (let k = 0; k < 40; k++) { // many overlapping ink dabs, darker in the middle of each cloud
-      const ux = (Math.random() - 0.5), uy = (Math.random() - 0.5);
-      x.fillStyle = ink + (0.22 + 0.45 * (1 - Math.abs(ux) * 1.6) * Math.random()) + ')';
-      x.beginPath(); x.ellipse(tx + sc * nx + ux * sc * nw * 1.3, h * ny + uy * sc * nw * 0.32, sc * nw * (0.14 + Math.random() * 0.2), sc * nw * (0.05 + Math.random() * 0.04), (Math.random() - 0.5) * 0.5, 0, Math.PI * 2); x.fill();
-    }
-  }
-  x.filter = 'none';
-  // a hanok eave sweeping in from the bottom right, its corner turned up
-  const ex = w, ey = h * 0.86;
-  x.fillStyle = ink + '0.96)';
-  x.beginPath(); x.moveTo(ex, h); x.lineTo(ex, ey - sc * 0.02);
-  x.quadraticCurveTo(ex - sc * 0.25, ey + sc * 0.05, ex - sc * 0.42, ey - sc * 0.07); // the 처마 curve lifting at the tip
-  x.lineTo(ex - sc * 0.4, ey - sc * 0.035);
-  x.quadraticCurveTo(ex - sc * 0.24, ey + sc * 0.09, ex - sc * 0.05, ey + sc * 0.05);
-  x.lineTo(ex - sc * 0.05, h); x.closePath(); x.fill();
-  x.strokeStyle = L ? 'rgba(235,226,204,0.25)' : 'rgba(120,130,150,0.22)'; x.lineWidth = 1;
-  for (let i = 1; i < 14; i++) { const px = ex - i * sc * 0.025; x.beginPath(); x.moveTo(px, ey + sc * 0.035 - i * 0.6); x.lineTo(px + sc * 0.008, h); x.stroke(); } // roof tiles
-  return c;
-}
-function drawKorea(bg, ctx, w, h, t) {
-  const L = isLight();
-  if (!bg.scene || bg.sceneLight !== L) { bg.scene = koreaScene(w, h); bg.sceneLight = L; }
-  ctx.drawImage(bg.scene, 0, 0);
-  const sc = Math.min(w, h);
-  // mist drifting between the ridges
-  const mist = tinted(noiseTexture('mist', 256, 64, 32, 4, 0.3, 0.85), L ? '#f6f0e1' : '#8d99ad', 'mist');
-  fogBand(ctx, mist, w, h * 0.55, h * 0.16, t * 0.15, L ? 0.75 : 0.2);
-  fogBand(ctx, mist, w, h * 0.68, h * 0.16, -t * 0.22 + 600, L ? 0.8 : 0.22);
-  // cranes crossing in front of the moon now and then
-  if (Math.random() < 0.0035 && bg.items.length < 4) { const n = 1 + ((Math.random() * 3) | 0); for (let i = 0; i < n; i++) bg.items.push({ x: w + 40 + i * sc * 0.08, y: h * (0.18 + Math.random() * 0.2) + i * sc * 0.03, v: -(0.5 + Math.random() * 0.25), ph: Math.random() * 6, s: sc * (0.07 + Math.random() * 0.03) }); }
-  for (const cr of bg.items) {
-    cr.x += cr.v; cr.ph += 0.05; cr.y += Math.sin(cr.ph) * 0.15;
-    const spr = craneSprite(L, Math.sin(cr.ph * 2) > 0);
-    ctx.save(); ctx.translate(cr.x, cr.y); ctx.scale(-1, 1); // flying to the left
-    ctx.drawImage(spr, -cr.s / 2, -cr.s * 0.3, cr.s, cr.s * 0.58);
-    ctx.restore();
-  }
-  bg.items = bg.items.filter((cr) => cr.x > -sc * 0.3);
-  // plum petals on the air
-  if (!bg.petals) bg.petals = [];
-  if (Math.random() < 0.05) bg.petals.push({ x: Math.random() * w, y: -8, r: Math.random() * 6, vy: 0.3 + Math.random() * 0.4 });
-  for (const p of bg.petals) {
-    p.r += 0.03; p.x += Math.sin(p.r) * 0.5 - 0.15; p.y += p.vy;
-    ctx.fillStyle = L ? 'rgba(214,92,110,0.6)' : 'rgba(240,170,185,0.55)';
-    ctx.beginPath(); ctx.ellipse(p.x, p.y, sc * 0.004, sc * 0.0025, p.r, 0, Math.PI * 2); ctx.fill();
-  }
-  bg.petals = bg.petals.filter((p) => p.y < h + 10);
 }
 
 /* 풍등: one paper lantern, lit from the flame at its open bottom, drawn once and reused */
@@ -3819,20 +3090,38 @@ function lanternSprite() {
   return c;
 }
 
-/* 캠프파이어: one looping, muted video shared by the background and its picker previews */
+/* 캠프파이어: one looping, muted video (VP9 with an alpha channel) shared by the background and its picker previews.
+   It plays only while something is drawing it: a watchdog pauses it a moment after the last draw (the dropdown
+   closed, another background picked, the window hidden), and a file that fails to load is tried again now and
+   then, never on every frame. */
 let CAMPFIRE_VIDEO = null;
 function campfireVideo() {
-  if (!CAMPFIRE_VIDEO) {
-    const v = document.createElement('video');
-    v.src = 'ambient/campfire.webm';
+  let v = CAMPFIRE_VIDEO;
+  const now = performance.now();
+  if (!v) {
+    v = CAMPFIRE_VIDEO = document.createElement('video');
     v.muted = true;
     v.loop = true;
     v.playsInline = true;
     v.preload = 'auto';
-    CAMPFIRE_VIDEO = v;
+    v.cfRetry = 0; // no play() before this time
+    v.cfWatch = 0; // the watchdog's timer while it is playing
+    v.addEventListener('error', () => { v.cfRetry = performance.now() + 15000; });
+    v.src = 'ambient/campfire.webm';
   }
-  if (CAMPFIRE_VIDEO.paused) CAMPFIRE_VIDEO.play().catch(() => {});
-  return CAMPFIRE_VIDEO;
+  v.cfUsed = now;
+  if (v.paused && now >= v.cfRetry && !document.hidden) {
+    v.cfRetry = now + 1000;
+    if (v.error) v.load();
+    v.play().catch(() => {});
+  }
+  if (!v.cfWatch) {
+    v.cfWatch = setInterval(() => {
+      if (!document.hidden && performance.now() - v.cfUsed < 1200) return;
+      v.pause(); clearInterval(v.cfWatch); v.cfWatch = 0;
+    }, 400);
+  }
+  return v;
 }
 
 /* 풍선 하늘: one detailed latex balloon per colour, drawn once and reused at every size */
@@ -3944,9 +3233,12 @@ async function updateAmbient() {
   }
   AMB.voice = null;
   AMB.cur = want;
+  const keep = (name) => name === want || (want === 'rain' && S.settings.bgAnim === 'thunder' && name.startsWith('thunder'));
+  for (const name of [...AMB.buffers.keys()]) if (!keep(name)) AMB.buffers.delete(name); // a decoded loop is about 15 MB: keep only what is playing
   if (!want) return;
   const buf = await ambBuffer(want);
-  if (!buf || AMB.want !== want || AMB.cur !== want || AMB.voice) return; // changed again while loading
+  if (!buf) { if (AMB.cur === want) AMB.cur = ''; return; } // could not load: try again next time
+  if (AMB.want !== want || AMB.cur !== want || AMB.voice) return; // changed again while loading
   const src = ctx.createBufferSource();
   src.buffer = buf;
   src.loop = true;
@@ -3994,9 +3286,12 @@ function ambSfx(kind) {
     tone('square', 247, 247, 0.06, 0.05);
   } else if (kind === 'meteor') { // a soft whoosh and a high glint
     const len = 0.9;
-    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * len), ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.sin((Math.PI * i) / d.length);
+    let buf = ambSfx.whoosh;
+    if (!buf || buf.sampleRate !== ctx.sampleRate) { // the same swell of noise every time: made once
+      buf = ambSfx.whoosh = ctx.createBuffer(1, Math.floor(ctx.sampleRate * len), ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.sin((Math.PI * i) / d.length);
+    }
     const n = ctx.createBufferSource();
     n.buffer = buf;
     const bp = ctx.createBiquadFilter();
@@ -4016,6 +3311,9 @@ function ambSfx(kind) {
 /** 뇌우: a distant roll a moment after the flash (light travels faster than sound). */
 async function ambThunder() {
   if (AMB.cur !== 'rain' || S.settings.bgAnim !== 'thunder' || !AMB.ctx) return;
+  const nowMs = performance.now();
+  if (nowMs - (AMB.thunderAt || 0) < 3000) return; // never a pile of rolls on top of each other
+  AMB.thunderAt = nowMs;
   const buf = await ambBuffer('thunder' + (1 + Math.floor(Math.random() * 3)));
   if (!buf) return;
   const ctx = AMB.ctx;
@@ -4038,6 +3336,7 @@ function updateBgAnim() {
     stageEl.insertBefore(canvas, stageEl.firstChild);
     BG = createBg(canvas);
     new ResizeObserver(() => BG.size(stageEl.clientWidth, stageEl.clientHeight)).observe(stageEl);
+    onDprChange(() => BG.size(stageEl.clientWidth, stageEl.clientHeight));
     BG.size(stageEl.clientWidth, stageEl.clientHeight);
   }
   BG.canvas.style.opacity = String(Math.max(0.15, Math.min(1, Number(S.settings.bgAnimLevel) || 0.6)));
@@ -4203,7 +3502,15 @@ function sampleSet(ctx, theme) {
 }
 
 /** A piano-ish note played backwards: it swells out of nothing and cuts off — the classic horror sound. */
+/** Take a feedback loop apart once its tail has died away (a cycle of nodes keeps rendering until collected). */
+function dropNodes(ms, ...nodes) {
+  setTimeout(() => { for (const n of nodes) { try { n.disconnect(); } catch { /* already gone */ } } }, ms);
+}
+
 function reverseNoteBuffer(ctx, f, secs = 1.1) {
+  const cache = reverseNoteBuffer.cache || (reverseNoteBuffer.cache = new Map()), key = `${Math.round(f * 10)}|${secs}|${ctx.sampleRate}`;
+  if (cache.has(key)) return cache.get(key);
+  if (cache.size > 64) cache.clear();
   const sr = ctx.sampleRate;
   const n = Math.round(sr * secs);
   const buf = ctx.createBuffer(1, n, sr);
@@ -4213,6 +3520,7 @@ function reverseNoteBuffer(ctx, f, secs = 1.1) {
     const v = (Math.sin(2 * Math.PI * f * t) + 0.5 * Math.sin(2 * Math.PI * f * 2.01 * t) + 0.25 * Math.sin(2 * Math.PI * f * 3.03 * t) + 0.12 * Math.sin(2 * Math.PI * f * 4.2 * t)) * Math.exp(-t * 3.2);
     d[n - 1 - i] = v * 0.45;
   }
+  cache.set(key, buf);
   return buf;
 }
 
@@ -4423,6 +3731,7 @@ function playKeySound(kind, key = 'key', force = false) {
           const edark = ctx.createBiquadFilter(); edark.type = 'lowpass'; edark.frequency.value = 2400;
           const ewet = ctx.createGain(); ewet.gain.value = 0.6;
           echo.connect(edark); edark.connect(efb); efb.connect(echo); edark.connect(ewet); ewet.connect(out); ewet.connect(send);
+          dropNodes(12000 * stretch, efb, echo, edark, ewet, send);
           const g = ctx.createGain();
           g.gain.setValueAtTime(0.0001, T);
           g.gain.exponentialRampToValueAtTime(1, T + (big ? 0.09 : 0.04)); // pipes speak softly, not struck
@@ -4743,6 +4052,7 @@ function playKeySound(kind, key = 'key', force = false) {
       room.delayTime.value = 0.023; rfb.gain.value = 0.32; rlp.type = 'lowpass'; rlp.frequency.value = 3500;
       room.connect(rlp); rlp.connect(rfb); rfb.connect(room);
       const wet = ctx.createGain(); wet.gain.value = 0.35; rlp.connect(wet); wet.connect(out);
+      dropNodes(6000, rfb, room, rlp, wet);
       const kit = ctx.createGain(); kit.gain.value = 1; kit.connect(out); kit.connect(room);
       const hat = (at = 0, peak = 0.3, open = false) => { // stick on brass: bright noise, a "chick"
         nz('highpass', 7500, 0.7, peak, open ? 0.42 : 0.06, at, kit);
@@ -5420,6 +4730,7 @@ function playKeySound(kind, key = 'key', force = false) {
       const dist = ctx.createWaveShaper(); dist.curve = playKeySound.crunch; const dg = ctx.createGain(); dg.gain.value = 0.8; dist.connect(dg); dg.connect(comp);
       const room = ctx.createDelay(0.5); const fb = ctx.createGain(); const rlp = filt('lowpass', 1800);
       room.delayTime.value = 0.09; fb.gain.value = 0.35; room.connect(rlp); rlp.connect(fb); fb.connect(room); rlp.connect(comp);
+      dropNodes(6000, fb, room, rlp);
       const shot = (at, heavy) => {
         nz('highpass', 200, 0.5, 1, heavy ? 0.05 : 0.025, at, dist); // the muzzle crack
         nz('lowpass', heavy ? 700 : 1200, 0.8, 1, heavy ? 0.35 : 0.16, at, dist); // the blast
@@ -5452,6 +4763,7 @@ function playKeySound(kind, key = 'key', force = false) {
       const elp = filt('lowpass', 3500);
       fx.connect(echo); echo.connect(elp); elp.connect(efb); efb.connect(echo);
       const ewet = ctx.createGain(); ewet.gain.value = 0.42; elp.connect(ewet); ewet.connect(out);
+      dropNodes(12000, efb, echo, elp, ewet);
       const hall = cathedral(ctx); const hs = ctx.createGain(); hs.gain.value = master.gain.value * 0.35; fx.connect(hs); hs.connect(hall);
       // a pump: sustained sounds duck and swell back like a side-chained mix
       const pump = (g, at, peak, len) => {
@@ -5655,6 +4967,7 @@ function playKeySound(kind, key = 'key', force = false) {
         const echo = ctx.createDelay(1); const fb = ctx.createGain(); const lp = ctx.createBiquadFilter();
         echo.delayTime.value = 0.16; fb.gain.value = 0.38; lp.type = 'lowpass'; lp.frequency.value = 1400;
         post.connect(echo); echo.connect(lp); lp.connect(fb); fb.connect(echo); lp.connect(comp);
+        dropNodes(8000, fb, echo, lp);
       }
       return;
     }
@@ -5763,6 +5076,7 @@ async function updateBgImage() {
   if (!bgImgEl.dataset.loaded) {
     const data = await window.mt.bgImage.get();
     if (!data) { saveSettings({ bgImage: false }); bgImgEl.hidden = true; return; }
+    if (!S.settings.bgImage) { bgImgEl.hidden = true; return; } // switched off while it was loading
     bgImgEl.style.backgroundImage = `url("${data}")`;
     bgImgEl.dataset.loaded = '1';
   }
@@ -5951,9 +5265,10 @@ const WG_RUNNERS = {
 function syncRunners(el, style, on) {
   let layer = el.querySelector(':scope > .wg-run');
   const make = on && WG_RUNNERS[style];
-  if (!make) { layer?.remove(); return; }
+  if (!make) { if (layer) { stopRunners(layer); layer.remove(); } return; }
   if (layer && layer.dataset.style === style) return;
-  if (!layer) { layer = document.createElement('div'); layer.className = 'wg-run'; el.appendChild(layer); }
+  if (layer) stopRunners(layer); // another style takes the layer over: the old one's observer and timer must not go on
+  else { layer = document.createElement('div'); layer.className = 'wg-run'; el.appendChild(layer); }
   layer.dataset.style = style;
   layer.innerHTML = make();
   const fit = style === 'relay' ? relayGeometry : style === 'santa' ? santaGeometry : RUN_CFG[style] ? runnerGeometry : null;
@@ -5963,11 +5278,21 @@ function syncRunners(el, style, on) {
     // the pane resized (window, split, sidebar…): re-measure the track instead of letting it fall apart
     let last = '';
     let raf = 0;
-    new ResizeObserver(() => {
+    const ro = new ResizeObserver(() => {
+      if (layer.runFit !== ro || !layer.isConnected) { ro.disconnect(); return; } // replaced, or gone with its tab / preview
       cancelAnimationFrame(raf); // a drag-resize fires many times: re-measure once per frame
-      raf = requestAnimationFrame(() => { const k = layer.clientWidth + 'x' + layer.clientHeight; if (k !== last && layer.clientWidth && layer.clientHeight) { last = k; fit(layer); } });
-    }).observe(layer);
+      raf = requestAnimationFrame(() => { const k = layer.clientWidth + 'x' + layer.clientHeight; if (layer.runFit === ro && k !== last && layer.clientWidth && layer.clientHeight) { last = k; fit(layer); } });
+    });
+    ro.observe(layer);
+    layer.runFit = ro;
   }
+}
+/** A runner layer is going away or changing style: stop watching its size, stop its santa round. */
+function stopRunners(layer) {
+  layer.runFit?.disconnect();
+  layer.runFit = null;
+  clearInterval(layer.santaTimer);
+  layer.santaTimer = 0;
 }
 /*
  * 계주: each runner runs one edge (top → right → bottom → left) in a quarter of the lap. To keep the feet from
@@ -6185,7 +5510,7 @@ function previewSound(kind, el) {
 }
 
 function previewCursor(kind, el) {
-  el.innerHTML = `<span class="pv-term"><span class="pv-text">hello</span><span class="pv-cur-wrap"><span class="pv-cur mt-cursor kind-${kind}${NATIVE_CURSORS[kind] ? ' native' : ''}"></span></span></span>`;
+  el.innerHTML = `<span class="pv-term"><span class="pv-text">hello</span><span class="pv-cur-wrap"><span class="pv-cur mt-cursor kind-${kind}${NATIVE_CURSORS[kind] ? ' native' : ''}">${(window.CURSOR_ART && window.CURSOR_ART[kind]) || ''}</span></span></span>`;
   return () => {};
 }
 
@@ -6292,16 +5617,21 @@ function syncRenderer(tab) {
   }
 }
 
+/** xterm throws on a line height below 1, and a typed value can be anything: keep it inside what the setting offers (1 – 2). */
+const clampLineHeight = (v) => Math.max(1, Math.min(2, Number(v) || 1.15));
+/** The same for letter spacing (-2 – 6): far below zero no cell width is left, and the terminal drops to 2 columns. */
+const clampLetterSpacing = (v) => Math.max(-2, Math.min(6, Number(v) || 0));
+
 function termOptions() {
   const st = S.settings;
   return {
     fontFamily: st.fontFamily,
     fontSize: st.fontSize,
-    lineHeight: st.lineHeight,
+    lineHeight: clampLineHeight(st.lineHeight),
     cursorBlink: st.cursorBlink && !cursorPreset().custom,
     cursorStyle: cursorPreset().style,
     cursorWidth: cursorPreset().width,
-    letterSpacing: Number(st.letterSpacing) || 0,
+    letterSpacing: clampLetterSpacing(st.letterSpacing),
     allowTransparency: needsClearTerminal(), // transparent rendering is slower: only when an effect needs it
     cursorInactiveStyle: cursorPreset().custom ? 'none' : 'outline',
     scrollback: 20000,
@@ -6311,7 +5641,9 @@ function termOptions() {
     minimumContrastRatio: 1,
     smoothScrollDuration: 0,
     rightClickSelectsWord: false,
-    windowsPty: { backend: 'conpty', buildNumber: 22621 },
+    // ConPTY reflows wrapped lines on a resize only from build 21376 on: xterm has to know the real build to do the same
+    // as the pty (22621 if it cannot be read: what was assumed before). No Windows pty on macOS / Linux.
+    ...(IS_WIN ? { windowsPty: { backend: 'conpty', buildNumber: window.mt.osBuild || 22621 } } : {}),
     theme: xtermTheme(),
   };
 }
@@ -6350,7 +5682,7 @@ function createTab(opts = {}) {
   tab.host.innerHTML = `
     <div class="tile-head">
       <span class="tile-ico"><span class="ico-slot"></span><span class="dot"></span></span>
-      <span class="tile-title"></span>
+      <span class="tile-title no-i18n"></span>
       <span class="tile-status"></span>
       <button class="icon-btn" data-a="solo" title="이 탭만 크게 보기">${icon('maximize')}</button>
       <button class="icon-btn" data-a="close" title="종료">${icon('x')}</button>
@@ -6467,7 +5799,8 @@ function createTab(opts = {}) {
     // typing again after a finished turn / a question → back to "입력 대기" (until Enter starts work)
     if (tab.agent && (tab.status === 'done' || tab.status === 'attention')) setStatus(tab, 'ready');
     if (tab.unseen) { tab.unseen = false; updateTabEl(tab); }
-    if (tab.agent && d === '\x1b' && tab.status === 'working') tab.interrupted = true; // Esc stops the agent
+    // Esc stops the agent, or turns down what it asked (the line above has already taken 'attention' back to 'ready')
+    if (tab.agent && d === '\x1b' && (tab.status === 'working' || tab.awaitChoice || tab.statusBeforeInput === 'attention')) { tab.interrupted = true; tab.interruptedAt = Date.now(); }
     if (d.includes('\r') && !d.startsWith('\x1b[200~')) {
       if (tab.agent) onAgentEnter(tab);
       if (tab.agent) { tab.armed = true; tab.armedAt = Date.now(); } // a prompt / answer was submitted → next output burst is real work
@@ -6518,7 +5851,11 @@ function createTab(opts = {}) {
   if (!opts.background || !S.activeId) activate(tab.id);
   else updateTabEl(tab);
 
-  requestAnimationFrame(() => startPty(tab));
+  // on the next frame, when the pane has its size — or a moment later if the window is hidden and draws no frames
+  let started = false;
+  const start = () => { if (!started) { started = true; startPty(tab); } };
+  requestAnimationFrame(start);
+  setTimeout(start, 500);
   renderSessions();
   renderProjects();
   updateEmpty();
@@ -6527,21 +5864,26 @@ function createTab(opts = {}) {
 }
 
 async function startPty(tab, { withLaunch = true } = {}) {
+  if (tab.closed) return; // closed before its first frame: nothing to start
   try { tab.fit.fit(); } catch { /* ignore */ }
+  const { cols, rows } = tab.term;
   const res = await window.mt.pty.create({
     id: tab.id,
     shellId: tab.shellId,
     cwd: tab.cwd,
     agent: withLaunch ? tab.launch : null,
-    cols: tab.term.cols,
-    rows: tab.term.rows,
+    cols,
+    rows,
   });
+  if (tab.closed) { if (res.ok) window.mt.pty.kill(tab.id); return; } // closed while it was starting: leave no pty behind
   if (!res.ok) {
     tab.term.write(`\x1b[31m${tr('셸을 시작하지 못했습니다:')} ${res.error}\x1b[0m\r\n`);
     setStatus(tab, 'exited');
     return;
   }
   tab.alive = true;
+  // resized while the pty was being created (onResize only reaches a live pty): bring it up to date
+  if (tab.term.cols !== cols || tab.term.rows !== rows) window.mt.pty.resize(tab.id, tab.term.cols, tab.term.rows);
   tab.shellId = res.shellId || tab.shellId;
   if (res.cwd) tab.cwd = res.cwd;
   if (!tab.launch) setStatus(tab, 'shell');
@@ -6583,7 +5925,7 @@ function updateTabEl(tab) {
   const iname = tabIconName(tab);
   if (slot && slot.dataset.name !== iname) { slot.innerHTML = icon(iname); slot.dataset.name = iname; }
   const title = el.querySelector('.tab-title');
-  if (title) title.textContent = tabLabel(tab);
+  if (title) { title.classList.add('no-i18n'); title.textContent = tabLabel(tab); } // a user-made name is never translated (set here: a rename re-creates the span)
   el.title = `${tabLabel(tab)}\n${tab.cwd}\n${tab.agent ? `${AGENTS[tab.agent].name} · ` : ''}${STATUS_TEXT[tab.status] || ''}`;
 
   // grid tile header mirrors the tab
@@ -6657,7 +5999,8 @@ const groupOf = (tab) => (tab ? S.groups.find((g) => g.ids.includes(tab.id)) || 
 function currentView() {
   if (S.grid) {
     const tiles = gridTiles();
-    if (tiles.length >= 2) return { kind: 'project', tiles, dir: 'grid' };
+    // the tab in front has to be one of them: after `cd` in the focused tile it no longer is, and would be hidden
+    if (tiles.length >= 2 && tiles.includes(activeTab())) return { kind: 'project', tiles, dir: 'grid' };
     S.grid = null;
   }
   const t = activeTab();
@@ -6726,12 +6069,13 @@ function applyLayout() {
 function splitPane(dir) {
   const t = activeTab();
   if (!t) return;
+  let g = groupOf(t);
+  // full already: say so before anything is changed (the zoom, the split's direction)
+  if (g && g.ids.length >= 6) return toast('한 화면에 최대 6개까지 나눌 수 있어요', { icon: 'info' });
   S.grid = null;
   S.zoom = null;
-  let g = groupOf(t);
   if (!g) { g = { ids: [t.id], dir }; S.groups.push(g); }
   else if (g.dir !== dir) g.dir = 'grid';
-  if (g.ids.length >= 6) return toast('한 화면에 최대 6개까지 나눌 수 있어요', { icon: 'info' });
   const lastIdx = Math.max(...g.ids.map((id) => S.tabs.findIndex((x) => x.id === id)));
   const nt = createTab({ shellId: t.shellId, cwd: t.cwd, index: lastIdx + 1, background: true });
   g.ids.splice(g.ids.indexOf(t.id) + 1, 0, nt.id);
@@ -6805,11 +6149,14 @@ async function closeTab(id, { confirmWorking = true } = {}) {
     const ok = await confirmDialog(`${AGENTS[tab.agent].name}가 작업 중입니다`, `'${tabLabel(tab)}' 탭을 닫으면 진행 중인 작업이 중단됩니다.`, '닫기');
     if (!ok) return;
   }
+  if (tab.closed) return; // already closed while the question was up
+  tab.closed = true; // whatever is still on its way for this tab (its pty starting, a transcript check) stops here
   const idx = S.tabs.indexOf(tab);
   syncTask(tab, 'exited');
   window.mt.pty.kill(tab.id);
   tab.alive = false;
   try { tab.term.dispose(); } catch { /* ignore */ }
+  syncRunners(tab.host, '', false); // a working pane's runner layer: its size observer goes with it
   tab.host.remove();
   tab.el.remove();
   S.tabs.splice(idx, 1);
@@ -6834,6 +6181,8 @@ async function closeTab(id, { confirmWorking = true } = {}) {
   renderStatus();
   updateEmpty();
   saveLayout();
+  // the button that closed it (a tab's X, a sidebar row's stop button) is gone, and the focus went with it
+  if (!S.overlay && document.activeElement === document.body) activeTab()?.term.focus();
 }
 
 function moveTab(from, to) {
@@ -6983,8 +6332,11 @@ function detachPane(tab) {
 function splitInto(tab, pane, side) {
   if (!tab || !pane) return;
   const dir = side === 'left' || side === 'right' ? 'row' : 'col';
-  // leave the group it was in (a group of one isn't a split any more)
   const old = groupOf(tab);
+  // the pane's split is full (moving a pane inside its own split is fine): say so before anything is changed
+  const full = groupOf(pane);
+  if (tab !== pane && full && full !== old && full.ids.length >= 6) return toast('한 화면에 최대 6개까지 나눌 수 있어요', { icon: 'info' });
+  // leave the group it was in (a group of one isn't a split any more)
   if (old) {
     old.ids = old.ids.filter((id) => id !== tab.id);
     if (old.ids.length < 2) S.groups = S.groups.filter((g) => g !== old);
@@ -6992,7 +6344,6 @@ function splitInto(tab, pane, side) {
   if (tab === pane) return activate(tab.id);
   let g = groupOf(pane);
   if (!g) { g = { ids: [pane.id], dir }; S.groups.push(g); }
-  else if (g.ids.length >= 6) { applyLayout(); return toast('한 화면에 최대 6개까지 나눌 수 있어요', { icon: 'info' }); }
   else if (g.ids.length >= 2 && g.dir !== dir) g.dir = 'grid';
   else if (g.ids.length < 2) g.dir = dir;
   const pi = g.ids.indexOf(pane.id);
@@ -7078,7 +6429,11 @@ function onTabPointerDown(e, tab) {
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onUp);
-    if (!dragging) { if (tab.id !== S.activeId) activate(tab.id); return; }
+    if (!dragging) { // a plain click (on the tab already in front it took the focus off the terminal: hand it back)
+      if (tab.id !== S.activeId) activate(tab.id);
+      else if (!S.overlay) tab.term.focus();
+      return;
+    }
     if (out) {
       tabsEl.classList.remove('tabs-dragging');
       document.body.classList.remove('grabbing');
@@ -7087,7 +6442,7 @@ function onTabPointerDown(e, tab) {
       splitDrop.clear();
       if (drop) splitInto(tab, drop.pane, drop.side);
       else if (tab.id !== S.activeId) activate(tab.id);
-      tab.term.focus();
+      activeTab()?.term.focus(); // the dragged tab, unless its split was refused
       return;
     }
     if (tab.id !== S.activeId) activate(tab.id);
@@ -7117,6 +6472,7 @@ function startRename(tab) {
   if (!titleEl) return;
   const input = h('input', 'tab-rename');
   input.value = tab.customTitle || tabLabel(tab);
+  const initial = input.value.trim();
   input.spellcheck = false;
   titleEl.replaceWith(input);
   input.focus();
@@ -7125,7 +6481,8 @@ function startRename(tab) {
   const finish = (commit) => {
     if (done) return;
     done = true;
-    if (commit) tab.customTitle = input.value.trim();
+    // only a name that was really changed is kept: an untouched label goes on following the agent's title and the folder
+    if (commit && input.value.trim() !== initial) tab.customTitle = input.value.trim();
     input.replaceWith(h('span', 'tab-title'));
     updateTabEl(tab);
     renderSessions();
@@ -7134,7 +6491,8 @@ function startRename(tab) {
   };
   input.addEventListener('keydown', (e) => {
     e.stopPropagation();
-    if (e.key === 'Enter' && !e.isComposing) finish(true);
+    // prevented: finish() moves the focus to the terminal, which would otherwise receive this very Enter as a keypress
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); finish(true); }
     if (e.key === 'Escape') finish(false);
   });
   input.addEventListener('blur', () => finish(true));
@@ -7346,7 +6704,7 @@ function findPromptBoxes(tab) {
 function drawPromptBoxes(tab) {
   let layer = tab.host.querySelector('.pbox-layer');
   const boxes = tab.alive ? findPromptBoxes(tab) : [];
-  if (!boxes.length) { if (layer) layer.innerHTML = ''; return; }
+  if (!boxes.length) { if (layer) { layer.innerHTML = ''; layer.dataset.sig = ''; } return; } // sig too: the same boxes may come back
   const screen = tab.host.querySelector('.xterm-screen');
   if (!screen) return;
   if (!layer) { layer = h('div', 'pbox-layer'); tab.host.querySelector('.term-body').appendChild(layer); }
@@ -7433,7 +6791,8 @@ function filterOutput(tab, data) {
     tab.pendingEsc = tail[0];
     data = data.slice(0, -tail[0].length);
     clearTimeout(tab.pendingTimer);
-    tab.pendingTimer = setTimeout(() => { if (tab.pendingEsc) { tab.term.write(tab.pendingEsc); tab.pendingEsc = ''; } }, 40);
+    // through writeFramed: written straight to xterm it would overtake a frame that is still being held
+    tab.pendingTimer = setTimeout(() => { if (tab.pendingEsc) { const tail = tab.pendingEsc; tab.pendingEsc = ''; writeFramed(tab, tail); } }, 40);
   }
   const codex = tab.agent === 'codex';
   return data.replace(/\x1b\[([0-9;:]*)m/g, (all, params) => rewriteSgr(params, dropDark, promptRepl, codex, isLight()) || all);
@@ -7461,6 +6820,33 @@ function previewPrompt(kind, el) {
  * frame with the cursor gone, so the cursor flickers. Hold such a chunk until the frame closes (the cursor
  * is shown again) — at most 40 ms, so an app that keeps the cursor hidden is never held up for long.
  */
+/*
+ * Everything a pty prints reaches xterm through here. xterm parses in slices between frames; output that comes
+ * faster piles up inside it, and past 50 MB of backlog xterm throws: that chunk is lost, and the throw used to
+ * break the output handler. So count what is waiting to be parsed and hold the pty back above a high mark, until
+ * xterm is down to a low mark again — a matter of milliseconds while the window is in view.
+ * Never while the window is hidden (minimised, covered): Chromium throttles its timers, and once xterm is behind
+ * there it parses about one slice a minute — a pty held back that long is an agent or a build standing still.
+ * So nothing is held back then, as before (what xterm refuses is dropped), and whatever was held is let go.
+ */
+const FLOW_HIGH = 1_000_000; // characters handed to xterm and not parsed yet
+const FLOW_LOW = 250_000;
+function termWrite(tab, data) {
+  const n = data.length;
+  tab.backlog = (tab.backlog || 0) + n;
+  try {
+    tab.term.write(data, () => {
+      tab.backlog -= n;
+      if (tab.flowPaused && tab.backlog < FLOW_LOW) { tab.flowPaused = false; window.mt.pty.resume(tab.id); }
+    });
+  } catch { tab.backlog -= n; } // xterm refused it (its backlog limit): the chunk is lost, the handler carries on
+  if (!tab.flowPaused && tab.alive && !document.hidden && tab.backlog > FLOW_HIGH) { tab.flowPaused = true; window.mt.pty.pause(tab.id); }
+}
+document.addEventListener('visibilitychange', () => { // hidden now: let go of every pty that is being held back
+  if (!document.hidden) return;
+  for (const t of S.tabs) if (t.flowPaused) { t.flowPaused = false; window.mt.pty.resume(t.id); }
+});
+
 function writeFramed(tab, data) {
   const buf = (tab.frameHeld || '') + data;
   const open = buf.lastIndexOf('\x1b[?25l') > buf.lastIndexOf('\x1b[?25h');
@@ -7472,13 +6858,13 @@ function writeFramed(tab, data) {
   clearTimeout(tab.frameTimer);
   tab.frameTimer = 0;
   tab.frameHeld = '';
-  tab.term.write(buf);
+  termWrite(tab, buf);
 }
 function flushFrame(tab) {
   tab.frameTimer = 0;
   const buf = tab.frameHeld || '';
   tab.frameHeld = '';
-  if (buf) tab.term.write(buf);
+  if (buf) termWrite(tab, buf);
 }
 
 window.mt.pty.onData((id, data) => {
@@ -7493,7 +6879,9 @@ window.mt.pty.onData((id, data) => {
   if (now - tab.lastIn < 150 || now - tab.lastResize < 700) return;
   if (data.length < 4) return;
   if (tab.status !== 'working') {
-    tab.workStart = now;
+    // a new turn starts its clock — not the same turn going on after a choice prompt was answered (awaitChoice is
+    // still set then): its short remainder would pass for an echo, and the turn would end without a 완료
+    if (!tab.awaitChoice) tab.workStart = now;
     setStatus(tab, 'working');
   }
 });
@@ -7502,8 +6890,10 @@ window.mt.pty.onExit((id, code) => {
   const tab = tabById(id);
   if (!tab) return;
   tab.alive = false;
+  tab.flowPaused = false; // that pty is gone: a restart begins unpaused
   if (tab.agent) setAgent(tab, null);
   setStatus(tab, 'exited');
+  flushFrame(tab); // what is still held of the last frame belongs above the banner
   tab.term.write(`\r\n\x1b[38;2;92;99;117m─── ${tr(`셸이 종료되었습니다 (코드 ${code}) · Enter: 다시 시작 · Ctrl+Shift+W: 닫기`)} ───\x1b[0m\r\n`);
   saveLayout();
 });
@@ -7642,7 +7032,10 @@ function screenSaysChoice(tab) {
 }
 /** 진행 중 → 선택지를 기다리는 중: flag the task, and tell the user wherever they are. */
 function awaitChoice(tab) {
-  if (tab.awaitChoice) return;
+  // Already flagged — unless the tab is back at 실행 중: the earlier question was answered, and this is the next
+  // one, on screen before the poll below saw a screen without a prompt. (Not while output is still arriving:
+  // right after the answer the old prompt can still be on screen for a moment.)
+  if (tab.awaitChoice && (tab.status !== 'working' || Date.now() - tab.lastOut < 400)) return;
   tab.awaitChoice = true;
   tab.armed = false;
   setStatus(tab, 'attention');
@@ -7710,22 +7103,39 @@ function stillWorking(tab) {
   return !!tab.agent && Date.now() - tab.lastOut < 5000 && screenSaysWorking(tab);
 }
 
-function finishWork(tab, duration) {
+/**
+ * Did this turn end because the user stopped it with Esc? Yes if an Esc was noted (tab.interrupted, with its time in
+ * tab.interruptedAt) and the agent's last output (tab.lastOut) came less than 5 s after that key. An Esc long before
+ * the end did not stop the turn, and a flag left over from an earlier turn does not count either.
+ */
+const stoppedByEsc = (tab) => !!tab.interrupted && tab.lastOut - (tab.interruptedAt || 0) < 5000;
+
+function finishWork(tab, duration, polled = false) {
+  if (tab.closed) return; // its tab was closed while a check was still on its way
   if (stillWorking(tab)) return; // output paused, a bell, or the transcript looked finished — but it isn't
   if (tab.agent && screenSaysChoice(tab)) { awaitChoice(tab); return; } // quiet because it waits for an answer
   // sub-agents launched in the background keep working after the agent's own turn ends: not done until they are
-  if (tab.agent && tab.sessionId && Date.now() - (tab.subPolledAt || 0) > 2000) { pollSubagents(tab).then((c) => { if (c) renderProjects(); }); return; }
+  if (!polled && tab.agent && tab.sessionId && Date.now() - (tab.subPolledAt || 0) > 2000) {
+    // ask, then come straight back: in a hidden window the next tick may be a minute away, and would only ask again
+    const { status, workStart } = tab;
+    pollSubagents(tab).then((c) => {
+      if (c) renderProjects();
+      if (tab.status === status && tab.workStart === workStart) finishWork(tab, duration, true); // still that turn, not ended meanwhile
+    });
+    return;
+  }
   if (hasRunningSubs(tab)) return;
   tab.armed = false;
   tab.bannerHold = Date.now() + 3000; // the spinner line may linger a moment after the turn ends
   tab.lastDuration = duration;
   if (duration < 800) { setStatus(tab, 'ready'); return; } // just an echo / redraw
   setStatus(tab, 'done');
-  if (duration > 1000) celebrate(tab);
+  const stopped = stoppedByEsc(tab); // stopped, not completed: nothing to celebrate or announce
+  if (duration > 1000 && !stopped) celebrate(tab);
   if (tab.id !== S.activeId || !S.winFocused) {
     tab.unseen = true;
     updateTabEl(tab);
-    if (duration > 2500) notifyTab(tab, `완료 (${elapsedText(duration)})`);
+    if (duration > 2500 && !stopped) notifyTab(tab, `완료 (${elapsedText(duration)})`);
   }
   if (duration > 1200) trackSession(tab, tab.workStart - 1500);
 }
@@ -7740,7 +7150,7 @@ async function checkTurn(tab, now) {
   tab.turnAt = now;
   try {
     if (!tab.sessionId) await trackSession(tab, tab.workStart - 1500); // user-typed agent: find its session
-    if (!tab.sessionId || tab.status !== 'working') return;
+    if (tab.closed || !tab.sessionId || tab.status !== 'working') return;
     const { state, mtime } = await window.mt.agent.turn(tab.agent, tab.cwd, tab.sessionId);
     // compare with the moment the prompt was sent (output may only start later)
     if (state === 'done' && mtime >= (tab.armedAt || tab.workStart) && tab.status === 'working') {
@@ -7857,12 +7267,12 @@ function currentCardHtml(t, view, index) {
   const status = agent || t.status === 'exited'
     ? `<span class="cc-status st-${t.status}"><i></i>${statusHtml(t)}</span>`
     : `<span class="cc-status shell">${esc(shellName(t.shellId))}</span>`;
-  const sub = `<span class="cc-place">${esc(tabPlace(t))}</span>`;
+  const sub = `<span class="cc-place no-i18n">${esc(tabPlace(t))}</span>`;
   return `
     <div class="cur-card${agent ? ' ' + agent : ' shell'} st-${t.status}${t.id === S.activeId ? ' focused' : ''}${t.unseen ? ' unseen' : ''}" data-cur="${t.id}" title="${esc(t.cwd)}">
       <span class="cc-ico">${icon(tabIconName(t))}</span>
       <span class="cc-text">
-        <span class="cc-title">${esc(tabLabel(t))}</span>
+        <span class="cc-title no-i18n">${esc(tabLabel(t))}</span>
         <span class="cc-sub">${status}${sub}</span>
       </span>
       <span class="cc-side">
@@ -7937,7 +7347,7 @@ function sessionRowHtml(t) {
     <div class="item child run st-${t.status}${t.id === S.activeId ? ' active' : ''}${t.unseen ? ' unseen' : ''} agent-${t.agent}" data-t="${t.id}" title="${esc(AGENTS[t.agent].name)} · ${esc(t.cwd)}">
       <span class="child-ico">${icon(t.agent)}<i class="dot"></i></span>
       <span class="item-text">
-        <span class="item-name">${esc(tabLabel(t))}</span>
+        <span class="item-name no-i18n">${esc(tabLabel(t))}</span>
         ${t.awaitChoice ? `<span class="item-sub has-bubble">${choiceBubbleHtml()}</span>` : `<span class="item-sub">${esc(AGENTS[t.agent].name)} · ${statusHtml(t)}</span>`}
       </span>
       <span class="item-actions"><button class="icon-btn danger" data-a="end" title="세션 종료">${icon('stop')}</button></span>
@@ -8002,7 +7412,7 @@ MINION_PROPS.book = '<svg class="mn-prop" viewBox="0 0 12 12"><path d="M6 3.2C4.
 MINION_PROPS.radio = '<svg class="mn-prop" viewBox="0 0 12 12"><rect x="2" y="4.6" width="5" height="6.8" rx="1" fill="#4a5163"/><rect x="3" y="5.6" width="3" height="1.6" rx=".3" fill="#69db7c"/><path d="M5.6 4.6V1" stroke="#9aa3b5" stroke-width=".9"/></svg>';
 const MINION_FX = { weld: 4, hammer: 1, laptop: 3, papers: 3, dig: 3, magnify: 0, gear: 0, paint: 1, saw: 3, broom: 3, flask: 3, drill: 3, water: 3, book: 0, radio: 3 }; // particles per action
 
-const SUBAGENT_KIND = { 'general-purpose': '범용', explore: '탐색', plan: '계획', 'statusline-setup': '설정', 'claude-code-guide': '안내', 'code-reviewer': '리뷰', 'test-runner': '테스트' };
+const SUBAGENT_KIND = { 'general-purpose': '범용', claude: '범용', fork: '분신', explore: '탐색', plan: '계획', 'statusline-setup': '설정', 'claude-code-guide': '안내', 'code-reviewer': '리뷰', 'test-runner': '테스트' };
 const subagentKind = (k) => SUBAGENT_KIND[String(k).toLowerCase()] || k;
 
 /** Rows for the sub-agents an agent's running task launched, hung under the task. */
@@ -8025,7 +7435,7 @@ function subagentRowsHtml(tab) {
         const fresh = a.status === 'done' && !!(tab.subCheer && tab.subCheer.has(a.id));
         return `<span class="minion mw-${w}${fresh ? ' mn-cheer' : ''}" style="--paint:${paint}">${minionSvg(a.id, live ? w : '')}${live ? MINION_PROPS[w] : ''}${fx}${badge(a)}</span>`;
       })()}
-      <span class="sa-text"><b>${esc(subagentKind(a.kind))}</b>${a.name ? `<span class="sa-sum">(${esc(a.name)})</span>` : ''}</span>
+      <span class="sa-text"><b>${esc(subagentKind(a.kind))}</b>${a.name ? `<span class="sa-sum no-i18n">(${esc(a.name)})</span>` : ''}</span>
       <span class="sa-state">${a.status === 'running' ? '<i></i><i></i><i></i>' : a.status === 'failed' ? icon('x') : ''}</span>
     </div>`).join('');
   if (tab && tab.subCheer && tab.subCheer.size) { for (const id of tab.subCheer) tab.subCheered.add(id); tab.subCheer.clear(); }
@@ -8071,6 +7481,9 @@ setInterval(async () => {
 
 function taskRowHtml(k) {
   const live = RUNNING_TASK.has(k.status);
+  const tb = tabById(k.tabId);
+  // a finished turn can leave background sub-agents working: they stay under the tab's latest task
+  const showSubs = live || !!(tb && hasRunningSubs(tb) && S.tasks.findLast((x) => x.tabId === k.tabId) === k);
   const time = live
     ? (k.status === 'working' ? ` · <span class="elapsed" data-since="${k.start}">${elapsed(k.start)}</span>` : '')
     : `${k.end && k.start ? ' · ' + elapsedText(k.end - k.start) : ''} · ${relTime(k.end || k.start)}`;
@@ -8078,13 +7491,13 @@ function taskRowHtml(k) {
     <div class="item child task st-${k.status === 'pending' ? 'working' : k.status} agent-${k.agent}" data-task="${k.id}" title="${esc(k.text)}">
       <span class="child-ico">${icon(AGENTS[k.agent]?.icon || 'terminal')}${live ? '<i class="dot"></i>' : ''}</span>
       <span class="item-text">
-        <span class="item-name">${esc(k.text)}</span>
+        <span class="item-name no-i18n">${esc(k.text)}</span>
         <span class="item-sub">${live && tabById(k.tabId) && tabById(k.tabId).awaitChoice
           ? choiceBubbleHtml()
           : `<span class="tk ${k.status}">${TASK_TEXT[k.status]}</span>${time}`}</span>
       </span>
       <span class="item-actions"><button class="icon-btn go-prompt" data-a="goto" title="이 작업의 프롬프트로 이동"${JUMP_OK.get(k.id) ? '' : ' hidden'}>${icon('arrowUp')}</button>${k.status === 'attention' ? `<button class="icon-btn" data-a="unflag" title="확인 필요 해제">${icon('check')}</button>` : ''}${live ? '' : `<button class="icon-btn danger" data-a="forget" title="목록에서 지우기">${icon('x')}</button>`}</span>
-    </div>${live ? subagentRowsHtml(tabById(k.tabId)) : ''}`;
+    </div>${showSubs ? subagentRowsHtml(tb) : ''}`;
 }
 
 function renderProjects() {
@@ -8099,12 +7512,15 @@ function renderProjects() {
     temp.push({ id: 'tmp:' + normP(t.cwd), name: basename(t.cwd), path: t.cwd, temp: true });
   }
   const groups = [...temp, ...sortedProjects()];
+  // which project owns a folder is worked out once per render: every folder box asks it for every tab and task
+  const owners = new Map();
+  const ownerOf = (cwd) => { let o = owners.get(cwd); if (o === undefined) { o = ownerProject(cwd); owners.set(cwd, o); } return o; };
 
   let html;
   if (!groups.length) {
     html = `<div class="sb-empty"><span data-i18n-html="sbEmpty">터미널에서 <b>claude</b> 나 <b>codex</b> 를 실행하면<br>그 폴더와 에이전트가 여기에 나타나요.</span><br><br><button data-action="add-project">+ 프로젝트 폴더 추가</button></div>`;
   } else {
-    html = groups.map((p) => folderHtml(p, agents)).join('');
+    html = groups.map((p) => folderHtml(p, agents, ownerOf)).join('');
   }
   if (root.dataset.sig !== html) {
     const scroll = root.scrollTop;
@@ -8123,14 +7539,14 @@ function historyHtml(p) {
     }
     if (!cached) return `<div class="children"><div class="child-note slim">불러오는 중…</div></div>`;
   }
-  const list = cached.list.filter((x) => !S.tabs.some((t) => t.sessionId === x.id));
+  const list = cached.list.filter((x) => !tabOfSession(x.id));
   if (!list.length) return `<div class="children"><div class="child-note slim">지난 대화가 없습니다</div></div>`;
   const rows = list.slice(0, 8).map((s) => `
       <div class="past-row agent-${s.agent}" data-s="${s.id}" data-agent="${s.agent}" data-cwd="${esc(p.path)}"
            title="${esc(AGENTS[s.agent].name)} · ${esc(s.title)}${s.branch ? ' · ' + esc(s.branch) : ''}${s.lastPrompt ? '\n마지막 프롬프트: ' + esc(s.lastPrompt) : ''}">
         <span class="pr-dot"></span>
         <span class="pr-ico">${icon(AGENTS[s.agent].icon)}</span>
-        <span class="pr-title">${esc(s.title)}</span>
+        <span class="pr-title${s.title === '(제목 없음)' ? '' : ' no-i18n'}">${esc(s.title)}</span>
         <span class="pr-time">${relTime(s.mtime)}</span>
         <span class="pr-actions">
           <button class="icon-btn go" data-a="resume" title="이 대화 이어서">${icon('play')}</button>
@@ -8151,8 +7567,8 @@ function projectIconHtml(p) {
 }
 
 /** One folder = one box. Click the head to open it (one at a time); inside, tabs instead of nested toggles. */
-function folderHtml(p, agents) {
-  const inFolder = (cwd) => (p.temp ? samePath(cwd, p.path) : ownerProject(cwd) === p);
+function folderHtml(p, agents, ownerOf = ownerProject) {
+  const inFolder = (cwd) => (p.temp ? samePath(cwd, p.path) : ownerOf(cwd) === p);
   const sessions = agents.filter((t) => inFolder(t.cwd));
   const openTabs = S.tabs.filter((t) => inFolder(t.cwd));
   const gridOn = S.grid && samePath(S.grid, p.path);
@@ -8162,9 +7578,13 @@ function folderHtml(p, agents) {
     S.loadingHistory.add(p.path);
     sessionsFor(p.path).finally(() => { S.loadingHistory.delete(p.path); renderSessions(); });
   }
-  const past = cached ? cached.list.filter((x) => !S.tabs.some((t) => t.sessionId === x.id)) : null;
+  // which box is open: the user's choice, else the folder of the tab in front
+  const active = activeTab();
+  const open = S.openFolder != null ? S.openFolder === p.id : !!(active && inFolder(active.cwd));
 
-  const tasks = S.tasks.filter((k) => inFolder(k.path));
+  // the lists inside a box are built for the open one only (a closed box shows just its head)
+  const past = open && cached ? cached.list.filter((x) => !tabOfSession(x.id)) : null;
+  const tasks = open ? S.tasks.filter((k) => inFolder(k.path)) : [];
   // a task whose agent stopped to ask the user steps over to 입력 대기 (with its bubble) until answered
   const asking = (k) => { const tb = tabById(k.tabId); return !!(tb && tb.awaitChoice); };
   const running = tasks.filter((k) => RUNNING_TASK.has(k.status) && !asking(k)).reverse();
@@ -8173,10 +7593,6 @@ function folderHtml(p, agents) {
   const waiting = sessions.filter((t) => t.status !== 'working'); // incl. one waiting for a choice (shows the bubble)
   const workingNoTask = sessions.filter((t) => t.status === 'working' && !runningTabs.has(t.id));
   const runCount = running.length + workingNoTask.length;
-
-  // which box is open: the user's choice, else the folder of the tab in front
-  const active = activeTab();
-  const open = S.openFolder != null ? S.openFolder === p.id : !!(active && inFolder(active.cwd));
 
   // quiet status: ONE filled dot in the colour of the most important state, plus how many sessions (hover for details)
   const RANK = { attention: 4, working: 3, done: 2, ready: 1 };
@@ -8239,8 +7655,8 @@ function folderHtml(p, agents) {
       <div class="fbox-head" data-p="${esc(p.id)}" data-path="${esc(p.path)}" title="${esc(p.path)}">
         ${projectIconHtml(p)}
         <span class="fb-text">
-          <span class="fb-name">${esc(p.name)}</span>
-          <span class="fb-path">${p.temp ? '프로젝트 아님 · ' : ''}${esc(prettyPath(p.path))}</span>
+          <span class="fb-name no-i18n">${esc(p.name)}</span>
+          <span class="fb-path">${p.temp ? '프로젝트 아님 · ' : ''}<span class="no-i18n">${esc(prettyPath(p.path))}</span></span>
         </span>
         <span class="fb-badges">${badges}</span>
         <span class="fb-actions">${actions}</span>
@@ -8379,7 +7795,7 @@ async function openTrash() {
       <div class="trash-row" data-id="${esc(x.id)}">
         <span class="child-ico agent-${x.agent}">${icon(AGENTS[x.agent]?.icon || 'terminal')}</span>
         <span class="item-text">
-          <span class="item-name">${esc(x.title || '(제목 없음)')}</span>
+          <span class="item-name${x.title && x.title !== '(제목 없음)' ? ' no-i18n' : ''}">${esc(x.title || '(제목 없음)')}</span>
           <span class="item-sub">${esc(AGENTS[x.agent]?.name || x.agent)} · ${esc(prettyPath(x.cwd))} · ${relTime(x.deletedAt)} 삭제</span>
         </span>
         <button class="btn small" data-a="restore">${icon('refresh')}복원</button>
@@ -8431,11 +7847,15 @@ async function openTrash() {
 }
 
 async function deleteSession(s, cwd) {
-  const openTab = S.tabs.find((t) => t.sessionId === s.id);
+  const openTab = tabOfSession(s.id);
   const A = AGENTS[s.agent];
+  // two whole sentences rather than one with an optional word: each is a phrase the translations can match
+  const ask = openTab
+    ? `${A.name} 대화 '${s.title}'을(를) 종료하고 휴지통으로 옮길까요?`
+    : `${A.name} 대화 '${s.title}'을(를) 휴지통으로 옮길까요?`;
   const ok = await confirmDialog(
     openTab ? '세션 종료 후 삭제' : '대화 삭제',
-    `${A.name} 대화 '${s.title}'을(를) ${openTab ? '종료하고 ' : ''}휴지통으로 옮길까요?\n휴지통에서 복원하거나 영구 삭제할 수 있습니다.`,
+    `${ask}\n휴지통에서 복원하거나 영구 삭제할 수 있습니다.`,
     openTab ? '종료 후 삭제' : '삭제',
   );
   if (!ok) return;
@@ -8497,7 +7917,7 @@ function updateEmpty() {
     const it = h('div', 'item');
     it.innerHTML = `
       <span class="item-ico proj">${icon('folder')}</span>
-      <span class="item-text"><span class="item-name">${esc(p.name)}</span><span class="item-sub">${esc(prettyPath(p.path))}</span></span>
+      <span class="item-text"><span class="item-name no-i18n">${esc(p.name)}</span><span class="item-sub no-i18n">${esc(prettyPath(p.path))}</span></span>
       <span class="item-actions" style="display:flex"><span class="icon-btn">${icon('terminal')}</span></span>`;
     it.addEventListener('click', () => newShell(null, p.path));
     rec.appendChild(it);
@@ -8524,7 +7944,7 @@ function newAgent(type, { cwd, mode = 'new', sessionId = '', permissionMode = ''
 }
 
 function resumeSession(agent, cwd, sessionId) {
-  const open = S.tabs.find((t) => t.sessionId === sessionId);
+  const open = tabOfSession(sessionId);
   if (open) return activate(open.id);
   return newAgent(agent, { cwd, mode: 'resume', sessionId });
 }
@@ -8567,7 +7987,8 @@ function renameProject(p) {
 
 function sendSlash(cmd) {
   const t = activeTab();
-  if (!t || !t.agent) return toast('Claude 또는 Codex 실행 중인 탭에서 사용할 수 있어요', { icon: 'info' });
+  if (!t || !t.agent || !t.alive) return toast('Claude 또는 Codex 실행 중인 탭에서 사용할 수 있어요', { icon: 'info' });
+  if (t.awaitChoice) return toast('선택이 필요해요', { icon: 'info' }); // its Enter would pick the highlighted answer
   window.mt.pty.write(t.id, cmd);
   t.armed = true;
   setTimeout(() => window.mt.pty.write(t.id, '\r'), 60);
@@ -8607,7 +8028,7 @@ function applySettings() {
   for (const t of S.tabs) {
     t.term.options.fontFamily = S.settings.fontFamily;
     t.term.options.fontSize = S.settings.fontSize;
-    t.term.options.lineHeight = S.settings.lineHeight;
+    t.term.options.lineHeight = clampLineHeight(S.settings.lineHeight);
   }
   applyAppearance();
   for (const t of S.tabs) fitTab(t);
@@ -8655,7 +8076,7 @@ function toggleSidebar(force) {
   const show = force != null ? force : app.classList.contains('no-sidebar');
   app.classList.toggle('no-sidebar', !show);
   saveSettings({ sidebarVisible: show });
-  setTimeout(() => fitTab(activeTab()), 220);
+  setTimeout(() => { const tiles = currentView().tiles; (tiles.length ? tiles : [activeTab()]).forEach(fitTab); }, 220);
 }
 
 /* --- search -------------------------------------------------------- */
@@ -8743,7 +8164,8 @@ function openMenu(items, x, y) {
   const r = menu.getBoundingClientRect();
   menu.style.left = `${Math.max(6, Math.min(x, innerWidth - r.width - 6))}px`;
   menu.style.top = `${Math.max(6, Math.min(y, innerHeight - r.height - 6))}px`;
-  const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); closeOverlay(); } };
+  // stopPropagation: focus is still in the terminal (a right-click doesn't move it), which would send this Esc to the agent
+  const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeOverlay(); } };
   window.addEventListener('keydown', onKey, true);
   S.overlay = { nodes: [scrim, menu], cleanup: () => window.removeEventListener('keydown', onKey, true) };
 }
@@ -8753,7 +8175,8 @@ function agentQuickItems(t) {
   const A = AGENTS[t.agent];
   return [
     { icon: 'edit', text: '프롬프트 작성기', hint: 'Ctrl+Shift+E', run: openComposer },
-    { icon: 'x', text: '작업 중단 (Esc)', run: () => { if (t.alive) window.mt.pty.write(t.id, '\x1b'); } },
+    // like a typed Esc (see term.onData): the task ends as 중단, and finishWork does not celebrate it
+    { icon: 'x', text: '작업 중단 (Esc)', run: () => { if (!t.alive) return; if (t.status === 'working' || t.status === 'attention' || t.awaitChoice) { t.interrupted = true; t.interruptedAt = Date.now(); } window.mt.pty.write(t.id, '\x1b'); } },
     ...A.quick.map(([ic, cmd, desc]) => ({ icon: ic, text: `${cmd} — ${desc}`, run: () => sendSlash(cmd) })),
   ];
 }
@@ -8792,7 +8215,7 @@ function openTabMenu(tab, x, y) {
     { icon: 'arrowLeft', text: '왼쪽으로 이동', hint: 'Ctrl+Shift+PgUp', disabled: i === 0, run: () => moveActive(-1) },
     { icon: 'arrowRight', text: '오른쪽으로 이동', hint: 'Ctrl+Shift+PgDn', disabled: i === S.tabs.length - 1, run: () => moveActive(1) },
     '-',
-    { icon: 'x', text: '다른 탭 모두 닫기', disabled: S.tabs.length < 2, run: () => S.tabs.filter((t) => t !== tab).forEach((t) => closeTab(t.id, { confirmWorking: false })) },
+    { icon: 'x', text: '다른 탭 모두 닫기', disabled: S.tabs.length < 2, run: async () => { for (const t of S.tabs.filter((x) => x !== tab)) await closeTab(t.id); } }, // one by one: a working agent asks first, as when closed alone
     { icon: 'x', text: '탭 닫기', hint: 'Ctrl+Shift+W', danger: true, run: () => closeTab(tab.id) },
   );
   openMenu(items, x, y);
@@ -8809,11 +8232,12 @@ function runInTab(tab, cmd) {
 /* ------------------------------------------------------------------ */
 
 const taskById = (id) => S.tasks.find((k) => k.id === id) || null;
+const MAX_TASKS = 400; // kept in memory and on disk
 let taskSaveTimer = null;
 function saveTasks() {
   clearTimeout(taskSaveTimer);
   taskSaveTimer = setTimeout(() => {
-    const keep = S.tasks.filter((k) => k.status !== 'pending').slice(-400)
+    const keep = S.tasks.filter((k) => k.status !== 'pending').slice(-MAX_TASKS)
       .map(({ id, agent, path, text, status, start, end, sessionId }) => ({ id, agent, path, text, status, start, end, sessionId }));
     window.mt.store.tasks(keep);
   }, 400);
@@ -8828,16 +8252,32 @@ function promptText(tab) {
   return t.slice(0, 200);
 }
 
-function onAgentEnter(tab) {
-  const before = tab.statusBeforeInput;
+/** A prompt is being submitted: typed in the terminal (read from the screen), or `sent` by the app itself (the composer). */
+function onAgentEnter(tab, sent) {
+  const before = sent == null ? tab.statusBeforeInput : tab.status;
+  const old = tab.taskId && taskById(tab.taskId);
   // answering a question / menu while a task runs: part of the current task, not a new one
-  if (before === 'working' || before === 'attention') return;
-  const text = promptText(tab);
+  // (a typed answer: its first key already put the tab back to 입력 대기, but the task still waits on the choice on screen)
+  if (before === 'working' || before === 'attention' || (tab.awaitChoice && old && old.status === 'attention')) return;
+  const text = sent == null ? promptText(tab) : String(sent).replace(/\s+/g, ' ').trim().slice(0, 200);
   if (!text) return;
-  const task = { id: uuid(), tabId: tab.id, agent: tab.agent, path: tab.cwd, text, status: 'pending', start: Date.now(), end: 0, sessionId: tab.sessionId || '' };
+  // the tab's previous task never ended (its question was dropped, its Enter started nothing): it must not stay in 진행 중
+  if (old && RUNNING_TASK.has(old.status)) {
+    if (old.status === 'pending') S.tasks = S.tasks.filter((k) => k !== old);
+    else { old.status = old.status === 'attention' && !tab.interrupted ? 'done' : 'stopped'; old.end = Date.now(); saveTasks(); } // (Esc at its question: stopped)
+  }
+  const task = { id: uuid(), tabId: tab.id, agent: tab.agent, path: tab.cwd, text, status: 'pending', start: Date.now(), end: 0, sessionId: tab.sessionId || '', sent: Date.now() };
   S.tasks.push(task);
+  if (S.tasks.length > MAX_TASKS) { const i = S.tasks.findIndex((k) => !RUNNING_TASK.has(k.status)); if (i >= 0) S.tasks.splice(i, 1); } // the oldest finished one goes
   tab.taskId = task.id;
   tab.interrupted = false;
+  // an Enter that starts no work at all (a local command, a menu) is not a task: don't leave it at 대기
+  setTimeout(() => {
+    if (task.status !== 'pending') return;
+    S.tasks = S.tasks.filter((k) => k !== task);
+    if (tab.taskId === task.id) tab.taskId = '';
+    renderSessions();
+  }, 15000);
   renderSessions();
 }
 
@@ -8845,17 +8285,24 @@ function onAgentEnter(tab) {
 function syncTask(tab, status) {
   const task = tab.taskId && taskById(tab.taskId);
   if (!task || task.status === 'done' || task.status === 'stopped') return;
-  if (status === 'working') { task.status = 'working'; task.start = tab.workStart || task.start; }
-  else if (status === 'attention') task.status = 'attention';
-  else if (status === 'done' || status === 'exited' || status === 'shell') {
-    task.status = status === 'done' && !tab.interrupted ? 'done' : 'stopped';
+  if (status === 'working') {
+    if (task.status !== 'working') saveTasks(); // on disk from the moment it runs: one still running at quit comes back as 중단
+    task.status = 'working';
+    task.start = tab.workStart || task.start;
+  } else if (status === 'attention') {
+    task.status = 'attention';
+    task.asked = true; // it got as far as a question: real work, however short the rest turns out to be
+  } else if (status === 'done' || status === 'exited' || status === 'shell' || (status === 'ready' && task.status === 'working' && task.asked)) {
+    task.status = (status === 'done' || status === 'ready') && !stoppedByEsc(tab) ? 'done' : 'stopped'; // the same rule finishWork celebrates by
     task.end = Date.now();
     task.sessionId = tab.sessionId || task.sessionId;
     refineTask(tab, task);
     saveTasks();
-  } else if (status === 'ready' && task.status === 'pending') {
-    S.tasks = S.tasks.filter((k) => k !== task); // Enter that never started any work
+  } else if (status === 'ready' && (task.status === 'pending' || task.status === 'working')) {
+    // Enter that never started any work — or only a redraw that looked like work (under 800 ms, see finishWork)
+    S.tasks = S.tasks.filter((k) => k !== task);
     tab.taskId = '';
+    saveTasks();
   }
 }
 
@@ -8866,7 +8313,13 @@ async function refineTask(tab, task) {
   if (!sid) return;
   task.sessionId = sid;
   const real = await window.mt.agent.lastPrompt(task.agent, tab.cwd, sid);
-  if (real) task.text = real.slice(0, 200);
+  // a plain string, or { text, ts } once the main process also sends when that prompt was recorded
+  const text = real && typeof real === 'object' ? real.text : real;
+  const ts = real && typeof real === 'object' ? Number(real.ts) || 0 : 0;
+  // The transcript's last prompt is this task's own only if it was sent when the task began: not before (the
+  // previous task's prompt: "/exit" must not be renamed after it) and not long after (an answer, a follow-up).
+  const mine = !String(task.text).startsWith('/') && (!ts || !task.sent || (ts >= task.sent - 1000 && ts <= task.sent + 30000));
+  if (text && !String(text).startsWith('/') && mine) task.text = String(text).slice(0, 200);
   saveTasks();
   renderSessions();
 }
@@ -8891,13 +8344,13 @@ function visiblePromptRow(tab, needle) {
   const buf = tab.term.buffer.active;
   const top = buf.viewportY;
   const lim = tab.term.rows - (buf.type === 'alternate' ? 3 : 0); // leave Claude's own input box out
+  const rows = [];
+  for (let r = 0; r < lim; r++) { const l = buf.getLine(top + r); rows.push(l ? flatText(l.translateToString(true)) : ''); }
   for (let r = 0; r < lim; r++) {
-    const l = buf.getLine(top + r);
-    if (!l) continue;
-    let t = l.translateToString(true);
-    const n = buf.getLine(top + r + 1);
-    if (n && n.isWrapped) t += n.translateToString(true);
-    if (flatText(t).includes(needle)) return r;
+    // the prompt starts on this row; a long or several-line one runs on over the rows below (wrapped by the
+    // terminal, or drawn that way by the agent: "❯ first line" + indented lines)
+    const at = rows[r] ? (rows[r] + (rows[r + 1] || '') + (rows[r + 2] || '')).indexOf(needle) : -1;
+    if (at >= 0 && at < rows[r].length) return r;
   }
   return -1;
 }
@@ -8911,12 +8364,15 @@ function findTaskPrompt(task) {
   const needle = promptNeedle(task);
   if (needle.length < 4) return null;
   const bottom = buf.baseY + buf.cursorY;
-  const lineText = (i) => { const l = buf.getLine(i); return l ? l.translateToString(true) : ''; };
+  const lineText = (i) => { const l = buf.getLine(i); return l ? flatText(l.translateToString(true)) : ''; };
+  let below = ['', '']; // the two lines under the current one: a long or several-line prompt runs on over them
   for (let i = buf.length - 1; i >= 0; i--) {
+    const head = lineText(i);
+    const at = head ? (head + below[0] + below[1]).indexOf(needle) : -1;
+    below = [head, below[0]];
+    if (at < 0 || at >= head.length) continue; // the prompt has to start on this line
     if (task.status !== 'done' && task.status !== 'stopped' && i >= bottom - 1) continue; // the live input line
-    let joined = lineText(i);
-    for (let j = 1; j <= 3 && i + j < buf.length && buf.getLine(i + j) && buf.getLine(i + j).isWrapped; j++) joined += lineText(i + j);
-    if (flatText(joined).includes(needle)) return { tab, line: i };
+    return { tab, line: i };
   }
   return null;
 }
@@ -8947,6 +8403,7 @@ function markPromptRow(tab, row) {
   setTimeout(() => mark.remove(), 1800);
 }
 
+let jumpRun = 0; // the prompt search in progress (starting another one ends it)
 async function gotoTaskPrompt(task) {
   const tab = taskTab(task);
   const fail = () => { JUMP_OK.set(task.id, false); toast('프롬프트가 더 이상 화면 기록에 없습니다'); renderProjects(); };
@@ -8965,12 +8422,32 @@ async function gotoTaskPrompt(task) {
   const col = Math.max(1, Math.floor(tab.term.cols / 2)), row = Math.max(1, Math.floor(tab.term.rows / 3));
   const wheel = (up) => window.mt.pty.write(tab.id, '\x1b[<' + (up ? 64 : 65) + ';' + col + ';' + row + 'M');
   const settle = () => new Promise((r) => setTimeout(r, 70));
+  // The wheel reports go to whatever runs in the tab, so the search ends at once when that is no longer the agent's
+  // transcript in front of the user: the agent exited (the reports would be typed into the shell), another tab came
+  // to the front, the user typed, or another search started.
+  const run = ++jumpRun;
+  const typedAt = tab.lastIn;
+  const live = () => run === jumpRun && tab.alive && !!tab.agent && S.activeId === tab.id && tab.lastIn === typedAt
+    && tab.term.buffer.active.type === 'alternate' && tab.term.modes.mouseTrackingMode !== 'none';
+  // the transcript rows (not the agent's spinner and input box at the bottom, which change by themselves)
+  const frame = () => { const b = tab.term.buffer.active; let s = ''; for (let r = 0; r < Math.max(3, tab.term.rows - 8); r++) s += `${b.getLine(b.viewportY + r)?.translateToString(true) || ''}\n`; return s; };
   let found = visiblePromptRow(tab, needle);
-  for (let i = 0; found < 0 && i < 160; i++) { wheel(true); wheel(true); await settle(); found = visiblePromptRow(tab, needle); }
-  for (let i = 0; found < 0 && i < 320; i++) { wheel(false); wheel(false); await settle(); found = visiblePromptRow(tab, needle); }
+  for (const up of [true, false]) { // up to the top, then back down to the bottom
+    let seen = frame();
+    for (let i = 0, still = 0; found < 0 && i < (up ? 160 : 320) && still < 6; i++) { // 6 steps without a change: that end is reached
+      if (!live()) return;
+      wheel(up); wheel(up);
+      await settle();
+      if (!live()) return;
+      found = visiblePromptRow(tab, needle);
+      const now = frame();
+      still = now === seen ? still + 1 : 0;
+      seen = now;
+    }
+  }
   if (found < 0) return fail();
   // bring it a little below the top so the answer under it shows too
-  if (found < 2) { wheel(false); await settle(); found = Math.max(0, visiblePromptRow(tab, needle)); }
+  if (found < 2) { wheel(false); await settle(); if (!live()) return; found = Math.max(0, visiblePromptRow(tab, needle)); }
   markPromptRow(tab, found);
 }
 
@@ -8993,7 +8470,7 @@ function unflagTask(task) {
 }
 
 function openTask(task) {
-  const tab = (task.tabId && tabById(task.tabId)) || (task.sessionId && S.tabs.find((t) => t.sessionId === task.sessionId));
+  const tab = (task.tabId && tabById(task.tabId)) || tabOfSession(task.sessionId);
   if (tab) return activate(tab.id);
   if (task.sessionId) return resumeSession(task.agent, task.path, task.sessionId);
   newShell(null, task.path);
@@ -9172,7 +8649,7 @@ function openHistory() {
 async function openSessionPicker(cwd) {
   const list = await sessionsFor(cwd, true);
   const items = list.map((s) => {
-    const open = S.tabs.find((t) => t.sessionId === s.id);
+    const open = tabOfSession(s.id);
     return {
       icon: AGENTS[s.agent].icon,
       cls: s.agent,
@@ -9197,9 +8674,21 @@ function openModal({ title, body, foot, width }) {
   if (foot) m.querySelector('.modal-foot').append(...foot);
   else m.querySelector('.modal-foot').remove();
   overlayRoot.append(scrim, m);
+  // the window takes the focus (callers may then focus a field of their own): otherwise it stays in the terminal
+  // behind the scrim, and whatever is typed goes to the shell / agent
+  m.tabIndex = -1;
+  m.style.outline = 'none';
+  m.focus();
   m.querySelector('[data-close]').addEventListener('click', () => closeOverlay());
   scrim.addEventListener('pointerdown', () => closeOverlay());
   const onKey = (e) => {
+    if (e.key === 'Tab') { // Tab goes round inside the window (and its open dropdown), never out to the page behind
+      const stops = (S.overlay ? S.overlay.nodes : [m]).flatMap((n) => [...n.querySelectorAll('button, input, select, textarea, [tabindex]')])
+        .filter((el) => !el.disabled && el.tabIndex >= 0 && el.offsetParent);
+      const at = document.activeElement;
+      if (!stops.includes(at) || at === stops[e.shiftKey ? 0 : stops.length - 1]) { e.preventDefault(); (stops[e.shiftKey ? stops.length - 1 : 0] || m).focus(); }
+      return;
+    }
     if (e.key !== 'Escape' || e.isComposing) return;
     e.preventDefault();
     e.stopPropagation();
@@ -9241,7 +8730,8 @@ function promptDialog(title, value, cb) {
   openModal({ title: esc(title), body, foot: [wrap], width: 420 });
   const submit = () => { const v = input.value.trim(); closeOverlay(); cb(v); };
   ok.addEventListener('click', submit);
-  input.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.isComposing) submit(); if (e.key === 'Escape') closeOverlay(); });
+  // preventDefault: submit() hands focus back to the terminal, and the keypress of this Enter would follow it there
+  input.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); submit(); } if (e.key === 'Escape') closeOverlay(); });
   input.focus();
   input.select();
 }
@@ -9257,7 +8747,7 @@ const drafts = new Map();
 function composerDeco(field, ta) {
   const st = S.settings;
   // where the caret is, measured with a mirror of the textarea's text
-  const mirror = h('div', 'composer-mirror');
+  const mirror = h('div', 'composer-mirror no-i18n'); // a copy of what is being typed: translating it would move the measured caret
   field.appendChild(mirror);
   const caretXY = () => {
     const cs = getComputedStyle(ta);
@@ -9282,6 +8772,7 @@ function composerDeco(field, ta) {
   if (!native || kind === 'bar-thick' || native[0] !== 'bar') { // thin / normal bars stay the native caret
     ta.style.caretColor = 'transparent';
     cur = h('div', `mt-cursor kind-${kind}`);
+    cursorArt(cur, kind);
     if (native) cur.style.setProperty('--cc', color); // block / underline follow 커서 색 like in the terminal
     field.appendChild(cur);
   }
@@ -9372,7 +8863,7 @@ function openComposer() {
   insert.title = '전송하지 않고 입력창에만 넣기';
   const right = h('div', 'foot-right');
   right.append(insert, send);
-  const label = h('span', `composer-target ${t.agent}`, `${icon(A.icon)}${esc(tabLabel(t))}`);
+  const label = h('span', `composer-target no-i18n ${t.agent}`, `${icon(A.icon)}${esc(tabLabel(t))}`);
   openModal({ title: '프롬프트 작성', body, foot: [label, right], width: 720 });
   const prev = S.overlay.cleanup;
   S.overlay.cleanup = () => { prev?.(); deco.stop(); drafts.set(t.id, ta.value); };
@@ -9380,12 +8871,16 @@ function openComposer() {
   const deliver = (submit) => {
     const text = ta.value.replace(/\s+$/, '');
     if (!text) return;
+    // the tab may have changed while this window was open: with the agent gone the text would run in the shell,
+    // and while it asks something the Enter would pick the highlighted answer (the text stays here)
+    if (!t.agent || !t.alive) return toast('Claude 또는 Codex 실행 중인 탭에서 사용할 수 있어요', { icon: 'info' });
+    if (t.awaitChoice) return toast('선택이 필요해요', { icon: 'info' });
     ta.value = '';
     closeOverlay();
     drafts.delete(t.id);
     activate(t.id);
     window.mt.pty.write(t.id, `\x1b[200~${text}\x1b[201~`); // bracketed paste keeps it one prompt
-    if (submit) { t.armed = true; setTimeout(() => window.mt.pty.write(t.id, '\r'), 150); }
+    if (submit) { onAgentEnter(t, text); t.armed = true; setTimeout(() => window.mt.pty.write(t.id, '\r'), 150); } // a task row, as for a typed prompt
   };
   send.addEventListener('click', () => deliver(true));
   insert.addEventListener('click', () => deliver(false));
@@ -9533,6 +9028,9 @@ function setupFontPicker(root) {
   root.closest('.modal').addEventListener('pointerdown', (e) => {
     if (pop && !root.contains(e.target)) close(false);
   });
+  // the whole window closed with the list open (a click outside it): a font previewed with the arrow keys goes back
+  const prevCleanup = S.overlay.cleanup;
+  S.overlay.cleanup = () => { prevCleanup?.(); if (pop) { pop = null; previewFont(S.settings.fontFamily); } };
 }
 
 /** 작업 완료 텍스트: phrase list editor, style picker, font list, try-it button. */
@@ -9875,6 +9373,8 @@ function openSettings() {
       let v = el.type === 'checkbox' ? el.checked : el.value;
       if (el.type === 'number' || el.type === 'range') v = Number.isFinite(Number(v)) && v !== '' ? Number(v) : S.settings[k];
       if (k === 'fontSize') v = Math.max(8, Math.min(32, v));
+      if (k === 'letterSpacing') v = Math.max(-2, Math.min(6, v)); // far below zero there is no cell width left (the terminal drops to 2 columns)
+      if (k === 'lineHeight') v = clampLineHeight(v);
       if (k === 'transparency') {
         el.parentElement.querySelector('.range-val').textContent = `${Math.round(v * 100)}%`;
         saveSettings({ bgOpacity: Math.round((1 - v) * 100) / 100 });
@@ -10103,11 +9603,19 @@ termsEl.addEventListener('contextmenu', (e) => {
   openMenu(items, e.clientX, e.clientY);
 });
 
-function droppedPaths(e) {
+/** Paths of the dropped files, quoted for where they go: `tab` is the shell tab they are pasted into (none: an agent's prompt). */
+function droppedPaths(e, tab) {
+  const sh = tab && !tab.agent ? (S.shells.find((s) => s.id === tab.shellId) || {}).type : '';
+  const quote = (p) => {
+    if (!sh) return /\s/.test(p) ? `"${p}"` : p; // a prompt takes the path as text
+    if (!/[\s;&|<>()^!%$`'"{}*?#~,=[\]]/.test(p)) return p; // nothing a shell would read as syntax
+    if (sh === 'cmd' || !/[$`"!]/.test(p)) return `"${p}"`;
+    return `'${p.replace(/'/g, sh === 'ps' ? "''" : "'\\''")}'`; // $( ) ` ! still work inside "…": PowerShell and POSIX shells need '…'
+  };
   const out = [];
   for (const f of e.dataTransfer?.files || []) {
     const p = window.mt.filePath(f);
-    if (p) out.push(/\s/.test(p) ? `"${p}"` : p);
+    if (p) out.push(quote(p));
   }
   return out;
 }
@@ -10131,7 +9639,7 @@ stage.addEventListener('drop', (e) => {
   e.preventDefault();
   if (dropHint) { dropHint.remove(); dropHint = null; }
   const t = activeTab();
-  const paths = droppedPaths(e);
+  const paths = droppedPaths(e, t);
   if (t && paths.length) { t.term.paste(paths.join(' ') + ' '); t.term.focus(); }
 });
 window.addEventListener('dragover', (e) => e.preventDefault());
@@ -10162,10 +9670,12 @@ $('#st-palette').addEventListener('click', () => openCommandPalette());
 $('#st-composer').addEventListener('click', () => openComposer());
 $('#st-session').addEventListener('click', () => { const t = activeTab(); if (t?.sessionId) copySessionId(t); });
 
-new ResizeObserver(() => (S.grid ? gridTiles() : [activeTab()]).forEach(fitTab)).observe(termsEl);
-$('#zoombar-exit').addEventListener('click', () => toggleZoom());
+// every pane on screen follows the stage: a split has several, like a folder grid
+new ResizeObserver(() => { const tiles = currentView().tiles; (tiles.length ? tiles : [activeTab()]).forEach(fitTab); }).observe(termsEl);
+$('#zoombar-exit').addEventListener('click', () => { toggleZoom(); activeTab()?.term.focus(); });
 $('#gridbar-exit').addEventListener('click', () => { S.grid = null; applyLayout(); renderProjects(); activeTab()?.term.focus(); });
 
+setTimeout(() => { if (!document.hasFocus()) S.winFocused = false; }, 2000); // opened behind another window: no focus event ever said so
 window.mt.onWinFocus((f) => {
   S.winFocused = f;
   if (f) {
@@ -10207,11 +9717,22 @@ setInterval(() => { if (S.expanded.size) { S.sessionCache.clear(); renderProject
 
   const layout = init.store.layout;
   if (S.settings.restoreSessions && layout?.tabs?.length) {
-    for (const lt of layout.tabs) {
+    // Which conversation each agent tab comes back to: its own, if the transcript is still there. A tab without one
+    // continues the folder's latest conversation — but only one tab per folder may, and none where another restored
+    // tab resumes its own: `claude --continue` / `codex resume --last` would put two tabs on one conversation.
+    // The others start a new one.
+    const isAgent = (lt) => lt.agent === 'claude' || lt.agent === 'codex';
+    const place = (lt) => `${lt.agent} ${normP(lt.cwd)}`;
+    const found = [];
+    for (const lt of layout.tabs) found.push(!!(isAgent(lt) && lt.sessionId && await window.mt.agent.has(lt.agent, lt.cwd, lt.sessionId)));
+    const taken = new Set(layout.tabs.filter((lt, i) => found[i]).map(place));
+    for (const [i, lt] of layout.tabs.entries()) {
       let launch = null;
-      if (lt.agent === 'claude' || lt.agent === 'codex') {
-        const ok = lt.sessionId && await window.mt.agent.has(lt.agent, lt.cwd, lt.sessionId);
-        launch = { type: lt.agent, mode: ok ? 'resume' : 'continue', sessionId: ok ? lt.sessionId : '', permissionMode: lt.permissionMode };
+      if (isAgent(lt)) {
+        const ok = found[i];
+        const mode = ok ? 'resume' : taken.has(place(lt)) ? 'new' : 'continue';
+        taken.add(place(lt));
+        launch = { type: lt.agent, mode, sessionId: ok ? lt.sessionId : '', permissionMode: lt.permissionMode };
       }
       const nt = createTab({ shellId: lt.shellId, cwd: lt.cwd, customTitle: lt.customTitle, launch, background: true });
       if (nt && lt.workingSince) nt.restoredWorkSince = lt.workingSince; // keeps the elapsed time if it's still working
