@@ -75,6 +75,7 @@
     if (last === ' ') g = '';
     const gw = (g && WIDE.test(g) ? 2 : 1) * cw;
     let cx = x;
+    if (onLine && o.pre) return { g, gw, cx: o.pre.left + gw / 2, cy: o.pre.top + c.ch / 2, onLine };
     if (onLine) {
       let comp = 0;
       if (fx.canvas.classList.contains('fx-layer')) { const v = document.querySelector('#stage .composition-view.active'); if (v && v.textContent) comp = v.getBoundingClientRect().width; }
@@ -145,7 +146,7 @@
       x.drawImage(hanji(tw, th, q).c, 0, 0, tw + 6, th + 6);
       if (!g) return;
       const fs = fitType(x, g, tw, th), cx = (tw + 6) / 2, cy = (th + 6) / 2 + fs * 0.03, R = rng(g.codePointAt(0) * 17 + tw);
-      x.filter = `blur(${0.8 * q}px)`; x.fillStyle = 'rgba(46,32,18,0.5)'; x.fillText(g, cx, cy); x.filter = 'none';
+      x.fillStyle = 'rgba(46,32,18,0.16)'; for (const [ox, oy] of [[-0.6, 0], [0.6, 0], [0, -0.6], [0, 0.6]]) x.fillText(g, cx + ox, cy + oy); // ink bleeding into the paper
       x.fillStyle = 'rgba(20,14,9,0.95)'; x.fillText(g, cx, cy); x.fillText(g, cx + 0.25, cy + 0.15);
       x.globalCompositeOperation = 'source-atop'; // where the ink did not take (the paper is the same colour, so only the strokes show it)
       for (let i = 0, n = Math.round((tw * th) / 14); i < n; i++) { x.fillStyle = `rgba(238,224,192,${0.25 + R() * 0.45})`; x.beginPath(); x.arc(3 + R() * tw, 3 + R() * th, 0.25 + R() * 0.5, 0, TAU); x.fill(); }
@@ -233,7 +234,8 @@
 
   /** Down, a blow, away: the stamp (a sort or a seal stone) and the print it leaves. */
   function drawStamp(ctx, p) {
-    const a = p.age++, hit = p.hit, S = Math.max(p.tw, p.th);
+    const a = p.age++ - (p.wait || 0), hit = p.hit, S = Math.max(p.tw, p.th);
+    if (a < 0) return;
     ctx.save(); ctx.globalCompositeOperation = 'source-over';
     if (a >= hit) {
       const t = (a - hit) / (p.T - hit), al = t < p.hold ? 1 : 1 - smooth((t - p.hold) / (1 - p.hold));
@@ -273,9 +275,23 @@
         P.push(part(124, drawStamp, { x: lim(x + cw * 1.2 + S / 2, fx.w), y: lim(y - S * 0.06, fx.h), print: sealS(S, q), block: sealToolS(S, q), shadow: shadowS(S, S, q), hit: 8, lift: 25, hold: 0.42, rot: rand(-0.09, 0.09), seed: (Math.random() * 1e9) | 0, tw: S, th: S, dust: crowded ? 0 : 11, red: true }));
         return;
       }
-      const at = typedAt(c), g = at.g == null ? JIKJI[jikji++ % JIKJI.length] : at.g, gw = (WIDE.test(g) ? 2 : 1) * cw, cx = at.cx;
-      const tw = Math.round((gw + Math.max(3, cw * 0.5)) * sz), th = Math.round(ch * 1.14 * sz);
-      P.push(part(66, drawStamp, { x: cx, y, print: printS(g, tw, th, q), block: blockS(g, tw, th, q), shadow: shadowS(tw, th, q), hit: 5, lift: 17, hold: 0.36, rot: rand(-0.045, 0.045), seed: (Math.random() * 1e9) | 0, tw, th, dust: crowded ? 0 : 5, red: false }));
+      const at = typedAt(c);
+      const one = (g, cx, cy, wait) => {
+        const gw = (WIDE.test(g) ? 2 : 1) * cw, tw = Math.round((gw + Math.max(2, cw * 0.3)) * sz), th = Math.round(ch * 1.1 * sz);
+        P.push(part(46 + wait, drawStamp, { x: cx, y: cy, wait, print: printS(g, tw, th, q), block: blockS(g, tw, th, q), shadow: shadowS(tw, th, q), hit: 4, lift: 13, hold: 0.3, rot: rand(-0.03, 0.03), seed: (Math.random() * 1e9) | 0, tw, th, dust: crowded ? 0 : 4, red: false }));
+      };
+      if (c.o.pre && at.onLine) { // each character where it lands, one after another
+        const gl = [...String(c.o.text)].slice(-8);
+        let left = c.o.pre.left + Math.max(0, [...String(c.o.text)].length - gl.length) * cw;
+        gl.forEach((ch0, i) => {
+          const w = (WIDE.test(ch0) ? 2 : 1) * cw;
+          if (ch0 !== ' ') one(ch0, left + w / 2, c.o.pre.top + ch / 2, i * 2);
+          left += w;
+        });
+        return;
+      }
+      const g = at.g == null ? JIKJI[jikji++ % JIKJI.length] : at.g;
+      one(g, at.cx, y, 0);
     },
   };
 
@@ -486,12 +502,14 @@
     if (h < 1 || w < 0.5) return;
     ctx.save(); ctx.globalCompositeOperation = L ? 'source-over' : 'lighter';
     if (p.glow) { ctx.globalAlpha = 0.34 * al; put(ctx, p.glow, x + lean * 0.3, y - h * 0.38, (h * 1.9) / 96); ctx.globalAlpha = 1; } // the sullen light it throws
+    ctx.globalCompositeOperation = 'source-over'; // the fire is in front of the letter: its sheets cover it, they do not just brighten it
     let g = ctx.createLinearGradient(0, y, 0, y - h); // three sheets of fire, hotter toward the heart
     g.addColorStop(0, L ? `rgba(190,24,10,${0.92 * al})` : `rgba(226,26,8,${0.72 * al})`); g.addColorStop(0.7, L ? `rgba(128,8,6,${0.75 * al})` : `rgba(150,6,4,${0.5 * al})`); g.addColorStop(1, 'rgba(70,0,0,0)');
     ctx.fillStyle = g; tongue(ctx, x, y, w, h, lean); ctx.fill();
     g = ctx.createLinearGradient(0, y, 0, y - h * 0.74);
     g.addColorStop(0, L ? `rgba(255,120,24,${0.95 * al})` : `rgba(255,112,24,${0.8 * al})`); g.addColorStop(1, L ? `rgba(226,56,12,${0.45 * al})` : 'rgba(240,40,8,0)');
     ctx.fillStyle = g; tongue(ctx, x, y, w * 0.62, h * 0.72, lean * 0.7); ctx.fill();
+    if (!L) ctx.globalCompositeOperation = 'lighter';
     g = ctx.createLinearGradient(0, y, 0, y - h * 0.42);
     g.addColorStop(0, L ? `rgba(255,240,180,${al})` : `rgba(255,240,190,${0.95 * al})`); g.addColorStop(1, L ? `rgba(255,180,70,${0.55 * al})` : 'rgba(255,170,60,0)');
     ctx.fillStyle = g; tongue(ctx, x, y, w * 0.3, h * 0.4, lean * 0.4); ctx.fill();
@@ -572,13 +590,13 @@
       const flame = (fx0, fy0, h, w, delay, T, vx = 0, vy = 0) => P.push(part(T + delay, drawFlame, { x: fx0, y: fy0, h, w, delay, ph: rand(0, TAU), vx, vy, drift: rand(-0.06, 0.06), rise: ch * 0.5, al: alpha, L, glow: L || lite ? null : hell }));
       const ember = (ex, ey, vx, vy, s, T, delay = 0) => P.push(part(T + delay, drawEmber, { x: ex, y: ey, vx, vy, g: -0.012, s, delay, ph: rand(0, TAU), curl: rand(0.2, 0.55), al: 1, L, glow }));
       if (!enter) { // the character catches: fire off its top, a crack glowing under its foot
-        const at = typedAt(c), fx0 = at.cx, low = isLow(fx, ch), top = low ? base : y - ch * 0.4, gw = at.gw;
-        flame(fx0, top, ch * rand(1.5, 2.05) * sz * (low ? 0.82 : 1), gw * rand(1.35, 1.7) * sz, 0, rand(25, 32));
+        const at = typedAt(c), fx0 = at.cx, low = isLow(fx, ch), top = low ? base : y - ch * 0.4, foot = low ? base : (at.cy != null ? at.cy : y) + ch * 0.46, gw = at.gw;
+        flame(fx0, foot, (ch * rand(1.5, 2.05) + (low ? 0 : ch * 0.8)) * sz * (low ? 0.82 : 1), gw * rand(1.35, 1.7) * sz, 0, rand(25, 32));
         if (bare) return;
         if (!lite) {
-          flame(fx0 - gw * rand(0.4, 0.7), top + 1, ch * rand(0.65, 1.05) * sz, cw * 0.85 * sz, 2, 21);
-          flame(fx0 + gw * rand(0.4, 0.7), top + 1, ch * rand(0.6, 1) * sz, cw * 0.85 * sz, 3, 22);
-          P.push(part(46, drawFissure, { x: fx0, y: base + 1, arms: crack((gw * 0.5 + cw * 1.1) * sz, ch * 0.09), wd: 0.9 + 0.3 * sz, al: alpha, L }));
+          flame(fx0 - gw * rand(0.4, 0.7), foot, (ch * rand(0.65, 1.05) + ch * 0.5) * sz, cw * 0.85 * sz, 2, 21);
+          flame(fx0 + gw * rand(0.4, 0.7), foot, (ch * rand(0.6, 1) + ch * 0.5) * sz, cw * 0.85 * sz, 3, 22);
+          P.push(part(46, drawFissure, { x: fx0, y: foot + 1, arms: crack((gw * 0.5 + cw * 1.1) * sz, ch * 0.09), wd: 0.9 + 0.3 * sz, al: alpha, L }));
         }
         for (let i = 0, m = lite ? 1 : Math.max(2, Math.round(3.4 * k)); i < m; i++) ember(fx0 + rand(-0.6, 0.6) * gw, top - rand(0, 0.7) * ch, rand(-0.6, 0.6), -rand(1.1, 2.6) * sz, rand(0.8, 1.6) * sz, rand(26, 46));
         return;

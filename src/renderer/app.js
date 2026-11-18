@@ -1737,14 +1737,28 @@ function spawnFx(tab, data, jamo = false) {
   // the finished syllable after 자모 were already thrown one by one: don't throw it again
   if (!jamo && kind === 'letters' && HANGUL_RE.test(data) && performance.now() - lastJamoFx < 1500) return;
   if (jamo) lastJamoFx = performance.now();
+  // Where the text lands: the cursor cell now, before the echo moves it. Keys typed faster than the echo comes
+  // back would all see the same cell, so the next cell is predicted from the previous key.
+  let pre = null;
+  if (!jamo && !/[\x00-\x1f\x7f]/.test(data)) {
+    const g0 = cursorGeometry(tab);
+    if (g0) {
+      const now = performance.now(), pr = tab.fxPred;
+      let left = g0.left;
+      if (pr && now - pr.t < 400 && Math.abs(pr.top - g0.top) < 1 && pr.left > left) left = pr.left;
+      pre = { left, top: g0.top };
+      const cells = [...data].reduce((n, c) => n + (/[\u1100-\u115f\u2e80-\u303e\u3041-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(c) ? 2 : 1), 0);
+      tab.fxPred = { left: left + cells * g0.cw, top: g0.top, t: now };
+    }
+  } else tab.fxPred = null;
   setTimeout(() => {
     const geo = cursorGeometry(tab);
     if (!geo) return;
     // while composing, the character being built is drawn at the cursor: burst from just after it
     const comp = tab.host.querySelector('.composition-view.active');
     if (comp && comp.textContent) geo.left += comp.getBoundingClientRect().width - geo.cw;
-    stageFx().burst(kind, geo.left + geo.cw / 2, geo.top + geo.ch / 2, { enter: data === '\r', k: S.settings.typingFxIntensity, cw: geo.cw, ch: geo.ch, text: data });
-  }, 60);
+    stageFx().burst(kind, geo.left + geo.cw / 2, geo.top + geo.ch / 2, { enter: data === '\r', k: S.settings.typingFxIntensity, cw: geo.cw, ch: geo.ch, text: data, pre });
+  }, kind === 'movable' ? 0 : 60); // the type comes down as the character appears
 }
 
 const CELEB_KINDS = [
