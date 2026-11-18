@@ -414,45 +414,45 @@ const fxKeyWords = () => FX_WORDS.keys[fxLang()] || FX_WORDS.keys.ko;
 
 const FX_KINDS = [
   ['none', '없음', '효과 없이 깔끔하게'],
-  ['glow', '글로우', '커서 주변이 은은하게 빛남'],
-  ['ripple', '물결', '동그란 파동이 퍼짐'],
-  ['shockwave', '충격파', '이중 링과 섬광, Enter는 크게'],
-  ['particles', '파티클', '작은 입자가 흩어짐'],
-  ['spark', '스파크', '빛줄기가 사방으로'],
-  ['stars', '별빛', '반짝이는 별이 퍼짐'],
-  ['pixel', '픽셀', '레트로 사각 픽셀'],
-  ['ember', '불꽃', '불씨가 위로 피어오름'],
-  ['bubbles', '버블', '방울이 떠오르다 사라짐'],
-  ['hearts', '하트', '하트가 둥실 떠오름'],
-  ['matrix', '매트릭스', '초록 글자가 흘러내림'],
-  ['lightning', '번개', '짧은 전기 불꽃'],
-  ['confetti', '컨페티', '테마 색 종이가 터짐'],
-  ['petals', '벚꽃잎', '꽃잎이 흩날리며 내려앉음'],
-  ['butterfly', '나비', '날개를 팔랑이며 날아가는 나비'],
-  ['notes', '음표', '♪ ♫ 음표가 리듬 타며 떠오름'],
-  ['firework', '미니 폭죽', '슝 올라가서 팡 터짐'],
-  ['ink', '먹물', '붓끝 먹물이 번지고 방울이 튐'],
-  ['snowflake', '눈송이', '육각 눈송이가 빙글 내려앉음'],
-  ['letters', '글자 파편', '방금 입력한 글자가 톡톡 튀어나옴 (한글은 자음·모음)'],
-  ['slash', '검기', '촥 하고 빛의 칼날이 지나감'],
-  ['emojipop', '이모지 팝', '😀🔥✨ 이모지가 톡 튀어나와 둥실'],
-  ['ono', '의성어', '"톡! 탁! 딱!" 만화 글자가 튀어나옴 · Enter는 "쾅!"'],
-  ['popcorn', '팝콘', '팝콘 알갱이가 팡 튀어 올랐다 떨어짐'],
-  ['paint', '물감 튀김', '알록달록 물감이 철퍽 튀김'],
-  ['coins', '코인', '금화가 빙글빙글 돌며 튀어나옴'],
-  ['gblock', '글리치 블록', 'RGB로 찢어진 조각이 지지직 (멋있는)'],
-  ['laser', '레이저', '네 방향으로 레이저 빔이 쭉 뻗어나감 (멋있는)'],
-  ['bloom', '꽃 피기', '커서에서 꽃 한 송이가 활짝 피어남 (이쁜)'],
-  ['glitter', '반짝이 가루', '파스텔 반짝이 가루가 살랑살랑 내려앉음 (이쁜)'],
-  ['dice', '주사위', '주사위가 데굴데굴 굴러 숫자가 나옴 (재미있는)'],
-  ['balloonpop', '풍선 펑', '작은 풍선이 부풀다가 "펑!" (재미있는)'],
-  ['raindrop', '빗방울', '위에서 빗방울이 똑 떨어져 물결이 퍼짐'],
-  ['meteors', '별똥별', '작은 별똥별이 사선으로 쏟아져 반짝'],
+  ['glow', '글로우', '커서 주변이 은은하게 빛남 · Enter는 줄을 훑는 빛'],
+  ['ripple', '물결', '동그란 파동이 퍼짐 · Enter는 물방울 파문'],
+  ['shockwave', '충격파', '이중 링과 섬광 · Enter는 줄을 따라 폭발'],
+  ['particles', '파티클', '작은 입자가 흩어짐 · Enter는 모였다 터지는 고리'],
+  ['spark', '스파크', '빛줄기가 사방으로 · Enter는 손 불꽃놀이'],
+  ['stars', '별빛', '반짝이는 별이 퍼짐 · Enter는 별똥별'],
+  ['pixel', '픽셀', '레트로 사각 픽셀 · Enter는 8비트 아이콘'],
+  ['ember', '불꽃', '불씨가 위로 피어오름 · Enter는 솟구치는 모닥불'],
+  ['bubbles', '버블', '방울이 떠오르다 사라짐 · Enter는 큰 비눗방울'],
+  ['hearts', '하트', '하트가 둥실 떠오름 · Enter는 두근두근 하트'],
+  ['matrix', '매트릭스', '초록 글자가 흘러내림 · Enter는 녹색 코드 비'],
+  ['lightning', '번개', '짧은 전기 불꽃 · Enter는 내리꽂는 번개'],
+  ['confetti', '컨페티', '테마 색 종이가 터짐 · Enter는 파티 폭죽'],
+  ['petals', '벚꽃잎', '꽃잎이 흩날리며 내려앉음 · Enter는 꽃잎 회오리'],
+  ['butterfly', '나비', '날개를 팔랑이며 날아가는 나비 · Enter는 나비 떼'],
+  ['notes', '음표', '♪ ♫ 음표가 리듬 타며 떠오름 · Enter는 오선지와 화음'],
+  ['firework', '미니 폭죽', '슝 올라가서 팡 터짐 · Enter는 국화 불꽃'],
+  ['ink', '먹물', '붓끝 먹물이 번지고 방울이 튐 · Enter는 붓으로 그린 원'],
+  ['snowflake', '눈송이', '육각 눈송이가 빙글 내려앉음 · Enter는 얼음 결정'],
+  ['letters', '글자 파편', '방금 입력한 글자가 톡톡 튀어나옴 (한글은 자음·모음) · Enter는 글자가 와르르'],
+  ['slash', '검기', '촥 하고 빛의 칼날이 지나감 · Enter는 십자 베기'],
+  ['emojipop', '이모지 팝', '😀🔥✨ 이모지가 톡 튀어나와 둥실 · Enter는 이모지 분수'],
+  ['ono', '의성어', '"톡! 탁! 딱!" 만화 글자가 튀어나옴 · Enter는 "쾅!" 폭발 말풍선'],
+  ['popcorn', '팝콘', '팝콘 알갱이가 팡 튀어 올랐다 떨어짐 · Enter는 팝콘 한 무더기'],
+  ['paint', '물감 튀김', '알록달록 물감이 철퍽 튀김 · Enter는 삼색 물감 폭탄'],
+  ['coins', '코인', '금화가 빙글빙글 돌며 튀어나옴 · Enter는 코인 잭팟'],
+  ['gblock', '글리치 블록', 'RGB로 찢어진 조각이 지지직 (멋있는) · Enter는 찢기는 줄'],
+  ['laser', '레이저', '네 방향으로 레이저 빔이 쭉 뻗어나감 (멋있는) · Enter는 회전 레이저 스캔'],
+  ['bloom', '꽃 피기', '커서에서 꽃 한 송이가 활짝 피어남 (이쁜) · Enter는 작은 꽃다발'],
+  ['glitter', '반짝이 가루', '파스텔 반짝이 가루가 살랑살랑 내려앉음 (이쁜) · Enter는 반짝이 폭탄'],
+  ['dice', '주사위', '주사위가 데굴데굴 굴러 숫자가 나옴 (재미있는) · Enter는 더블 식스'],
+  ['balloonpop', '풍선 펑', '작은 풍선이 부풀다가 "펑!" (재미있는) · Enter는 풍선 다발'],
+  ['raindrop', '빗방울', '위에서 빗방울이 똑 떨어져 물결이 퍼짐 · Enter는 소나기와 물결'],
+  ['meteors', '별똥별', '작은 별똥별이 사선으로 쏟아져 반짝 · Enter는 불덩이 운석'],
   ['movable', '금속활자', '청동 활자가 탁 찍혀 한지에 먹 글자를 남김 · Enter는 붉은 낙관'],
-  ['holy', '천상의 빛', '금빛 빛줄기가 퍼지고 깃털이 내려앉음'],
-  ['hellfire', '지옥불', '검붉은 불길이 솟고 불씨가 흩날림'],
+  ['holy', '천상의 빛', '금빛 빛줄기가 퍼지고 깃털이 내려앉음 · Enter는 빛기둥과 날개'],
+  ['hellfire', '지옥불', '검붉은 불길이 솟고 불씨가 흩날림 · Enter는 불타는 마법진'],
   ['blood', '핏자국', '피가 튀어 흘러내림 · Enter는 할퀸 자국'],
-  ['magiccircle', '마법진', '커서 아래 빛나는 마법진이 돌며 피어남'],
+  ['magiccircle', '마법진', '커서 아래 빛나는 마법진이 돌며 피어남 · Enter는 3단 마법진'],
 ];
 
 /* Scene backgrounds (src/renderer/scenes/): drawn in ink and haze over the theme's own background. */
@@ -570,6 +570,8 @@ function addBurst(fx, kind, x, y, o) {
   const P = fx.parts;
   const rnd = (a, b) => a + Math.random() * (b - a);
 
+  const sub = o.submit && window.FX_SUBMIT && window.FX_SUBMIT[kind]; // a real submit (not a celebration's burst): the effect's own flourish (fx/submit-*.js)
+  if (sub) { try { sub({ fx, P: fx.parts, x, y, o, k, sz, cw, ch, cols, pick, alpha, rnd, L: isLight() }); } catch (e) { console.error(e); } return; }
   const ext = window.FX_EXT && window.FX_EXT[kind]; // effects kept in their own module (fx/effects.js)
   if (ext) { ext.burst({ fx, P, x, y, o, enter, k, sz, cw, ch, cols, pick, alpha, n, rnd }); return; }
   switch (kind) {
@@ -1739,7 +1741,7 @@ function spawnFx(tab, data, jamo = false) {
   if (jamo) lastJamoFx = performance.now();
   // Where the text lands: the cursor cell now, before the echo moves it. Keys typed faster than the echo comes
   // back would all see the same cell, so the next cell is predicted from the previous key.
-  let pre = null;
+  let pre = null, line = null;
   if (!jamo && !/[\x00-\x1f\x7f]/.test(data)) {
     const g0 = cursorGeometry(tab);
     if (g0) {
@@ -1750,6 +1752,37 @@ function spawnFx(tab, data, jamo = false) {
       const cells = [...data].reduce((n, c) => n + (/[\u1100-\u115f\u2e80-\u303e\u3041-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(c) ? 2 : 1), 0);
       tab.fxPred = { left: left + cells * g0.cw, top: g0.top, t: now };
     }
+  } else if (/^[]+$/.test(data)) {
+    // Backspace: the cell before the caret goes. Held down, the keys come faster than an agent redraws (a long
+    // session redraws slowly), so each one steps a cell left of the previous one instead of waiting for the screen.
+    const g0 = cursorGeometry(tab), c0 = stableCaret(tab);
+    if (g0) {
+      const now = performance.now(), pr = tab.fxPred, b = tab.term.buffer.active, line = b.getLine(b.viewportY + c0.y);
+      let col = pr && pr.del && now - pr.t < 400 && Math.abs(pr.top - g0.top) < 1 ? pr.col : c0.x;
+      for (let i = 0; i < data.length && col > 0; i++) {
+        col--;
+        const cell = line && line.getCell(col);
+        if (cell && cell.getWidth() === 0 && col > 0) col--; // the second half of a wide character
+      }
+      const cell = line && line.getCell(col), w = cell && cell.getWidth() === 2 ? 2 : 1;
+      const left = g0.left - (c0.x - col) * g0.cw;
+      pre = { left, top: g0.top, w };
+      tab.fxPred = { del: true, col, left, top: g0.top, t: now };
+    }
+  } else if (data === '\r') {
+    // Enter: the submit flourish plays on what was submitted, the text on the caret's row up to the caret
+    const g0 = cursorGeometry(tab), c0 = stableCaret(tab);
+    if (g0) {
+      const b = tab.term.buffer.active, row = b.getLine(b.viewportY + c0.y), full = row ? row.translateToString(false, 0, c0.x) : '';
+      let start = full.search(/\S/);
+      if (start < 0) start = c0.x;
+      const lead = /^(?:[❯›>$#%]\s+|PS [^>]*>\s?|[A-Za-z]:\\[^>]*>)/.exec(full.slice(start)); // an agent's or a shell's prompt mark is not what was sent
+      if (lead) start += lead[0].length;
+      const text = full.slice(start).trimEnd();
+      pre = { left: g0.left, top: g0.top };
+      line = { text, left: g0.left - (c0.x - start) * g0.cw, top: g0.top, cols: Math.max(0, c0.x - start) };
+    }
+    tab.fxPred = null;
   } else tab.fxPred = null;
   setTimeout(() => {
     const geo = cursorGeometry(tab);
@@ -1757,8 +1790,8 @@ function spawnFx(tab, data, jamo = false) {
     // while composing, the character being built is drawn at the cursor: burst from just after it
     const comp = tab.host.querySelector('.composition-view.active');
     if (comp && comp.textContent) geo.left += comp.getBoundingClientRect().width - geo.cw;
-    stageFx().burst(kind, geo.left + geo.cw / 2, geo.top + geo.ch / 2, { enter: data === '\r', k: S.settings.typingFxIntensity, cw: geo.cw, ch: geo.ch, text: data, pre });
-  }, kind === 'movable' ? 0 : 60); // the type comes down as the character appears
+    stageFx().burst(kind, geo.left + geo.cw / 2, geo.top + geo.ch / 2, { enter: data === '\r', submit: data === '\r', k: S.settings.typingFxIntensity, cw: geo.cw, ch: geo.ch, text: data, pre, line });
+  }, kind === 'movable' || pre ? 0 : 60); // the type comes down as the character appears
 }
 
 const CELEB_KINDS = [
@@ -3409,6 +3442,15 @@ const SOUND_KINDS = [
   ['orch', '오케스트라 튜닝', '실제 녹음 · 글자=바이올린 피치카토 선율 · Space=첼로 · ⌫=스피카토 · ⇧⏎=튜닝 음 · Enter=오케스트라 한 방'],
   ['merchant', '마을 주민', '마인크래프트 주민 목소리 (PC에 설치된 마인크래프트 Java에서 불러옴, 없으면 비슷한 합성음) · 글자=흠 · Space=흥정 · ⌫=으응(아니) · ⇧⏎=흠!(좋아) · Enter=주민이 죽는 소리'],
 ];
+/* Typing sounds made for MinsuTerm with Stable Audio 3 (samples-gen.js): until a theme's clips are decoded, a soft tick plays. */
+SOUND_KINDS.push(
+  ['slots', '슬롯머신', '글자=릴 딸깍 · Space=레버 당기기 · ⌫=칩 짤그락 · ⇧⏎=주사위 · Enter=잭팟!'],
+  ['cartoon', '만화 효과음', '글자=뾱·띠용·뽁 (매번 다름) · Space=슬라이드 휘슬 · ⌫=빵빵 경적 · ⇧⏎=스프링 보잉 · Enter=와장창'],
+  ['wizard', '마법 주문', '글자=반짝이는 마법 종 · Space=망토 휘익 · ⌫=주문 실패 퓨슉 · ⇧⏎=룬 웅웅 · Enter=주문 시전'],
+  ['steamworks', '스팀펑크 공방', '글자=톱니 딸깍 · Space=증기 칙 · ⌫=래칫 드르륵 · ⇧⏎=밸브 끼익 · Enter=증기 기적 뿌우'],
+  ['pirate', '해적선', '글자=갑판 삐걱 · Space=파도 철썩 · ⌫=앵무새 꽥 · ⇧⏎=닻 사슬 철컥 · Enter=대포 쾅 + 배 종'],
+);
+const GEN_SOUNDS = new Set(['slots', 'cartoon', 'wizard', 'steamworks', 'pirate']);
 const SOUND_ALIASES = { mech: 'blue', type: 'typewriter', chime: 'holy', rap: 'blue' }; // settings saved by earlier versions
 let audioCtx = null;
 let lastSound = 0;
@@ -4136,6 +4178,7 @@ function playKeySound(kind, key = 'key', force = false) {
      * until then (the first key or two) the synthesized version below plays instead.
      */
     const SB = sampleSet(ctx, kind);
+    if (GEN_SOUNDS.has(kind) && !(SB && Object.keys(SB).length)) { master.disconnect(); return playKeySound('soft', key, true); } // still decoding: a soft tick meanwhile
     if (SB && Object.keys(SB).length) {
       const any = (names) => { const have = names.filter((n) => SB[n]); return have[(Math.random() * have.length) | 0]; };
       const hall = (kind === 'choir' || kind === 'holy') ? cathedral(ctx) : null;
@@ -4153,6 +4196,20 @@ function playKeySound(kind, key = 'key', force = false) {
       const PENTA = [1, 1.125, 1.26, 1.5, 1.68, 2];
       let done = false;
       switch (kind) {
+        case 'slots': case 'cartoon': case 'wizard': case 'steamworks': case 'pirate': { // made for MinsuTerm (samples-gen.js)
+          const keys = ['k1', 'k2', 'k3', 'k4'].filter((n) => SB[n]);
+          const loud = { slots: 0.62, cartoon: 0.55, wizard: 0.5, steamworks: 0.6, pirate: 0.6 }[kind];
+          const lv = (n) => loud * ((window.SAMPLE_GAINS && window.SAMPLE_GAINS[kind] && window.SAMPLE_GAINS[kind][n]) ?? 1); // each clip at about the same loudness
+          if (key === 'key') {
+            const n = any(keys);
+            // the wizard's chimes play a pentatonic tune; the others vary a little so no two keys sound the same
+            done = sp(n, 0, { rate: kind === 'wizard' ? PENTA[(Math.random() * PENTA.length) | 0] * 0.8 : r(), gain: lv(n) });
+          } else if (key === 'space') done = sp('space', 0, { gain: lv('space') * 0.9 });
+          else if (key === 'back') done = sp('back', 0, { rate: r(), gain: lv('back') * 0.85 });
+          else if (key === 'newline') done = sp('newline', 0, { gain: lv('newline') * 0.9 });
+          else done = sp('enter', 0, { gain: lv('enter') });
+          break;
+        }
         case 'meow': // the cutest kitten mews, nudged a little higher
           if (key === 'key') done = sp(any(['m1', 'm2', 'm3', 'm4']), 0, { rate: 1.04 + Math.random() * 0.12, gain: 0.6 });
           else if (key === 'space') done = sp('purr', 0, { gain: 0.7, dur: 0.9 });
@@ -5113,7 +5170,7 @@ function previewFx(kind, el) {
   const timer = setInterval(() => {
     x += 9;
     const enter = x > W - 18;
-    fx.burst(kind, enter ? W / 2 : x, H / 2 + 2, { enter, k: S.settings.typingFxIntensity, cw: 7, ch: 13 });
+    fx.burst(kind, enter ? W / 2 : x, H / 2 + 2, { enter, submit: enter, k: S.settings.typingFxIntensity, cw: 7, ch: 13 });
     if (enter) x = 12;
   }, 170);
   return () => { clearInterval(timer); fx.stop(); };
@@ -5516,7 +5573,10 @@ function previewSound(kind, el) {
     type(2); // ok
     at += 300;
     seq.push([at, 'enter']); // submit
-    seq.forEach(([ms, k]) => setTimeout(() => playKeySound(kind, k, true), ms));
+    const play = () => seq.forEach(([ms, k]) => setTimeout(() => playKeySound(kind, k, true), ms));
+    if (GEN_SOUNDS.has(kind)) { // decode the clips first, or the phrase would begin with stand-in ticks
+      try { audioCtx = audioCtx || new AudioContext({ latencyHint: 'interactive' }); sampleSet(audioCtx, kind); (sampleCache.pending[kind] || Promise.resolve()).then(play, play); } catch { play(); }
+    } else play();
     clearTimeout(btn.playTimer);
     btn.playTimer = setTimeout(() => btn.classList.remove('playing'), at + 400);
   });
@@ -5731,8 +5791,16 @@ function createTab(opts = {}) {
     let hidden = false;
     try { hidden = !!term._core.coreService.isCursorHidden; } catch { /* ignore */ }
     if (!hidden && tab.caret && b.cursorY === tab.caret.y && b.cursorX < term.cols - 1 && b.viewportY === b.baseY) tab.caret = { x: b.cursorX, y: b.cursorY };
+    // While the user types (or holds a key) an agent keeps redrawing and the output never pauses for 24 ms:
+    // then the caret is read at least every 60 ms anyway, or it would stay where the typing began.
+    const now = performance.now();
+    if (!tab.caretSince) tab.caretSince = now;
+    else if (now - tab.caretSince > 60 && Date.now() - (tab.lastIn || 0) < 400) {
+      settleCaret(tab); tab.caretSince = now;
+      if (tab.id === S.activeId) scheduleCursor();
+    }
     clearTimeout(tab.caretTimer);
-    tab.caretTimer = setTimeout(() => { settleCaret(tab); if (tab.id === S.activeId) scheduleCursor(); }, 24);
+    tab.caretTimer = setTimeout(() => { settleCaret(tab); tab.caretSince = 0; if (tab.id === S.activeId) scheduleCursor(); }, 24);
   });
   // xterm puts its hidden input field and the IME composition box at the raw cursor; move them to the caret
   try {

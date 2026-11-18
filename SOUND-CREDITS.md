@@ -158,6 +158,10 @@ Each background has its own loop: cut into a seamless loop (whole bars for rhyth
 | analog | [VHS VCR Magnetic Tape Cassette Background White Noise Hiss](https://freesound.org/s/719880/) + [square wave drone running through tape deck - 001](https://freesound.org/s/824177/), slowed down |
 | backrooms | [Fluorescent Ballast Buzz - Room Tone](https://freesound.org/s/273625/) |
 
+## Typing sounds made for MinsuTerm (슬롯머신 · 만화 효과음 · 마법 주문 · 스팀펑크 공방 · 해적선)
+
+Generated locally on an NVIDIA GPU with [Stable Audio 3 Medium](https://huggingface.co/stabilityai/stable-audio-3-medium) (Stability AI, Stability AI Community License), driven through [Audio Studio MCP](https://github.com/kanaworksai-hue/audio-studio-mcp) (MIT). Powered by Stability AI. Each set was cut from the generated takes (single hits for letters, a trimmed take for the other keys) and level-matched; the clips are bundled in src/renderer/samples-gen.js.
+
 ## Background video
 
 - 캠프파이어 (campfire.webm): [Fire آتش 07](https://commons.wikimedia.org/wiki/File:Fire_%D8%A2%D8%AA%D8%B4_07.ogv) by Mostafameraji, CC0 (Wikimedia Commons). Looped, repainted in soft flat tones and cut out: only the fire, its light and the shapes of the camp are kept (VP9 with an alpha channel), so the theme's own background shows through.

@@ -76,6 +76,7 @@
     const gw = (g && WIDE.test(g) ? 2 : 1) * cw;
     let cx = x;
     if (onLine && o.pre) return { g, gw, cx: o.pre.left + gw / 2, cy: o.pre.top + c.ch / 2, onLine };
+    if (o.pre && o.pre.w) { const w = o.pre.w * cw; return { g, gw: w, cx: o.pre.left + w / 2, cy: o.pre.top + c.ch / 2, onLine: false }; } // the cell a Backspace erases
     if (onLine) {
       let comp = 0;
       if (fx.canvas.classList.contains('fx-layer')) { const v = document.querySelector('#stage .composition-view.active'); if (v && v.textContent) comp = v.getBoundingClientRect().width; }
@@ -291,7 +292,7 @@
         return;
       }
       const g = at.g == null ? JIKJI[jikji++ % JIKJI.length] : at.g;
-      one(g, at.cx, y, 0);
+      one(g, at.cx, at.cy != null ? at.cy : y, 0);
     },
   };
 

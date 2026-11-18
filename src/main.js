@@ -1612,15 +1612,41 @@ async function runTestScript() {
         log.push(`drag ${x1},${y1} -> ${x2},${y2}`);
         continue;
       }
+      if (step.startsWith('prof:')) { // "prof:<ms>|<keys>": CPU profiles of the renderer and of main while typing <keys>
+        const [msS, keysS = ''] = step.slice(5).split('>>');
+        const ms = Number(msS) || 5000, dbg = win.webContents.debugger;
+        const inspector = require('inspector'), ses = new inspector.Session(); ses.connect();
+        const post = (m, p = {}) => new Promise((res, rej) => ses.post(m, p, (e, r) => (e ? rej(e) : res(r))));
+        try { dbg.attach('1.3'); } catch { /* already */ }
+        await dbg.sendCommand('Profiler.enable'); await dbg.sendCommand('Profiler.setSamplingInterval', { interval: 200 }); await dbg.sendCommand('Profiler.start');
+        await post('Profiler.enable'); await post('Profiler.setSamplingInterval', { interval: 200 }); await post('Profiler.start');
+        let lag = 0, last = Date.now(); const lagT = setInterval(() => { const n = Date.now(); lag = Math.max(lag, n - last - 20); last = n; }, 20);
+        const t0 = Date.now();
+        win.webContents.focus();
+        for (const ch of keysS.replace(/\\n/g, '\n')) {
+          const keyCode = ch === '\n' ? 'Return' : ch === ' ' ? 'Space' : ch;
+          win.webContents.sendInputEvent({ type: 'keyDown', keyCode });
+          if (ch !== '\n') win.webContents.sendInputEvent({ type: 'char', keyCode: ch });
+          win.webContents.sendInputEvent({ type: 'keyUp', keyCode });
+          await wait(90);
+        }
+        await wait(Math.max(0, ms - (Date.now() - t0)));
+        clearInterval(lagT);
+        const r = await dbg.sendCommand('Profiler.stop'); fs.writeFileSync(path.join(TEST_DIR, 'renderer.cpuprofile'), JSON.stringify(r.profile));
+        const m = await post('Profiler.stop'); fs.writeFileSync(path.join(TEST_DIR, 'main.cpuprofile'), JSON.stringify(m.profile));
+        ses.disconnect(); try { dbg.detach(); } catch { /* ignore */ }
+        log.push(`prof: main event-loop lag max ${lag} ms`);
+        continue;
+      }
       if (step.startsWith('keys:')) { // real key presses, typed at a human pace ("\n" = Enter)
         win.webContents.focus();
-        for (const ch of step.slice(5).replace(/\\n/g, '\n')) {
-          const keyCode = ch === '\n' ? 'Return' : ch === ' ' ? 'Space' : ch;
+        for (const ch of step.slice(5).replace(/\\n/g, '\n').replace(/\\b/g, '\b')) {
+          const keyCode = ch === '\n' ? 'Return' : ch === '\b' ? 'Backspace' : ch === ' ' ? 'Space' : ch;
           const modifiers = /[A-Z~!@#$%^&*()_+{}|:"<>?]/.test(ch) ? ['shift'] : [];
           win.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
-          if (ch !== '\n') win.webContents.sendInputEvent({ type: 'char', keyCode: ch, modifiers });
+          if (ch !== '\n' && ch !== '\b') win.webContents.sendInputEvent({ type: 'char', keyCode: ch, modifiers });
           win.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
-          await wait(35 + Math.random() * 45);
+          await wait(ch === '\b' ? 33 : 35 + Math.random() * 45); // a held Backspace repeats about 30 times a second
         }
         log.push(`${step.slice(0, 20)}: typed`);
         continue;
