@@ -649,6 +649,9 @@ body.resizing #body { transition: none; }
 /* custom cursors (stage overlay; also used inside picker previews) */
 .mt-cursor { position: absolute; left: 0; top: 0; z-index: 11; pointer-events: none; will-change: transform; --cc: var(--violet); }
 .mt-cursor[hidden] { display: none; }
+.mt-cursor.off, .mt-cursor.off * { visibility: hidden; animation-play-state: paused !important; }
+/* the syllable an IME is composing: like typed text, underlined, instead of xterm's white-on-black box */
+.xterm .composition-view { background: transparent; color: var(--text); border-bottom: 2px solid var(--violet); }
 .mt-cursor.blurred { opacity: .35; animation: none !important; }
 .mt-cursor.blink { animation: curBlink 1.1s steps(1) infinite; }
 @keyframes curBlink { 50% { opacity: 0; } }

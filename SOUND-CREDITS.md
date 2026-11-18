@@ -51,7 +51,11 @@ Every clip below is **CC0 (public domain)** on freesound.org — free to use and
 ## 오케스트라 튜닝 (orch) — Freesound, CC0
 - 373908 (violin pizzicato) · 257996 (cello) · 372813 (cello spiccato) · 10662 (violin note) · 570804 (orchestra hit)
 
-## Background ambience (배경 음악): all CC0, from Freesound
+## 합창단 (choir) Enter — Handel, Messiah: Hallelujah
+
+The Enter sound of 합창단 is an excerpt (the first "Hallelujah") of [Handel - messiah - 44 hallelujah.ogg](https://commons.wikimedia.org/wiki/File:Handel_-_messiah_-_44_hallelujah.ogg), performed by the MIT Concert Choir, directed by William C. Cutter, licensed [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/). The excerpt (trimmed, faded, level-matched) is shared under the same license.
+
+## Background ambience (배경 음악): CC0 from Freesound, or made for MinsuTerm
 
 Each background has its own loop: cut into a seamless loop (whole bars for rhythmic music, the end crossfaded into the start otherwise) and level-matched. The small sounds for the bouncing logo, pong and shooting stars are synthesised in the app.
 
@@ -60,20 +64,25 @@ Each background has its own loop: cut into a seamless loop (whole bars for rhyth
 | stars | [Crickets At Night - Raw sound](https://freesound.org/s/522299/) |
 | shooting | [Night Woods](https://freesound.org/s/532301/) |
 | sunset | [forest with small river birds and nature field recording](https://freesound.org/s/577623/) |
+| planewindow | made for MinsuTerm: a cabin engine bed generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI), with a synthesized cabin chime |
 | rain / thunder | [Rain Slowly Passing TREATED LOOP_Edgewater_06192020.wav](https://freesound.org/s/525046/) |
 | snow | [Winter night - frozen trees](https://freesound.org/s/370266/) |
+| autumn | made for MinsuTerm: generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI) |
 | fireflies | [Forest at night, crickets, cicadas and insects in the Sian Ka'an Biosphere Reserve](https://freesound.org/s/328293/) |
+| mushroom | made for MinsuTerm: generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI) |
 | sakura | [Birds In Spring (Scotland)](https://freesound.org/s/463903/) |
+| bamboo | made for MinsuTerm: generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI) |
 | waves | [Seawash (calm) ](https://freesound.org/s/176617/) |
 | jellyfish | [Underwater [Loop] AMB.wav](https://freesound.org/s/366159/) |
-| deepsea | [Deep Sea Ambience](https://freesound.org/s/193822/) |
+| deepsea | made for MinsuTerm: a deep-sea bed with a distant whale generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI), and a synthesized sonar ping |
 | aquarium | [WATRUndwtr_Underwater Bubble Flow Loop_KOLBYR_FREE SOUNDS](https://freesound.org/s/852478/) |
 | pond | [Water drops](https://freesound.org/s/181890/) |
 | nightfire | [Fireworks_Distant.WAV](https://freesound.org/s/552164/) |
 | balloonsky | [Park ambience - mostly birds](https://freesound.org/s/274175/) |
+| skywhale | made for MinsuTerm: generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI) |
 | blackhole | [spacedrone1.wav](https://freesound.org/s/20703/) |
 | aurora | [Ambient F Sharp Minor Ethereal Choir Pad 1](https://freesound.org/s/808032/) |
-| constellation | [Space Bar Ambient](https://freesound.org/s/568612/) |
+| constellation | made for MinsuTerm: generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI) |
 | grid | [80s synthWAVE Vibe Loop](https://freesound.org/s/386941/) |
 | network | [Sci-Fi Survival Dreamscape](https://freesound.org/s/468407/) |
 | bokeh | [Blade Runner Ambient](https://freesound.org/s/416070/) |
@@ -95,9 +104,12 @@ Each background has its own loop: cut into a seamless loop (whole bars for rhyth
 | haunted | [Dark Ambience - Abandoned Fields](https://freesound.org/s/164272/) |
 | heaven | [Angelic Choir](https://freesound.org/s/434700/) |
 | castle | [Orchestral Suspense Loop 1](https://freesound.org/s/387223/) |
+| ruins | made for MinsuTerm: generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI) |
 | hell | [Drone Horror Music 03](https://freesound.org/s/465858/) + [fire roar and crackle](https://freesound.org/s/386560/) |
 | cyberpunk | [Cyberpunk Beat](https://freesound.org/s/525290/) |
+| arcade | made for MinsuTerm: an arcade-hall bed generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI), with synthesized 8-bit game sounds and a chiptune tune |
 | korea | Original gugak-style piece (gayageum and daegeum), generated for MinsuTerm with ACE-Step 1.5 |
+| cheonma | made for MinsuTerm: generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI) |
 | steampunk | [Tick-Tock - Pendulum Family Clock](https://freesound.org/s/797574/) + [Mechanical alarm clock is ticking (SLAVA).wav](https://freesound.org/s/171043/) + [FactoryHum.wav](https://freesound.org/s/478640/) + [steam.WAV](https://freesound.org/s/672248/) |
 | analog | [VHS VCR Magnetic Tape Cassette Background White Noise Hiss](https://freesound.org/s/719880/) + [square wave drone running through tape deck - 001](https://freesound.org/s/824177/), slowed down |
 | backrooms | [Fluorescent Ballast Buzz - Room Tone](https://freesound.org/s/273625/) |

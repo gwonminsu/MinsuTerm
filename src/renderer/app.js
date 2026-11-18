@@ -465,14 +465,18 @@ const BG_KINDS = [
   ['rain', '비', '사선으로 내리는 빗줄기'],
   ['thunder', '뇌우', '비 내리는 밤, 가끔 구름 속에서 번개가 번쩍'],
   ['snow', '눈', '흩날리는 눈송이'],
+  ['autumn', '가을 단풍길', '붉은 단풍 터널 너머 노을빛, 흩날리는 낙엽이 길에 내려앉음'],
   ['grid', '신스웨이브', '네온 원근 그리드'],
   ['network', '입자 네트워크', '떠다니는 점과 연결선'],
   ['fireflies', '반딧불', '따뜻한 빛이 둥실 떠다니며 깜빡임'],
+  ['mushroom', '빛나는 버섯 숲', '스스로 빛나는 버섯과 떠다니는 포자, 이끼 덮인 숲'],
   ['sakura', '벚꽃', '분홍 꽃잎이 흩날리며 떨어짐'],
+  ['bamboo', '대나무 숲', '안개 속에 흔들리는 대나무, 사이로 내려오는 햇살과 날리는 댓잎'],
   ['bokeh', '보케', '흐릿한 빛망울이 천천히 떠다님'],
   ['waves', '물결', '아래쪽에서 잔잔하게 일렁이는 파도'],
   ['shooting', '별똥별', '밤하늘에 가끔 별똥별이 지나감'],
   ['sunset', '노을', '천천히 물드는 노을빛과 첫 별'],
+  ['planewindow', '구름 위 비행기 창밖', '해질녘 구름바다가 흘러가고 날개 끝 불빛이 깜빡임'],
   ['blackhole', '블랙홀', '빛이 소용돌이치며 사건의 지평선으로 빨려 들어감'],
   ['warp', '워프 드라이브', '별빛이 길게 늘어지며 우주를 질주'],
   ['jellyfish', '해파리', '빛나는 해파리가 촉수를 흔들며 유영'],
@@ -481,9 +485,12 @@ const BG_KINDS = [
   ['haunted', '으스스한 숲', '안개 낀 죽은 숲, 어둠 속에서 붉은 눈이 깜빡인다'],
   ['heaven', '천상', '쏟아지는 빛 아래 천사들이 보좌하는 하늘'],
   ['castle', '마왕성', '핏빛 달 아래 번개 치는 마왕의 성과 박쥐 떼'],
+  ['ruins', '고대 신전 유적', '덩굴 덮인 돌기둥과 천장 틈으로 드는 빛줄기, 반짝이는 먼지'],
   ['hell', '지옥', '끓어오르는 용암과 타오르는 불씨, 자욱한 연기'],
   ['cyberpunk', '사이버펑크', '비 내리는 네온 도시와 날아다니는 차들'],
+  ['arcade', '레트로 오락실', '어두운 오락실, 오락기 화면 불빛과 가끔 깜빡이는 네온 간판'],
   ['korea', '한국의 밤', '보름달 아래 수묵 산수, 소나무와 처마, 날아가는 학'],
+  ['cheonma', '천마', '허공에 뜬 천마의 이기어검에 구파일방 영웅들이 밀려남'],
   ['steampunk', '스팀펑크', '맞물려 도는 황동 톱니와 시계탑, 증기 속을 떠가는 비행선'],
   ['analog', '아날로그 호러', '낡은 비디오테이프 화면, 잡음 사이로 무언가가 스쳐 지나간다'],
   ['backrooms', '백룸', '끝없이 이어지는 누런 방과 웅웅거리는 형광등'],
@@ -494,13 +501,14 @@ const BG_KINDS = [
   ['code', '코드 비', '희미한 코드 글자가 줄기처럼 흘러내림'],
   ['circuit', '회로 기판', '회로선을 따라 빛 신호가 달려감'],
   ['tunnel', '시공간 터널', '빛의 고리가 끝없이 다가오는 터널'],
-  ['deepsea', '심해', '위에서 비치는 빛줄기와 떠오르는 기포, 반짝이는 플랑크톤'],
+  ['deepsea', '심해', '희미한 빛줄기와 바다눈 사이로 스스로 빛나는 심해 생물들이 떠다님'],
   ['nightfire', '밤하늘 불꽃', '강 건너 마을 위로 불꽃놀이가 연이어 피어나 물에 비침'],
   ['aquarium', '수족관', '꼬리 흔드는 물고기들이 헤엄치고 기포가 보글'],
-  ['life', '생명 게임', '세포가 스스로 태어나고 죽으며 무늬를 만듦'],
+  ['life', '생명 게임', '빛나는 세포가 태어나고 스러지며, 글라이더가 꼬리를 끌고 지나감'],
   ['bounce', '튕기는 로고', 'M 로고가 벽에 튕길 때마다 색이 바뀜 · 모서리에 맞으면 반짝!'],
   ['pong', '혼자 하는 탁구', '양쪽 라켓이 알아서 공을 주고받음'],
   ['balloonsky', '풍선 하늘', '알록달록 풍선이 줄을 늘어뜨리고 둥실 떠오름'],
+  ['skywhale', '하늘 고래', '새벽 구름 바다를 천천히 유영하는 거대한 고래 · 가끔 새끼와 함께'],
 ];
 
 /* ---------- effect engine ---------- */
@@ -1713,6 +1721,20 @@ function stableCaret(tab) {
   const b = tab.term.buffer.active;
   return tab.caret || { x: b.cursorX, y: b.cursorY };
 }
+/*
+ * Does the lead over typed text the agent has not echoed yet (tab.ahead, see onData) still hold at caret c? Not once
+ * the caret went back left — Claude Code wraps long input onto a new line with the caret's row staying put (the box
+ * grows upward), a redraw, a deletion — nor when the lead would run past the last column: the cursor flew off the
+ * right edge whenever a long prompt wrapped.
+ */
+function aheadHolds(ah, c, cols) {
+  return !!ah && ah.y === c.y && c.x >= ah.base && c.x >= (ah.seen || 0) && c.x < ah.base + ah.cells && ah.base + ah.cells <= cols - 1;
+}
+/** Cells the caret is ahead of the echo right now (0 if no lead holds). */
+function aheadCells(tab) {
+  const ah = tab.ahead, c = stableCaret(tab);
+  return ah && performance.now() - ah.t <= 700 && aheadHolds(ah, c, tab.term.cols) ? ah.base + ah.cells - c.x : 0;
+}
 function cursorGeometry(tab) {
   const screen = tab.host.querySelector('.xterm-screen');
   if (!screen || !tab.term.cols) return null;
@@ -1757,14 +1779,16 @@ function spawnFx(tab, data, jamo = false) {
     if (tab.agent) settleCaret(tab); // where the agent has drawn its caret right now (a busy agent never lets it settle)
     const g0 = cursorGeometry(tab);
     if (g0) {
-      const now = performance.now(), pr = tab.fxPred;
+      const now = performance.now(), pr = tab.fxPred, c0 = stableCaret(tab);
+      const cells = [...data].reduce((n, c) => n + (/[\u1100-\u115f\u2e80-\u303e\u3041-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(c) ? 2 : 1), 0);
+      const edge = g0.left + (tab.term.cols - 1 - c0.x) * g0.cw; // the last column
       let left = g0.left;
       // keys arrive faster than the echo (a held key, a slow session): carry on from the previous key's cell; if the
-      // box moved a row meanwhile, the column still holds
-      if (pr && !pr.del && now - pr.t < 1500 && pr.left > left) left = pr.left;
-      pre = { left, top: g0.top, cells: 0 };
-      const cells = [...data].reduce((n, c) => n + (/[\u1100-\u115f\u2e80-\u303e\u3041-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(c) ? 2 : 1), 0);
-      pre.cells = cells;
+      // box moved a row meanwhile, the column still holds. Not when the caret is far behind that cell (a long prompt
+      // wrapped onto a new line: the caret went back to its start) or the cell would lie past the last column \u2014 the
+      // effects ran on past the right edge then, until typing paused.
+      if (pr && !pr.del && now - pr.t < 1500 && pr.left > left && pr.left - left < 24 * g0.cw && pr.left + (cells - 1) * g0.cw <= edge + 0.5) left = pr.left;
+      pre = { left, top: g0.top, cells };
       tab.fxPred = { left: left + cells * g0.cw, top: g0.top, t: now };
     }
   } else if (/^[]+$/.test(data)) {
@@ -1803,6 +1827,9 @@ function spawnFx(tab, data, jamo = false) {
   setTimeout(() => {
     const geo = cursorGeometry(tab);
     if (!geo) return;
+    // the caret is ahead of text not echoed yet (a Korean syllable committed a moment ago in a slow session): the
+    // composing one is drawn there (placeAt), so its 자모 burst from there too, not from the last echoed character
+    if (!pre) geo.left += aheadCells(tab) * geo.cw;
     // while composing, the character being built is drawn at the cursor: burst from just after it
     const comp = tab.host.querySelector('.composition-view.active');
     if (comp && comp.textContent) geo.left += comp.getBoundingClientRect().width - geo.cw;
@@ -2452,7 +2479,7 @@ function cursorArt(el, kind) {
   el.innerHTML = (window.CURSOR_ART && window.CURSOR_ART[kind]) || '';
 }
 const CURSOR_REDRAW_MS = 400; // longer than any redraw, short enough that a cursor an app really hides goes at once
-let cursorHideTimer = 0;
+let cursorHideTimer = 0, cursorAheadTimer = 0;
 /*
  * How far the pane reaches round the caret, for cursors that spread out over the terminal (fx/cursor-wide.css):
  * --pl / --pr / --pt / --pb are px from the caret cell's top left corner to the pane's left, right, top and bottom
@@ -2479,12 +2506,15 @@ function paneReach(t, geo) {
   s.clipPath = tiled ? `inset(${(r.top + b - y).toFixed(1)}px ${(geo.cw - pr).toFixed(1)}px ${(geo.ch - pb).toFixed(1)}px ${-pl}px round 9px)` : '';
 }
 function updateCursor() {
-  if (!cursorEl) { cursorEl = h('div', 'mt-cursor'); cursorEl.hidden = true; $('#stage').appendChild(cursorEl); }
+  if (!cursorEl) { cursorEl = h('div', 'mt-cursor off'); $('#stage').appendChild(cursorEl); }
+  // hidden = invisible and held still, not display:none: shown again, the cursor's animations go on where they were
+  const off = () => { cursorEl.classList.add('off'); };
   const kind = S.settings.cursorStyle;
   const t = activeTab();
-  if (NATIVE_CURSORS[kind] || !t || !t.alive || S.overlay) { cursorEl.hidden = true; return; }
+  if (NATIVE_CURSORS[kind] || !t || !t.alive || S.overlay) { off(); return; }
   let hidden = false;
   try { hidden = !!t.term._core.coreService.isCursorHidden; } catch { /* ignore */ }
+  if (hidden && t.agent) hidden = false; // Claude Code / Codex always have an input caret (settleCaret finds the one they draw)
   if (hidden) {
     // Claude Code (like most full-screen apps) hides the cursor while it redraws and shows it again at the input.
     // In a long session a redraw can take tens of ms and comes many times a second (spinner, agent timers): copying
@@ -2493,9 +2523,14 @@ function updateCursor() {
     if (since < CURSOR_REDRAW_MS) { hidden = false; clearTimeout(cursorHideTimer); cursorHideTimer = setTimeout(scheduleCursor, CURSOR_REDRAW_MS - since + 20); }
   }
   const b = t.term.buffer.active;
-  if (hidden || b.viewportY !== b.baseY) { cursorEl.hidden = true; return; } // app hides it / scrolled back
+  if (hidden || b.viewportY !== b.baseY) { off(); return; } // app hides it / scrolled back
   const geo = cursorGeometry(t);
-  if (!geo) { cursorEl.hidden = true; return; }
+  if (!geo) { off(); return; }
+  // Typed text the agent has not echoed yet (a long session can take 100–200 ms): the cursor stays ahead of it
+  // instead of falling back onto the last character and jumping forward again on every key or syllable.
+  const ah = t.ahead, c0 = stableCaret(t);
+  if (ah && (performance.now() - ah.t > 700 || !aheadHolds(ah, c0, t.term.cols))) t.ahead = null;
+  else if (ah) { ah.seen = c0.x; geo.left += (ah.base + ah.cells - c0.x) * geo.cw; clearTimeout(cursorAheadTimer); cursorAheadTimer = setTimeout(scheduleCursor, 720); }
   // Korean / CJK input: the character being composed is drawn at the cursor but not committed yet,
   // so the buffer cursor hasn't advanced. Put our cursor after the composing text.
   const comp = t.host.querySelector('.composition-view.active');
@@ -2504,7 +2539,6 @@ function updateCursor() {
   const blink = S.settings.cursorBlink && !SELF_ANIMATED_CURSORS.includes(kind);
   cursorEl.className = `mt-cursor kind-${kind}${focused ? '' : ' blurred'}${blink ? ' blink' : ''}${cursorEl.classList.contains('moving') ? ' moving' : ''}`;
   cursorArt(cursorEl, kind);
-  cursorEl.hidden = false;
   cursorEl.style.width = `${geo.cw}px`;
   cursorEl.style.height = `${geo.ch}px`;
   paneReach(t, geo);
@@ -2556,11 +2590,6 @@ function createBg(canvas) {
     else if (k === 'lavalamp') bg.items = Array.from({ length: 7 }, (_, i) => ({ x: (0.15 + R() * 0.7) * w, y: R() * h, r: (50 + R() * 70) * sc, vy: (R() < 0.5 ? -1 : 1) * (0.15 + R() * 0.25) * Math.max(0.4, sc), ph: R() * 6, c: i % 3 }));
     else if (k === 'code') { const fs = Math.max(8, 14 * sc); bg.fs = fs; bg.items = Array.from({ length: Math.ceil(w / (fs * 1.6)) }, (_, i) => ({ x: i * fs * 1.6 + R() * fs * 0.4, y: R() * h, v: (0.6 + R() * 1.6) * sc + 0.3, len: 6 + ((R() * 14) | 0), chars: [], t: 0 })); }
     else if (k === 'tunnel') bg.items = Array.from({ length: 14 }, (_, i) => ({ z: i / 14, rot: R() * 6 }));
-    else if (k === 'deepsea') bg.items = Array.from({ length: Math.round(10 * area) + 10 }, () => ({ x: R() * w, y: R() * h, r: (1 + R() * 3) * Math.max(0.5, sc), v: (0.2 + R() * 0.6) * Math.max(0.4, sc), ph: R() * 6, glow: R() < 0.35 }));
-    else if (k === 'life') {
-      const cs = Math.max(6, Math.round(13 * sc)); bg.cs = cs; bg.gw = Math.ceil(w / cs); bg.gh = Math.ceil(h / cs);
-      bg.grid = new Uint8Array(bg.gw * bg.gh).map(() => (R() < 0.22 ? 1 : 0)); bg.age = new Float32Array(bg.gw * bg.gh); bg.gen = 0;
-    }
     else if (k === 'bounce') { bg.items = [{ x: R() * w * 0.6, y: R() * h * 0.6, vx: 2 * Math.max(0.5, sc), vy: 1.45 * Math.max(0.5, sc), c: 0, flash: 0 }]; }
     else if (k === 'pong') { bg.items = [{ x: w / 2, y: h / 2, vx: 3.2 * Math.max(0.4, sc), vy: 1.7 * Math.max(0.4, sc), l: h / 2, r: h / 2, sl: 0, sr: 0 }]; }
     else if (k === 'balloonsky') bg.items = Array.from({ length: Math.round(2.6 * area) + 6 }, () => { const z = 0.25 + R() * 0.75; return { z, x: R() * w, y: R() * h * 1.1, v: (0.18 + z * 0.55) * Math.max(0.4, sc), r: (4 + z * 10) * sc, ph: R() * 6, c: (R() * BALLOON_COLS.length) | 0 }; }).sort((a, b) => a.z - b.z);
@@ -2968,54 +2997,6 @@ function drawBg(bg) {
         ctx.beginPath();
         for (let i = 0; i <= 6; i++) { const a = (i / 6) * Math.PI * 2; ctx[i ? 'lineTo' : 'moveTo'](Math.cos(a) * s, Math.sin(a) * s * 0.7); }
         ctx.stroke(); ctx.restore();
-      }
-      break;
-    }
-    case 'deepsea': { // god rays from the surface, bubbles rising, plankton glowing
-      ctx.globalCompositeOperation = 'lighter';
-      for (let i = 0; i < 5; i++) {
-        const x0 = w * (0.1 + i * 0.2) + Math.sin(t * 0.008 + i) * w * 0.05;
-        const g = ctx.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, 'rgba(120,200,255,0.07)'); g.addColorStop(1, 'rgba(120,200,255,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.moveTo(x0 - w * 0.03, 0); ctx.lineTo(x0 + w * 0.03, 0); ctx.lineTo(x0 + w * 0.12, h); ctx.lineTo(x0 - w * 0.02, h); ctx.closePath(); ctx.fill();
-      }
-      for (const b of bg.items) {
-        b.ph += 0.03;
-        if (b.glow) { // plankton: drifting, pulsing blue-green
-          b.x += Math.sin(b.ph) * 0.2; b.y += Math.cos(b.ph * 0.7) * 0.15;
-          const al = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(b.ph * 2));
-          const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r * 4);
-          g.addColorStop(0, `rgba(80,255,220,${al})`); g.addColorStop(1, 'rgba(80,255,220,0)');
-          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 4, 0, Math.PI * 2); ctx.fill();
-        } else { // bubbles
-          b.y -= b.v; b.x += Math.sin(b.ph) * 0.3;
-          if (b.y < -10) { b.y = h + 10; b.x = Math.random() * w; }
-          ctx.strokeStyle = 'rgba(180,225,255,0.3)'; ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.stroke();
-        }
-      }
-      ctx.globalCompositeOperation = 'source-over';
-      break;
-    }
-    case 'life': { // Conway's Game of Life, a generation every few frames; reseeded if it dies down
-      const { gw, gh, cs } = bg;
-      if (t % 7 === 0) {
-        const nx = new Uint8Array(gw * gh); let alive = 0;
-        for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
-          let nb = 0;
-          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { if (dx || dy) nb += bg.grid[((y + dy + gh) % gh) * gw + ((x + dx + gw) % gw)]; }
-          const i = y * gw + x; const v = bg.grid[i] ? (nb === 2 || nb === 3 ? 1 : 0) : (nb === 3 ? 1 : 0);
-          nx[i] = v; alive += v;
-        }
-        bg.grid = nx; bg.gen++;
-        if (alive < gw * gh * 0.04 || bg.gen > 600) { bg.grid = bg.grid.map(() => (Math.random() < 0.22 ? 1 : 0)); bg.gen = 0; }
-      }
-      for (let i = 0; i < gw * gh; i++) {
-        bg.age[i] = bg.grid[i] ? Math.min(1, bg.age[i] + 0.2) : bg.age[i] * 0.85; // cells fade in and out
-        if (bg.age[i] < 0.03) continue;
-        ctx.fillStyle = A(bg.grid[i] ? a0 : a2, 0.12 * bg.age[i]); // quiet enough to read text over
-        ctx.fillRect((i % gw) * cs + 1, Math.floor(i / gw) * cs + 1, cs - 2, cs - 2);
       }
       break;
     }
@@ -3458,7 +3439,7 @@ const SOUND_KINDS = [
   ['fight', '격투 게임', '글자=잽 · Space=발차기 · ⌫=가드 · ⇧⏎=회피 · Enter=K.O.!'],
   ['sword', '검술', '글자=휘익 휘두르기 · Space=베어 가르기 · ⌫=납도 · ⇧⏎=발도(스르릉) · Enter=칼날 부딪힘'],
   ['drums', '드럼', '치는 대로 비트가 됨(탐·스네어·하이햇) · Space=킥 · ⌫=스틱 · ⇧⏎=플램 · Enter=필인+심벌'],
-  ['choir', '합창단', '칠 때마다 아·오·우·에 합창 · Space=베이스 · Enter="아—멘"'],
+  ['choir', '합창단', '글자=할렐루야 선율 (레·라·시·라) · Space=맑은 아 화음 · Enter=할렐루야 합창 (헨델 메시아)'],
   ['gross', '더러운 소리', '글자=뿡·뽀옹 (매번 다름) · Space=끄으억 트림 · ⌫=후루룩 · ⇧⏎=철퍽 · Enter=대폭발'],
   ['horror', '공포', '거꾸로 차오르는 피아노 · Space=심장 박동 · ⌫=쇠 긁는 소리 · ⇧⏎=귓가의 속삭임 · Enter=비명 현악'],
   ['gun', '총', '글자=탕! · Space=장전 (탄창 탁 + 슬라이드 철컥) · ⌫=탄피 떨어짐 · ⇧⏎=노리쇠 철컥 · Enter=샷건+펌프'],
@@ -3471,9 +3452,9 @@ const SOUND_KINDS = [
   ['pluck', '신스 플럭', '전자 현을 튕기는 소리'],
   ['bloop', '물속 블룹', '물속에서 울리는 둥근 블룹'],
   ['pingpong', '탁구 랠리', '글자=좌우로 오가는 똑딱 랠리 · Space=서브 전 공 튀기기 · ⌫=네트 · ⇧⏎=서브 · Enter=스매시! 공이 튀며 굴러감'],
-  ['frog', '개구리 연못', '글자=개굴 · Space=황소개구리 구워억 · ⌫=퐁당 · ⇧⏎=귀뚜라미 · Enter=연못 전체가 개굴개굴'],
+  ['frog', '개구리 연못', '글자=개굴 · Space=청개구리 개굴개굴 · ⌫=퐁당 · ⇧⏎=귀뚜라미 · Enter=연못 전체가 개굴개굴'],
   ['duck', '삑삑이 오리', '글자=삑! · Space=꾸욱 쥐어짜기 · ⌫=바람 빠지는 소리 · ⇧⏎=삑삑 · Enter=삑삑이 팡파르'],
-  ['kitchen', '주방', '글자=칼질 탁탁 · Space=기름 지글지글 · ⌫=냄비 뚜껑 · ⇧⏎=보글보글 · Enter=전자레인지 띵'],
+  ['kitchen', '주방', '글자=칼질 탁탁 · Space=기름 지글지글 · ⌫=냄비 뚜껑 · ⇧⏎=보글보글 · Enter=오븐 타이머 띵~'],
   ['farm', '농장 아침', '실제 녹음 · 글자=병아리 삐약 · Space=소 음매 · ⌫=거위 꽥 · ⇧⏎=양 매애 · Enter=닭 꼬끼오'],
   ['orch', '오케스트라 튜닝', '실제 녹음 · 글자=바이올린 피치카토 선율 · Space=첼로 · ⌫=스피카토 · ⇧⏎=튜닝 음 · Enter=오케스트라 한 방'],
   ['merchant', '마을 주민', '마인크래프트 주민 목소리 (PC에 설치된 마인크래프트 Java에서 불러옴, 없으면 비슷한 합성음) · 글자=흠 · Space=흥정 · ⌫=으응(아니) · ⇧⏎=흠!(좋아) · Enter=주민이 죽는 소리'],
@@ -3493,7 +3474,7 @@ SOUND_KINDS.push(
   ['basketball', '농구 코트', '글자=드리블 텅텅 · Space=그물 슉 · ⌫=림 맞고 텅 · ⇧⏎=호루라기 · Enter=버저비터 + 함성'],
   ['car', '자동차 실내', '글자=방향지시등 똑딱 · Space=안전벨트 찰칵 · ⌫=와이퍼 스윽 · ⇧⏎=경적 빵 · Enter=시동 부릉'],
 );
-const GEN_SOUNDS = new Set(['slots', 'cartoon', 'wizard', 'steamworks', 'pirate', 'holy', 'drums', 'choir', 'gun', 'meow', 'pingpong', 'frog', 'duck', 'kitchen', 'dialup', 'vending', 'alien', 'camera', 'paper', 'basketball', 'car']);
+const GEN_SOUNDS = new Set(['slots', 'cartoon', 'wizard', 'steamworks', 'pirate', 'holy', 'drums', 'choir', 'gun', 'meow', 'pingpong', 'frog', 'kitchen', 'dialup', 'vending', 'alien', 'camera', 'paper', 'basketball', 'car']);
 const SOUND_ALIASES = { mech: 'blue', type: 'typewriter', chime: 'holy', rap: 'blue' }; // settings saved by earlier versions
 let audioCtx = null;
 let lastSound = 0;
@@ -4143,7 +4124,7 @@ function playKeySound(kind, key = 'key', force = false) {
       o.start(t0 + at); o.stop(t0 + at + len + 0.02);
     };
 
-    if (kind === 'drums') {
+    if (kind === 'drums' && !(window.SAMPLES && window.SAMPLES.drums)) { // the clips in samples-gen.js take over once they are there
       // 드럼 (acoustic kit): typing plays a groove around the kit (toms · ghost snares · hi-hats);
       // space = the bass drum, ⌫ = sticks clicked together, ⇧⏎ = a snare flam, ⏎ = a tom fill into kick + crash.
       // Everything is noise + skins (no oscillator "beeps"), and a small room glues the kit together.
@@ -4240,18 +4221,24 @@ function playKeySound(kind, key = 'key', force = false) {
       let done = false;
       switch (kind) {
         case 'slots': case 'cartoon': case 'wizard': case 'steamworks': case 'pirate': // made for MinsuTerm (samples-gen.js) …
-        case 'holy': case 'drums': case 'choir': case 'gun': case 'meow': case 'pingpong': case 'frog': case 'duck': case 'kitchen': case 'dialup': case 'vending': case 'alien': case 'camera': case 'paper': case 'basketball': case 'car': { // … and these, remade the same way
+        case 'holy': case 'drums': case 'choir': case 'gun': case 'meow': case 'pingpong': case 'frog': case 'kitchen': case 'dialup': case 'vending': case 'alien': case 'camera': case 'paper': case 'basketball': case 'car': { // … and these, remade the same way
           const keys = ['k1', 'k2', 'k3', 'k4'].filter((n) => SB[n]);
-          const loud = { slots: 0.62, cartoon: 0.55, wizard: 0.5, steamworks: 0.6, pirate: 0.6, holy: 0.5, choir: 0.5, gun: 0.5, drums: 0.62, meow: 0.6, pingpong: 0.62, frog: 0.6, duck: 0.6, kitchen: 0.6, dialup: 0.5, vending: 0.6, alien: 0.55, camera: 0.6, paper: 0.62, basketball: 0.6, car: 0.6 }[kind] ?? 0.6;
+          const loud = { slots: 0.62, cartoon: 0.55, wizard: 0.5, steamworks: 0.6, pirate: 0.6, holy: 0.5, choir: 0.5, gun: 0.62, drums: 0.8, meow: 0.6, pingpong: 0.62, frog: 0.6, duck: 0.6, kitchen: 0.6, dialup: 0.5, vending: 0.6, alien: 0.55, camera: 0.6, paper: 0.62, basketball: 0.6, car: 0.6 }[kind] ?? 0.6;
           const lv = (n) => loud * ((window.SAMPLE_GAINS && window.SAMPLE_GAINS[kind] && window.SAMPLE_GAINS[kind][n]) ?? 1); // each clip at about the same loudness
           if (key === 'key') {
             const n = any(keys);
             // chimes, organ and choir play a pentatonic tune; the others vary a little so no two keys sound the same;
             // the table-tennis ball crosses the table, left and right in turn
-            const tune = { wizard: 0.8, holy: 0.75, choir: 0.75 }[kind];
+            const tune = { wizard: 0.8, holy: 0.75 }[kind];
             let dest = out;
             if (kind === 'pingpong') { playKeySound.pp = !playKeySound.pp; dest = ctx.createStereoPanner(); dest.pan.value = playKeySound.pp ? -0.6 : 0.6; dest.connect(out); }
-            done = sp(n, 0, { rate: tune ? PENTA[(Math.random() * PENTA.length) | 0] * tune : r(), gain: lv(n), dest });
+            let rate = tune ? PENTA[(Math.random() * PENTA.length) | 0] * tune : r();
+            if (kind === 'choir') { // each key the next note of the Hallelujah (레 라 시 라), sung as a soft chord
+              const P = [1.335, 1, 1.122, 1];
+              playKeySound.chs = ((playKeySound.chs ?? -1) + 1) % P.length;
+              rate = P[playKeySound.chs];
+            }
+            done = sp(n, 0, { rate, gain: lv(n), dest });
           } else if (key === 'space') done = sp('space', 0, { gain: lv('space') * 0.9 });
           else if (key === 'back') done = sp('back', 0, { rate: r(), gain: lv('back') * 0.85 });
           else if (key === 'newline') done = sp('newline', 0, { gain: lv('newline') * 0.9 });
@@ -4427,14 +4414,18 @@ function playKeySound(kind, key = 'key', force = false) {
         nz('bandpass', 3800, 1.5, peak * 0.25, 0.025, at); // the puff of air as the squeaker starts
       };
       const release = (at, peak) => squeak(at, 1250, 0.13, peak, { rise: 1.02, fall: 0.8 }); // the duck sucking air back in: lower, softer
-      if (key === 'key') squeak(0, 1550 + Math.random() * 350, 0.085, 0.4);
+      if (key === 'key') {
+        const f = 1480 + Math.random() * 460;
+        squeak(0, f, 0.07 + Math.random() * 0.035, 0.4, { rise: 1.08 + Math.random() * 0.08, fall: 0.92 + Math.random() * 0.06 });
+        nz('bandpass', 850, 1.1, 0.06, 0.035, 0); // the rubber squished
+        if (Math.random() < 0.5) release(0.11 + Math.random() * 0.04, 0.12); // …and letting go
+      }
       else if (key === 'space') { squeak(0, 1500, 0.26, 0.4, { rise: 1.05, fall: 1.18 }); release(0.32, 0.28); } // a full squeeze… and let go
       else if (key === 'back') release(0, 0.32);
       else if (key === 'newline') { squeak(0, 1600, 0.07, 0.4); squeak(0.11, 1800, 0.08, 0.4); }
       else { // 빰 빠빠 빰 빰 — (쉼) — 삑 삑!
         const N = [[0, 1568, 0.15], [0.21, 1175, 0.08], [0.31, 1175, 0.08], [0.42, 1319, 0.15], [0.63, 1175, 0.15], [0.98, 1480, 0.12], [1.15, 1568, 0.2]];
         N.forEach(([at, f, len]) => squeak(at, f, len, 0.4, { rise: 1.03, fall: 0.99 }));
-        release(1.42, 0.25);
       }
       return;
     }
@@ -5819,6 +5810,7 @@ function createTab(opts = {}) {
     const core = term._core;
     const placeAt = (el, c) => {
       const cell = core._renderService.dimensions.css.cell;
+      const ah = tab.ahead; if (aheadHolds(ah, c, term.cols)) c = { x: ah.base + ah.cells, y: c.y }; // ahead of the echo, like the cursor
       el.style.left = `${c.x * cell.width}px`;
       el.style.top = `${c.y * cell.height}px`;
     };
@@ -5888,6 +5880,14 @@ function createTab(opts = {}) {
     // they are not the user typing and must not change the agent's state
     if (isTerminalReport(d)) return;
     tab.lastIn = Date.now();
+    if (tab.agent && !d.startsWith('\x1b[200~') && !/[\x00-\x1f\x7f]/.test(d)) {
+      // (a lead that no longer holds \u2014 the caret went back left as a long prompt wrapped \u2014 starts again from the caret)
+      const c = stableCaret(tab), now = performance.now(), ah = tab.ahead;
+      const prev = ah && now - ah.t < 700 && ah.y === c.y && c.x >= ah.base && c.x >= (ah.seen || 0) ? ah : null;
+      const cells = [...d].reduce((n, ch) => n + (/[\u1100-\u115f\u2e80-\u303e\u3041-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(ch) ? 2 : 1), 0);
+      tab.ahead = prev ? { ...prev, cells: prev.cells + cells, t: now, seen: c.x } : { y: c.y, base: c.x, cells, t: now, seen: c.x };
+      if (tab.id === S.activeId) scheduleCursor();
+    } else tab.ahead = null;
     spawnFx(tab, d);
     tab.statusBeforeInput = tab.status;
     // typing again after a finished turn / a question → back to "입력 대기" (until Enter starts work)
