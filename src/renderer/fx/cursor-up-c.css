@@ -1,0 +1,266 @@
+/* Upgraded cursors, group c (fx/cursor-up-c.js): 로켓 · 운석 · 혜성 · 마법봉 · 광선검 · 위성.
+
+   .cuc-box is the 20 x 40 drawing fitted to the caret cell (20 % wider than the cell, so it reads at 8 x 18 px). Every
+   moving part is its own layer (.cuc-l) and only transform and opacity are animated; the reactions to typing use the
+   individual translate / rotate / scale properties, so they add to whatever transform a layer is animating.
+   Origins and distances are percentages of the box: x% = x * 5, y% = y * 2.5. Edges that must not vanish at small
+   sizes keep a fixed width in screen pixels. .cuc-reach parts reach out over the terminal: faint, gone when the
+   terminal loses focus, and left out of the composer. One-shot reactions to each key run on .cuc-kick elements, whose
+   class the script swaps between .cuc-ka and .cuc-kb (two copies of the same keyframes). */
+
+.mt-cursor.kind-saber, .mt-cursor.kind-comet, .mt-cursor.kind-meteor, .mt-cursor.kind-rocket, .mt-cursor.kind-wand, .mt-cursor.kind-orbit { container-type: size; }
+.cuc-defs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+.cuc-box { position: absolute; left: 50%; top: 50%; width: min(120cqw, 60cqh, 40px); aspect-ratio: 1 / 2; translate: -50% -50%; pointer-events: none; }
+.cuc-l { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+.cuc-reach { transition: opacity .35s; }
+.mt-cursor.blurred .cuc-reach { opacity: 0 !important; }
+.composer-field .cuc-reach { display: none; }
+
+:root {
+  --cuc-sb-c: var(--violet); --cuc-sb-in: color-mix(in srgb, var(--violet) 36%, #fff); --cuc-sb-glow-o: 1.3; --cuc-sb-core: #fff; --cuc-sb-edge: rgba(0, 0, 0, .4);
+  --cuc-cm-coma: color-mix(in srgb, var(--violet) 40%, #dff4ff); --cuc-cm-coma-o: .85; --cuc-cm-nuc0: #ffffff; --cuc-cm-nuc: color-mix(in srgb, var(--violet) 22%, #eaf8ff); --cuc-cm-nuc2: color-mix(in srgb, var(--violet) 60%, #9fdcff);
+  --cuc-cm-dust: #fff2da; --cuc-cm-dust-o: .36; --cuc-cm-ion: color-mix(in srgb, var(--violet) 60%, #8fdcff); --cuc-cm-ion-o: .9; --cuc-cm-mote: #f2f8ff; --cuc-cm-rim: transparent; --cuc-cm-halo-o: .85;
+  --cuc-mt-glow: #ff7a24; --cuc-mt-glow-o: .5; --cuc-mt-f1a: #ffb347; --cuc-mt-f1b: #ff4316; --cuc-mt-f2a: #ffe48a; --cuc-mt-f2b: #ff8a1e; --cuc-mt-f3: #ffd75e;
+  --cuc-mt-smoke: #a59a94; --cuc-mt-smoke-o: .22; --cuc-mt-spark: #ffd27a; --cuc-mt-edge: rgba(0, 0, 0, 0);
+  --cuc-rk-h1: #a3a9b6; --cuc-rk-h2: #dfe3ea; --cuc-rk-h3: #8a909d; --cuc-rk-edge: rgba(10, 12, 20, .4); --cuc-rk-fo1: #ffc14a; --cuc-rk-fo2: #ff5a14; --cuc-rk-fi: #fff1a0; --cuc-rk-smoke: #c8cdd7; --cuc-rk-smoke-o: .42;
+  --cuc-wd-l: #fff3b8; --cuc-wd-d: #f2b02a; --cuc-wd-edge: rgba(150, 90, 0, .55); --cuc-wd-glow: #ffd45e; --cuc-wd-glow-o: .55;
+  --cuc-wd-r1: #b9a8ee; --cuc-wd-r2: #e7defc; --cuc-wd-r3: #8f7fd0; --cuc-wd-line: rgba(0, 0, 0, .25); --cuc-wd-s1: #ffe48a; --cuc-wd-s2: #ff9ad6; --cuc-wd-s3: #9fe6ff;
+  --cuc-ob-core: #ffffff; --cuc-ob-glow-o: .35; --cuc-ob-path: color-mix(in srgb, var(--violet) 55%, #fff); --cuc-ob-path-o: .38; --cuc-ob-trail: color-mix(in srgb, var(--violet) 45%, #fff); --cuc-ob-edge: rgba(0, 0, 0, .35); --cuc-ob-halo: #fff3c8; --cuc-ob-halo-o: .8; --cuc-ob-p1: #3f7fe0; --cuc-ob-p2: #c4e4ff;
+}
+:root[data-theme="light"] {
+  --cuc-sb-c: color-mix(in srgb, var(--violet) 70%, #000); --cuc-sb-in: var(--violet); --cuc-sb-glow-o: .85; --cuc-sb-core: color-mix(in srgb, var(--violet) 45%, #fff); --cuc-sb-edge: rgba(16, 18, 26, .75);
+  --cuc-cm-coma: var(--violet); --cuc-cm-coma-o: .42; --cuc-cm-nuc0: color-mix(in srgb, var(--violet) 55%, #fff); --cuc-cm-nuc: var(--violet); --cuc-cm-nuc2: color-mix(in srgb, var(--violet) 85%, #000);
+  --cuc-cm-dust: #5d6b85; --cuc-cm-dust-o: .22; --cuc-cm-ion: color-mix(in srgb, var(--violet) 85%, #000); --cuc-cm-ion-o: .75; --cuc-cm-mote: color-mix(in srgb, var(--violet) 70%, #000); --cuc-cm-rim: transparent; --cuc-cm-halo-o: .35;
+  --cuc-mt-glow: #ff6a10; --cuc-mt-glow-o: .35; --cuc-mt-f1a: #ff8a1c; --cuc-mt-f1b: #e2380c; --cuc-mt-f2a: #ffc23a; --cuc-mt-f2b: #f06a10; --cuc-mt-f3: #ffb21e;
+  --cuc-mt-smoke: #5a5f6a; --cuc-mt-smoke-o: .3; --cuc-mt-spark: #e8700a; --cuc-mt-edge: rgba(40, 16, 8, .65);
+  --cuc-rk-h1: #9ea4b0; --cuc-rk-h2: #e4e7ee; --cuc-rk-h3: #7c828f; --cuc-rk-edge: rgba(16, 20, 30, .75); --cuc-rk-fo1: #ff9a1a; --cuc-rk-fo2: #e8400c; --cuc-rk-fi: #ffd23a; --cuc-rk-smoke: #646a76; --cuc-rk-smoke-o: .4;
+  --cuc-wd-l: #ffd84a; --cuc-wd-d: #e0950e; --cuc-wd-edge: rgba(110, 60, 0, .85); --cuc-wd-glow: #ffb400; --cuc-wd-glow-o: .35;
+  --cuc-wd-r1: #9b88dc; --cuc-wd-r2: #ddd2fa; --cuc-wd-r3: #7a68c0; --cuc-wd-line: rgba(40, 20, 80, .55); --cuc-wd-s1: #e8a200; --cuc-wd-s2: #e0409a; --cuc-wd-s3: #1e8fd6;
+  --cuc-ob-core: color-mix(in srgb, var(--violet) 72%, #fff); --cuc-ob-glow-o: .22; --cuc-ob-path: var(--violet); --cuc-ob-path-o: .42; --cuc-ob-trail: var(--violet); --cuc-ob-edge: rgba(10, 14, 30, .7); --cuc-ob-halo: var(--violet); --cuc-ob-halo-o: .22; --cuc-ob-p1: #1f4fae; --cuc-ob-p2: #6fb2f4;
+}
+
+/* ---------- 광선검 ---------- */
+.cuc-sb .sb-swing { transform-origin: 18% 100%; transition: rotate .6s cubic-bezier(.3, 1.7, .5, 1); }
+.kind-saber.moving .cuc-sb .sb-swing { rotate: -5deg; transition: rotate .06s ease-out; } /* swung back as the caret moves on */
+.cuc-sb .sb-glow { transform-origin: 18% 50%; animation: cucSbHum 1.4s linear infinite; }
+.cuc-sb .sb-blade { animation: cucSbFlick .23s ease-in-out infinite alternate; }
+.cuc-sb .sb-core { fill: var(--cuc-sb-core); }
+.cuc-sb .sb-pulse { opacity: 0; animation: cucSbPulse 3.2s cubic-bezier(.45, 0, .7, 1) infinite; }
+.cuc-sb .sb-flare { opacity: 0; transform-origin: 18% 60%; }
+.cuc-sb .sb-flare.cuc-ka { animation: cucSbFlareA .5s ease-out; }
+.cuc-sb .sb-flare.cuc-kb { animation: cucSbFlareB .5s ease-out; }
+.cuc-sb .sb-slot { fill: #111217; }
+.cuc-sb .sb-ring { fill: var(--cuc-sb-in); }
+.cuc-sb .sb-ridge { fill: none; stroke: #7a808c; stroke-width: .4; opacity: .8; }
+.cuc-sb .sb-stud { fill: #e2483e; }
+.cuc-sb .sb-edge { fill: none; stroke: var(--cuc-sb-edge); stroke-width: .6px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+@keyframes cucSbHum {
+  0%, 100% { transform: scaleX(.93); opacity: .78; } 17% { transform: scaleX(1.03); opacity: 1; } 31% { transform: scaleX(.97); opacity: .86; }
+  52% { transform: scaleX(1.06); opacity: .97; } 70% { transform: scaleX(.95); opacity: .8; } 86% { transform: scaleX(1.02); opacity: .93; }
+}
+@keyframes cucSbFlick { from { opacity: .88; } to { opacity: 1; } }
+@keyframes cucSbPulse { 0% { transform: translateY(0); opacity: 0; } 8% { opacity: .95; } 45%, 100% { transform: translateY(-62%); opacity: 0; } }
+@keyframes cucSbFlareA { 0% { transform: scale(1.2, 1.03); opacity: 1; } 100% { transform: scale(.92, 1); opacity: 0; } }
+@keyframes cucSbFlareB { 0% { transform: scale(1.2, 1.03); opacity: 1; } 100% { transform: scale(.92, 1); opacity: 0; } }
+
+/* ---------- 혜성 ---------- */
+.mt-cursor.kind-comet { transition: transform .14s cubic-bezier(.2, .8, .2, 1); } /* it glides to the new cell */
+.cm-dir { position: absolute; left: 50%; top: 50%; width: 0; height: 0; rotate: var(--cuc-cm-a, 5deg); pointer-events: none; }
+.cm-dir.cm-turn { transition: rotate .15s ease-out; } /* a small turn while typing on */
+.cm-dir.cm-rest { transition: rotate .9s cubic-bezier(.4, 0, .2, 1); } /* stopped: back along the row (fx/cursor-up-c.js) */
+.cm-tail { position: absolute; right: 0; top: -40cqh; width: 600cqw; height: 80cqh; transform-origin: 100% 50%; transition: transform 1.2s cubic-bezier(.15, .7, .3, 1), opacity .35s; }
+.kind-comet.moving .cm-tail { transform: scaleX(var(--cuc-cm-k, 1.8)); transition: transform .1s ease-out; }
+.mt-cursor.blurred .cm-tail { opacity: .5; }
+.composer-field .cm-tail { scale: .5 1; }
+.cm-tail .cm-dust { transform-origin: 100% 50%; animation: cucCmDust 3s ease-in-out infinite alternate; }
+.cm-tail .cm-ion { transform-origin: 100% 50%; animation: cucCmIon 1.6s ease-in-out infinite; }
+.cm-tail .cm-i2 { animation-duration: 1.1s; animation-delay: -.4s; }
+.cm-tail .cm-i3 { animation-duration: 1.35s; animation-delay: -.8s; }
+.cm-tail .cm-ion path { fill: none; stroke-width: 1.1px; vector-effect: non-scaling-stroke; stroke-linecap: round; }
+.cm-tail .cm-i2 path, .cm-tail .cm-i3 path { stroke-width: .8px; }
+.cm-tail .cm-mote { animation: cucCmMote 2s linear infinite; }
+.cm-tail .cm-mote circle { fill: var(--cuc-cm-mote); }
+.cuc-cm .cm-coma { animation: cucCmComa 2.6s ease-in-out infinite alternate; transition: scale .8s ease-out; }
+.kind-comet.moving .cuc-cm .cm-coma { scale: 1.3; transition: scale .08s; }
+.cuc-cm .cm-rim { fill: none; stroke: var(--cuc-cm-rim); stroke-width: .7px; vector-effect: non-scaling-stroke; }
+.cuc-cm .cm-hi { fill: #fff; opacity: .9; }
+.cuc-cm .cm-glint path { fill: #fff; }
+.cuc-cm .cm-glint { animation: cucCmGlint 3.4s ease-in-out infinite; }
+@keyframes cucCmDust { from { transform: scale(1, .88); opacity: .8; } to { transform: scale(1.05, 1.1); opacity: 1; } }
+@keyframes cucCmIon { 0%, 100% { transform: scaleX(.8); opacity: .55; } 50% { transform: scaleX(1.08); opacity: 1; } }
+@keyframes cucCmMote { 0% { transform: translateX(0); opacity: 0; } 12% { opacity: .9; } 100% { transform: translateX(-62%); opacity: 0; } }
+@keyframes cucCmComa { from { transform: scale(.94); opacity: .75; } to { transform: scale(1.06); opacity: 1; } }
+@keyframes cucCmGlint { 0%, 100% { transform: rotate(0deg) scale(.55); opacity: .3; } 50% { transform: rotate(45deg) scale(1); opacity: .85; } }
+
+/* ---------- 운석 ---------- */
+.cuc-mt .mt-tw { position: absolute; left: 50%; top: 57.5%; width: 0; height: 0; rotate: 35deg; } /* falling down to the right: the fire streams up-left */
+.cuc-mt .mt-tail { position: absolute; right: 0; top: -20.4cqh; width: 170cqh; height: 40.8cqh; transform-origin: 100% 50%; transition: scale .9s cubic-bezier(.2, .7, .3, 1); }
+.kind-meteor.moving .cuc-mt .mt-tail { scale: 1.45 1.12; transition: scale .08s ease-out; }
+.cuc-mt .mt-fire, .cuc-mt .mt-f1, .cuc-mt .mt-f2, .cuc-mt .mt-f3 { transform-origin: 100% 50%; }
+.cuc-mt .mt-f1 { animation: cucMtF1 .46s ease-in-out infinite; }
+.cuc-mt .mt-f2 { animation: cucMtF2 .34s ease-in-out infinite alternate; }
+.cuc-mt .mt-f3 { animation: cucMtF3 .22s ease-in-out infinite alternate; }
+.cuc-mt .mt-smoke { transform-origin: 90% 50%; animation: cucMtSmoke 2.4s ease-in-out infinite alternate; }
+.cuc-mt .mt-spark { animation: cucMtSpark 1.2s linear infinite; }
+.cuc-mt .mt-spark path, .cuc-mt .mt-bs path { fill: var(--cuc-mt-spark); }
+.cuc-mt .mt-bs { opacity: 0; transform-origin: 97% 50%; }
+.cuc-mt .mt-burst.cuc-ka > .mt-bs { animation: cucMtBurstA .6s cubic-bezier(.2, .7, .4, 1); }
+.cuc-mt .mt-burst.cuc-kb > .mt-bs { animation: cucMtBurstB .6s cubic-bezier(.2, .7, .4, 1); }
+.cuc-mt .mt-glow { transform-origin: 50% 57.5%; animation: cucMtGlow 1.7s ease-in-out infinite alternate; transition: scale .8s ease-out; }
+.kind-meteor.moving .cuc-mt .mt-glow { scale: 1.25; transition: scale .08s; }
+.cuc-mt .mt-rock { animation: cucMtSpin 7s linear infinite; }
+.cuc-mt .mt-pit { fill: #261c18; opacity: .7; }
+.cuc-mt .mt-pitlit { fill: none; stroke: #b0927a; stroke-width: .35; opacity: .65; }
+.cuc-mt .mt-edge { fill: none; stroke: var(--cuc-mt-edge); stroke-width: .6px; vector-effect: non-scaling-stroke; }
+.cuc-mt .mt-heat { animation: cucMtHeat .3s ease-in-out infinite alternate; }
+@keyframes cucMtF1 { 0%, 100% { transform: scale(1, 1) skewY(0deg); } 30% { transform: scale(.93, 1.08) skewY(-1.4deg); } 64% { transform: scale(1.05, .92) skewY(1.2deg); } }
+@keyframes cucMtF2 { from { transform: scale(.9, 1.06) skewY(1deg); } to { transform: scale(1.06, .94) skewY(-1deg); } }
+@keyframes cucMtF3 { from { transform: scale(.88, 1); opacity: .85; } to { transform: scale(1.06, 1.06); opacity: 1; } }
+@keyframes cucMtSmoke { from { transform: scale(.95, .85); opacity: .7; } to { transform: scale(1.08, 1.15); opacity: 1; } }
+@keyframes cucMtSpark { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
+@keyframes cucMtBurstA { 0% { transform: translate(0, 0) scale(1.4); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(.4); opacity: 0; } }
+@keyframes cucMtBurstB { 0% { transform: translate(0, 0) scale(1.4); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(.4); opacity: 0; } }
+@keyframes cucMtGlow { from { transform: scale(.94); opacity: .7; } to { transform: scale(1.06); opacity: 1; } }
+@keyframes cucMtSpin { to { transform: rotate(360deg); } }
+@keyframes cucMtHeat { from { opacity: .82; } to { opacity: 1; } }
+
+/* ---------- 로켓 ---------- */
+.cuc-rk .rk-lift { transition: translate .9s cubic-bezier(.3, 1.35, .5, 1); }
+.kind-rocket.moving .cuc-rk .rk-lift { translate: 0 -9%; transition: translate .16s ease-out; } /* lifts off the line while you type */
+.kind-rocket.moving .cuc-rk .rk-shake { animation: cucRkShake .09s linear infinite; }
+.cuc-rk .rk-flamew, .cuc-rk .rk-thrust, .cuc-rk .rk-sput, .cuc-rk .rk-fo, .cuc-rk .rk-fi { transform-origin: 50% 73%; }
+.cuc-rk .rk-flamew { transition: scale .5s ease-out; }
+.kind-rocket.moving .cuc-rk .rk-flamew { scale: 1.18 1.9; transition: scale .07s; }
+.cuc-rk .rk-thrust.cuc-ka { animation: cucRkKickA .3s ease-out; }
+.cuc-rk .rk-thrust.cuc-kb { animation: cucRkKickB .3s ease-out; }
+.cuc-rk .rk-sput { animation: cucRkSput 5.6s ease-in-out infinite; }
+.cuc-rk .rk-fo { animation: cucRkFo .38s ease-in-out infinite; }
+.cuc-rk .rk-fi { animation: cucRkFi .24s ease-in-out infinite alternate; }
+.cuc-rk .rk-dia path { fill: #fff8e0; }
+.cuc-rk .rk-dia { opacity: 0; transition: opacity .3s; }
+.kind-rocket.moving .cuc-rk .rk-dia { opacity: .85; transition: opacity .05s; }
+.cuc-rk .rk-smoke { transform-origin: 50% 97.5%; transition: scale .9s ease-out, opacity .35s; }
+.kind-rocket.moving .cuc-rk .rk-smoke { scale: 1.7 1.4; transition: scale .12s, opacity .35s; }
+.cuc-rk .rk-puff { transform-origin: 50% 97.5%; opacity: 0; animation: cucRkPuff 1.8s ease-out infinite; }
+.cuc-rk .rk-fin { stroke: var(--cuc-rk-edge); stroke-width: .5px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.cuc-rk .rk-seam { fill: none; stroke: rgba(0, 0, 0, .35); stroke-width: .35; }
+.cuc-rk .rk-rivet { fill: none; stroke: rgba(40, 46, 60, .5); stroke-width: .55; stroke-linecap: round; }
+.cuc-rk .rk-rim { fill: #8d939f; stroke: rgba(0, 0, 0, .35); stroke-width: .3; }
+.cuc-rk .rk-glint { fill: #fff; opacity: .9; }
+.cuc-rk .rk-edge { fill: none; stroke: var(--cuc-rk-edge); stroke-width: .6px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+@keyframes cucRkShake { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(.6%, -.2%); } 50% { transform: translate(-.5%, .2%); } 75% { transform: translate(.4%, .1%); } }
+@keyframes cucRkKickA { 0% { transform: scale(1.12, 1.35); } 100% { transform: none; } }
+@keyframes cucRkKickB { 0% { transform: scale(1.12, 1.35); } 100% { transform: none; } }
+@keyframes cucRkSput { /* now and then the engine coughs: the flame dips and catches again */
+  0%, 84%, 100% { transform: none; opacity: 1; } 87% { transform: scale(.82, .5); opacity: .7; } 90% { transform: scale(1.04, 1.2); opacity: 1; } 93% { transform: scale(.94, .85); } 96% { transform: none; }
+}
+@keyframes cucRkFo { 0%, 100% { transform: scale(1, 1); } 35% { transform: scale(.9, .82); } 70% { transform: scale(1.05, 1.08); } }
+@keyframes cucRkFi { from { transform: scale(.9, .8); opacity: .85; } to { transform: scale(1.05, 1.08); opacity: 1; } }
+@keyframes cucRkPuff { 0% { transform: translate(0, 0) scale(.35); opacity: 0; } 12% { opacity: .9; } 100% { transform: translate(var(--dx), -3%) scale(1.5); opacity: 0; } }
+
+/* ---------- 마법봉 ---------- */
+.cuc-wd .wd-tilt { rotate: 12deg; transition: rotate .7s cubic-bezier(.3, 1.8, .5, 1); }
+.kind-wand.moving .cuc-wd .wd-tilt { rotate: 22deg; transition: rotate .07s ease-out; } /* a flick of the wand */
+.cuc-wd .wd-starw { animation: cucWdRock 3s ease-in-out infinite alternate; }
+.cuc-wd .wd-glow { transform-origin: 25% 21.5%; animation: cucWdGlow 1.6s ease-in-out infinite alternate; }
+.cuc-wd .wd-tw { opacity: 0; animation: cucWdTw 2.7s ease-in-out infinite; }
+.cuc-wd .wd-tw path { fill: #fff; }
+.cuc-wd .wd-fl { fill: var(--cuc-wd-l); }
+.cuc-wd .wd-fd { fill: var(--cuc-wd-d); }
+.cuc-wd .wd-edge { fill: none; stroke: var(--cuc-wd-edge); stroke-width: .6px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.cuc-wd .wd-hi { fill: #fff; opacity: .9; }
+.cuc-wd .wd-rib { fill: none; stroke: var(--violet); stroke-width: .75; opacity: .85; }
+.cuc-wd .wd-line { fill: none; stroke: var(--cuc-wd-line); stroke-width: .5px; vector-effect: non-scaling-stroke; }
+.cuc-wd .wd-band { fill: none; stroke: #f2c14e; stroke-width: .7; }
+.cuc-wd .wd-c1 { fill: var(--cuc-wd-s1); }
+.cuc-wd .wd-c2 { fill: var(--cuc-wd-s2); }
+.cuc-wd .wd-c3 { fill: var(--cuc-wd-s3); }
+.cuc-wd .wd-fall { opacity: 0; animation: cucWdFall 2.8s linear infinite; }
+.cuc-wd .wd-bs { opacity: 0; }
+.cuc-wd .wd-burst.cuc-ka > .wd-bs { animation: cucWdBurstA .7s cubic-bezier(.15, .7, .35, 1); }
+.cuc-wd .wd-burst.cuc-kb > .wd-bs { animation: cucWdBurstB .7s cubic-bezier(.15, .7, .35, 1); }
+@keyframes cucWdRock { from { transform: rotate(-9deg) scale(.97); } to { transform: rotate(9deg) scale(1.04); } }
+@keyframes cucWdGlow { from { transform: scale(.88); opacity: .6; } to { transform: scale(1.1); opacity: 1; } }
+@keyframes cucWdTw { 0%, 60%, 100% { transform: scale(0) rotate(0deg); opacity: 0; } 75% { transform: scale(1) rotate(45deg); opacity: 1; } 90% { transform: scale(0) rotate(90deg); opacity: 0; } }
+@keyframes cucWdFall {
+  0% { transform: translate(0, 0) scale(.2) rotate(0deg); opacity: 0; }
+  12% { transform: translate(calc(var(--dx) * .15), 3%) scale(1) rotate(30deg); opacity: 1; }
+  100% { transform: translate(var(--dx), 62%) scale(.3) rotate(180deg); opacity: 0; }
+}
+@keyframes cucWdBurstA {
+  0% { transform: translate(0, 0) scale(.3) rotate(0deg); opacity: 1; }
+  25% { transform: translate(calc(var(--bx) * .45), calc(var(--by) * .45)) scale(1.15) rotate(40deg); opacity: 1; }
+  100% { transform: translate(var(--bx), calc(var(--by) + 10%)) scale(.2) rotate(120deg); opacity: 0; }
+}
+@keyframes cucWdBurstB {
+  0% { transform: translate(0, 0) scale(.3) rotate(0deg); opacity: 1; }
+  25% { transform: translate(calc(var(--bx) * .45), calc(var(--by) * .45)) scale(1.15) rotate(40deg); opacity: 1; }
+  100% { transform: translate(var(--bx), calc(var(--by) + 10%)) scale(.2) rotate(120deg); opacity: 0; }
+}
+
+/* ---------- 위성 ---------- */
+/* one orbit takes 3.2 s: x and y each slide back and forth on an eased half-turn, a quarter of a turn apart, the depth
+   (size and brightness) with y; the trail turns once in a squashed circle; the bar is drawn again on top while the
+   satellite is on the far side (the second half of the turn) */
+.cuc-ob .ob-plane { position: absolute; left: 18%; top: 50%; width: 260%; aspect-ratio: 1; translate: -50% -50%; rotate: -16deg; transition: rotate .9s cubic-bezier(.3, 1.6, .5, 1); }
+.kind-orbit.moving .cuc-ob .ob-plane { rotate: -3deg; transition: rotate .12s ease-out; }
+.cuc-ob .ob-path { opacity: var(--cuc-ob-path-o); }
+.cuc-ob .ob-path path { fill: none; stroke: var(--cuc-ob-path); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.cuc-ob .ob-path .ob-back { opacity: .45; }
+.cuc-ob .ob-sq { transform: scaleY(.3); }
+.cuc-ob .ob-spin { animation: cucObSpin 3.2s linear infinite; }
+.cuc-ob .ob-trail path { fill: none; stroke: var(--cuc-ob-trail); stroke-width: 1.4px; vector-effect: non-scaling-stroke; stroke-linecap: round; }
+.cuc-ob .ob-x { animation: cucObX 1.6s cubic-bezier(.37, 0, .63, 1) infinite alternate; }
+.cuc-ob .ob-y { animation: cucObY 1.6s cubic-bezier(.37, 0, .63, 1) -.8s infinite alternate; }
+.cuc-ob .ob-d { animation: cucObD 1.6s cubic-bezier(.37, 0, .63, 1) -.8s infinite alternate; }
+.cuc-ob .ob-over { animation: cucObOver 3.2s step-end infinite; }
+.cuc-ob .ob-blink circle { fill: #ff4a3d; }
+.cuc-ob .ob-blink { animation: cucObBlink 1.2s steps(1) infinite; }
+.cuc-ob .ob-glint path { fill: #fff; }
+.cuc-ob .ob-glint { opacity: 0; animation: cucObGlint 3.2s ease-in-out infinite; }
+.cuc-ob .ob-strut { fill: none; stroke: #b9bfca; stroke-width: 1.6; }
+.cuc-ob .ob-grid { fill: none; stroke: rgba(20, 50, 110, .45); stroke-width: .6; }
+.cuc-ob .ob-edge { fill: none; stroke: var(--cuc-ob-edge); stroke-width: .6px; vector-effect: non-scaling-stroke; }
+.cuc-ob .ob-mast { fill: none; stroke: #c9ced8; stroke-width: 1; }
+.cuc-ob .ob-foil { fill: none; stroke: rgba(120, 70, 0, .45); stroke-width: .6; }
+.cuc-ob .ob-ping { opacity: 0; }
+.cuc-ob .ob-ping ellipse { fill: none; stroke: var(--cuc-ob-trail); stroke-width: 1.2px; vector-effect: non-scaling-stroke; }
+.cuc-ob .ob-ping.cuc-ka { animation: cucObPingA .9s cubic-bezier(.2, .6, .35, 1); }
+.cuc-ob .ob-ping.cuc-kb { animation: cucObPingB .9s cubic-bezier(.2, .6, .35, 1); }
+@keyframes cucObSpin { to { transform: rotate(360deg); } }
+@keyframes cucObX { from { transform: translateX(48%); } to { transform: translateX(-48%); } }
+@keyframes cucObY { from { transform: translateY(-14.4%); } to { transform: translateY(14.4%); } }
+@keyframes cucObD { from { transform: scale(.7); opacity: .55; } to { transform: scale(1.12); opacity: 1; } }
+@keyframes cucObOver { 0% { opacity: 0; } 50%, 100% { opacity: 1; } }
+@keyframes cucObBlink { 0% { opacity: .2; } 70% { opacity: 1; } 85% { opacity: .2; } }
+@keyframes cucObGlint { 0%, 15% { transform: scale(.4); opacity: 0; } 25% { transform: scale(1); opacity: 1; } 35%, 100% { transform: scale(.4); opacity: 0; } }
+@keyframes cucObPingA { 0% { transform: scale(.08); opacity: .95; } 100% { transform: scale(1.25); opacity: 0; } }
+@keyframes cucObPingB { 0% { transform: scale(.08); opacity: .95; } 100% { transform: scale(1.25); opacity: 0; } }
+
+/* ---------- picker previews: the reactions to typing, played over and over ---------- */
+.pv-cur .cuc-sb .sb-flare { animation: cucSbDemo 2.2s ease-out infinite; }
+.pv-cur .cuc-sb .sb-swing { animation: cucSbSwingDemo 2.2s cubic-bezier(.3, 1.7, .5, 1) infinite; }
+.pv-cur .cm-tail { animation: cucCmDemo 2.6s cubic-bezier(.2, .7, .3, 1) infinite; }
+.pv-cur .cuc-mt .mt-burst > .mt-bs { animation: cucMtDemo 1.8s cubic-bezier(.2, .7, .4, 1) infinite; }
+.pv-cur .cuc-mt .mt-burst + .mt-burst > .mt-bs { animation-delay: -.9s; }
+.pv-cur .cuc-rk .rk-lift { animation: cucRkLiftDemo 3.2s infinite; }
+.pv-cur .cuc-rk .rk-flamew { animation: cucRkFlameDemo 3.2s infinite; }
+.pv-cur .cuc-rk .rk-dia { animation: cucRkDiaDemo 3.2s infinite; }
+.pv-cur .cuc-wd .wd-burst > .wd-bs { animation: cucWdDemo 2.1s cubic-bezier(.15, .7, .35, 1) infinite; }
+.pv-cur .cuc-wd .wd-burst + .wd-burst > .wd-bs { animation-delay: -.7s; }
+.pv-cur .cuc-wd .wd-burst + .wd-burst + .wd-burst > .wd-bs { animation-delay: -1.4s; }
+.pv-cur .cuc-ob .ob-ping { animation: cucObPingDemo 1.6s cubic-bezier(.2, .6, .35, 1) infinite; }
+.pv-cur .cuc-ob .ob-ping + .ob-ping { animation-delay: -.8s; }
+@keyframes cucSbDemo { 0% { transform: scale(1.2, 1.03); opacity: 1; } 23%, 100% { transform: scale(.92, 1); opacity: 0; } }
+@keyframes cucSbSwingDemo { 0% { rotate: -5deg; } 30%, 100% { rotate: 0deg; } }
+@keyframes cucCmDemo { 0% { transform: scaleX(1); } 12%, 40% { transform: scaleX(1.9); } 100% { transform: scaleX(1); } }
+@keyframes cucMtDemo { 0% { transform: translate(0, 0) scale(1.4); opacity: 1; } 33%, 100% { transform: translate(var(--dx), var(--dy)) scale(.4); opacity: 0; } }
+@keyframes cucRkLiftDemo { 0%, 18% { translate: 0 0; } 26%, 56% { translate: 0 -9%; animation-timing-function: cubic-bezier(.3, 1.35, .5, 1); } 82%, 100% { translate: 0 0; } }
+@keyframes cucRkFlameDemo { 0%, 18% { scale: 1; } 22%, 56% { scale: 1.18 1.9; animation-timing-function: ease-out; } 70%, 100% { scale: 1; } }
+@keyframes cucRkDiaDemo { 0%, 18% { opacity: 0; } 22%, 56% { opacity: .85; } 66%, 100% { opacity: 0; } }
+@keyframes cucWdDemo {
+  0% { transform: translate(0, 0) scale(.3) rotate(0deg); opacity: 1; }
+  8% { transform: translate(calc(var(--bx) * .45), calc(var(--by) * .45)) scale(1.15) rotate(40deg); opacity: 1; }
+  33%, 100% { transform: translate(var(--bx), calc(var(--by) + 10%)) scale(.2) rotate(120deg); opacity: 0; }
+}
+@keyframes cucObPingDemo { 0% { transform: scale(.08); opacity: .95; } 56%, 100% { transform: scale(1.25); opacity: 0; } }

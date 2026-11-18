@@ -8,7 +8,7 @@
 - Choice prompts: when the agent asks the user to choose, the task gets a speech-bubble badge and the OS shows a notification.
 - Done notifications for agents in background tabs.
 - Session restore: reopening the app restores tabs and continues the Claude Code / Codex conversations; past conversations are searchable.
-- Decorations: 35+ working-border animations (relay race, Santa sleigh, train, marching ants), 35+ completion celebrations, 30+ done-text styles, 40+ animated backgrounds, 35+ typing effects, 45+ typing sounds, 30+ dark and light color themes.
+- Decorations: 35+ working-border animations (relay race, Santa sleigh, train, marching ants), 35+ completion celebrations, 30+ done-text styles, 40+ animated backgrounds, 40 typing effects, 55+ typing sounds, 50+ animated cursor styles, 30+ dark and light color themes.
 - Terminal: xterm.js with WebGL rendering, split panes by dragging tabs, CJK IME support, Shift+Enter newline, drag-and-drop file paths, window transparency.
 - Privacy: no network access; it only reads transcript files Claude Code / Codex already store locally.
 

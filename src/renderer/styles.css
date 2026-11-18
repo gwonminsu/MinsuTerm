@@ -1,4 +1,12 @@
 [hidden] { display: none !important; }
+/* Nerd Font icons for prompt themes (folder, git, language and OS icons, powerline shapes): only the Private Use
+   Area, so letters, Hangul and ordinary symbols keep coming from the chosen font. Symbols Nerd Font Mono, MIT (fonts/). */
+@font-face {
+  font-family: 'MT Nerd Symbols';
+  src: url('fonts/MTNerdSymbols.woff2') format('woff2');
+  unicode-range: U+E000-F8FF, U+F0000-FFFFD;
+  font-display: block;
+}
 :root {
   --bg: #0d0f14;
   --stage: #10131a;

@@ -1,0 +1,349 @@
+/* Cursors reaching out over the terminal (fx/cursor-wide.js): 후광 · 촛불 · 심전도 · 초승달 · 비눗방울 · 벚꽃 · 반딧불 커서;
+   and, in the second half, cursors redrawn in layers: 고양이 · 촛불 · 병아리 · 하트 · 슬라임 · 젤리.
+
+   .cw-wide is the caret cell, under the cursor's own drawing (z-index -1 in the cursor's stacking context); its parts
+   spill out of it. --pl / --pr / --pt / --pb (set by updateCursor) are the px from the cell's top left corner to the
+   pane's edges; the stage, or in a split view a clip on the cursor, keeps everything inside the pane. Sizes are in cell
+   units (cqw / cqh, the cursor is a size container), or in % of a cell-sized box for paths, so a bigger font, the
+   picker preview and the composer all scale with it.
+   Each moving part is its own element and only transform and opacity are animated: the gradients are painted once.
+   Faint, so text reads through; they leave when the terminal loses focus, and hold still with the rest of the cursor
+   (cursors.css) when nobody is typing. */
+
+.mt-cursor.kind-candle, .mt-cursor.kind-ecg, .mt-cursor.kind-moon, .mt-cursor.kind-bubble, .mt-cursor.kind-sakura, .mt-cursor.kind-firefly { container-type: size; }
+.cw-wide { position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; transition: opacity .35s; }
+.cw-wide span { position: absolute; display: block; }
+.cw-wide svg { position: absolute; display: block; overflow: visible; }
+.mt-cursor.blurred .cw-wide { opacity: 0; }
+.composer-field .cw-wide { display: none; } /* the composer box: only the cursor itself (심전도 keeps a short trace, below) */
+.pv-cur .cw-wide:not(.cw-ecg):not(.cw-halo) { scale: .5; } /* picker previews: the same scene, smaller, inside the little box */
+
+:root {
+  --hw-c: 255, 214, 120; --hw-a: 1; --hw-mote: #fff3c4;
+  --cdw-c: 255, 168, 72; --cdw-a: 1;
+  --ew-c: #ff4d6d; --ew-glow: rgba(255, 77, 109, .22);
+  --mw-c: 196, 214, 255; --mw-in: 255, 206, 170; --mw-a: 1;
+  --bw-hi: rgba(255, 255, 255, .92); --bw-hi2: rgba(255, 255, 255, .4); --bw-blue: rgba(150, 215, 255, .5); --bw-pink: rgba(255, 150, 225, .72); --bw-fill: rgba(255, 255, 255, .035);
+  --sw-c: #ffbcd6; --sw-vein: rgba(255, 236, 244, .8); --sw-o: .82;
+  --fw-core: #f6ffb0; --fw-mid: rgba(214, 255, 96, .62); --fw-out: rgba(190, 255, 80, .2);
+}
+:root[data-theme="light"] {
+  --hw-c: 226, 146, 0; --hw-a: 1.15; --hw-mote: #c98200;
+  --cdw-c: 236, 128, 16; --cdw-a: .72;
+  --ew-c: #d4163f; --ew-glow: rgba(212, 22, 63, .14);
+  --mw-c: 70, 102, 180; --mw-in: 196, 112, 60; --mw-a: .8;
+  --bw-hi: rgba(255, 255, 255, .95); --bw-hi2: rgba(255, 255, 255, .7); --bw-blue: rgba(36, 120, 200, .6); --bw-pink: rgba(196, 48, 150, .62); --bw-fill: rgba(60, 130, 210, .05);
+  --sw-c: #f27aa8; --sw-vein: rgba(255, 228, 238, .9); --sw-o: .8;
+  --fw-core: #8ab800; --fw-mid: rgba(104, 150, 0, .5); --fw-out: rgba(104, 150, 0, .16);
+}
+
+/* ---------- 후광: a pillar of light from the top of the pane down onto the halo ---------- */
+.cw-halo .hw-col { left: 50%; bottom: 96%; width: 0; height: var(--pt, 300cqh);
+  /* light all the way down from the top edge, stronger as it nears the halo, easing into it at the bottom */
+  --hw-fall: linear-gradient(0deg, transparent, rgba(0, 0, 0, .8) 45cqh, #000 90cqh, rgba(0, 0, 0, .74) 24%, rgba(0, 0, 0, .5) 55%, rgba(0, 0, 0, .36) 88%, transparent);
+}
+.cw-halo .hw-col > span { top: 0; height: 100%; }
+.cw-halo .hw-shaft { /* the soft column: brightest where it lands, fading up into the top of the pane */
+  left: -310cqw; width: 620cqw;
+  background: linear-gradient(90deg, transparent, rgba(var(--hw-c), calc(.03 * var(--hw-a))) 18%, rgba(var(--hw-c), calc(.085 * var(--hw-a))) 36%, rgba(var(--hw-c), calc(.115 * var(--hw-a))) 50%, rgba(var(--hw-c), calc(.085 * var(--hw-a))) 64%, rgba(var(--hw-c), calc(.03 * var(--hw-a))) 82%, transparent);
+  -webkit-mask: var(--hw-fall); mask: var(--hw-fall);
+  animation: cwHaloShaft 5.2s ease-in-out infinite alternate;
+}
+.cw-halo .hw-core { /* brighter where it comes down on the halo */
+  left: -130cqw; width: 260cqw;
+  background: linear-gradient(90deg, transparent, rgba(var(--hw-c), calc(.11 * var(--hw-a))) 50%, transparent);
+  -webkit-mask: linear-gradient(0deg, rgba(0, 0, 0, .3), #000 50cqh, rgba(0, 0, 0, .45) 16%, transparent 42%); mask: linear-gradient(0deg, rgba(0, 0, 0, .3), #000 50cqh, rgba(0, 0, 0, .45) 16%, transparent 42%);
+  animation: cwHaloShaft 2.6s ease-in-out infinite alternate;
+}
+.cw-halo .hw-ray { /* two broad bands of the beam brightening out of step: the light shimmers */
+  width: 180cqw; background: linear-gradient(90deg, transparent, rgba(var(--hw-c), calc(.06 * var(--hw-a))) 50%, transparent);
+  -webkit-mask: linear-gradient(0deg, transparent, #000 90cqh, rgba(0, 0, 0, .55) 40%, transparent); mask: linear-gradient(0deg, transparent, #000 90cqh, rgba(0, 0, 0, .55) 40%, transparent);
+}
+.cw-halo .hw-r1 { left: -200cqw; animation: cwHaloRay 3.3s ease-in-out infinite alternate; }
+.cw-halo .hw-r2 { left: 20cqw; animation: cwHaloRay 4.1s ease-in-out -1.7s infinite alternate-reverse; }
+.cw-halo .hw-motew { width: 0; animation: cwHaloMoteFall 7s linear infinite; }
+.cw-halo .hw-mote {
+  left: min(-14cqh, -3px); top: 0; width: max(28cqh, 6px); aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(circle, var(--hw-mote) 0 22%, rgba(var(--hw-c), .4) 40%, transparent 70%);
+  animation: cwHaloMote 7s linear infinite;
+}
+@keyframes cwHaloShaft { from { opacity: .72; } to { opacity: 1; } }
+@keyframes cwHaloRay { from { opacity: .15; } to { opacity: 1; } }
+@keyframes cwHaloMoteFall { from { transform: translateY(8%); } to { transform: translateY(96%); } }
+@keyframes cwHaloMote { 0% { opacity: 0; } 18% { opacity: .6; } 78% { opacity: .6; } 96%, 100% { opacity: 0; } }
+
+/* ---------- 촛불: warm light round the flame, a few lines across, flickering ---------- */
+.cw-candle .cdw-g { left: 0; top: 0; width: 100%; height: 100%; animation: cmCnLight 8.6s ease-in-out infinite; } /* dims with the flame when it gutters (촛불, below) */
+.cw-candle .cdw-pool, .cw-candle .cdw-core { left: 50%; top: 22%; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%; }
+.cw-candle .cdw-pool {
+  width: min(1300cqh, 560px);
+  background: radial-gradient(closest-side, rgba(var(--cdw-c), calc(.19 * var(--cdw-a))), rgba(var(--cdw-c), calc(.125 * var(--cdw-a))) 14%, rgba(var(--cdw-c), calc(.062 * var(--cdw-a))) 36%, rgba(var(--cdw-c), calc(.022 * var(--cdw-a))) 62%, rgba(var(--cdw-c), calc(.006 * var(--cdw-a))) 84%, transparent);
+  animation: cwCandlePool 2.9s ease-in-out infinite;
+}
+.cw-candle .cdw-core {
+  width: min(520cqh, 230px);
+  background: radial-gradient(closest-side, rgba(var(--cdw-c), calc(.11 * var(--cdw-a))), rgba(var(--cdw-c), calc(.045 * var(--cdw-a))) 45%, transparent);
+  animation: cwCandleCore 1.27s ease-in-out infinite;
+}
+@keyframes cwCandlePool {
+  0%, 100% { transform: scale(1); opacity: .9; } 14% { transform: translateX(-1.2%) scale(1.02); opacity: 1; } 29% { transform: scale(.985); opacity: .82; }
+  43% { transform: translateX(.8%) scale(1.01); opacity: .96; } 61% { transform: translateX(1.4%) scale(.99); opacity: .86; } 78% { transform: translateX(-.4%) scale(1.015); opacity: 1; }
+}
+@keyframes cwCandleCore {
+  0%, 100% { transform: translateX(0) scale(1); opacity: .85; } 22% { transform: translateX(-3%) scale(1.06); opacity: 1; }
+  47% { transform: translateX(2%) scale(.94); opacity: .7; } 71% { transform: translateX(3%) scale(1.03); opacity: .95; }
+}
+
+/* ---------- 심전도: the trace the pen writes, running off along the row to the right ---------- */
+.mt-cursor.kind-ecg { --ew-p: 1200cqw; } /* one beat: twelve cells */
+.cw-ecg .ew-strip {
+  left: 3px; top: -10%; height: 120%; width: calc(var(--pr, 2400cqw) - 3px); overflow: hidden;
+  -webkit-mask: linear-gradient(90deg, #000, rgba(0, 0, 0, .62) calc(var(--ew-p) * .5), rgba(0, 0, 0, .3) calc(var(--ew-p) * 1.6), rgba(0, 0, 0, .15) calc(var(--ew-p) * 3.4), rgba(0, 0, 0, .03) 100%);
+          mask: linear-gradient(90deg, #000, rgba(0, 0, 0, .62) calc(var(--ew-p) * .5), rgba(0, 0, 0, .3) calc(var(--ew-p) * 1.6), rgba(0, 0, 0, .15) calc(var(--ew-p) * 3.4), rgba(0, 0, 0, .03) 100%);
+}
+.cw-ecg .ew-trace { left: calc(var(--ew-p) * -1); top: 0; width: calc(var(--ew-p) * 40); height: 100%; animation: cwEcgRun 1.1s linear infinite; }
+.cw-ecg .ew-line { fill: none; stroke: var(--ew-c); stroke-width: 1.4px; stroke-linejoin: round; stroke-linecap: round; }
+.cw-ecg .ew-glow { fill: none; stroke: var(--ew-glow); stroke-width: 4px; stroke-linejoin: round; stroke-linecap: round; }
+.cw-ecg .ew-beat { /* the pen glows as a beat goes through it */
+  left: 50%; top: 50%; width: 260cqh; height: 140cqh; translate: -50% -50%; border-radius: 50%;
+  background: radial-gradient(closest-side, var(--ew-glow), transparent);
+  animation: cwEcgBeat 1.1s linear infinite;
+}
+@keyframes cwEcgRun { to { transform: translateX(2.5%); } } /* one beat further on (1 / 40 of the strip) */
+@keyframes cwEcgBeat { 0%, 44% { opacity: .2; } 54% { opacity: 1; } 76%, 100% { opacity: .2; } }
+.composer-field .cw-ecg { display: block; }
+.composer-field .cw-ecg .ew-strip { width: 320cqw; -webkit-mask: linear-gradient(90deg, #000 40%, transparent); mask: linear-gradient(90deg, #000 40%, transparent); }
+.pv-cur .cw-ecg .ew-strip { width: 900cqw; }
+
+/* ---------- 초승달: moonlight, and a faint lunar halo round the moon ---------- */
+.cw-moon .mw-glow, .cw-moon .mw-ring { left: 50%; top: 50%; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%; }
+.cw-moon .mw-glow {
+  width: min(900cqh, 400px);
+  background: radial-gradient(closest-side, rgba(var(--mw-c), calc(.1 * var(--mw-a))), rgba(var(--mw-c), calc(.045 * var(--mw-a))) 32%, rgba(var(--mw-c), calc(.014 * var(--mw-a))) 66%, transparent);
+  animation: cwMoonGlow 5.4s ease-in-out infinite alternate;
+}
+.cw-moon .mw-ring {
+  width: min(860cqh, 380px);
+  background: radial-gradient(closest-side, transparent 76%, rgba(var(--mw-in), calc(.045 * var(--mw-a))) 83%, rgba(var(--mw-c), calc(.1 * var(--mw-a))) 88.5%, rgba(var(--mw-c), calc(.045 * var(--mw-a))) 94%, transparent);
+  animation: cwMoonRing 7.6s ease-in-out infinite alternate;
+}
+:root[data-theme="light"] .kind-moon::before { box-shadow: inset .22em -.08em 0 0 #d99a12; filter: drop-shadow(0 0 1.5px rgba(150, 96, 0, .45)); }
+:root[data-theme="light"] .kind-moon::after { background: #d99a12; }
+@keyframes cwMoonGlow { from { opacity: .75; } to { opacity: 1; } }
+@keyframes cwMoonRing { from { opacity: .45; transform: scale(.985); } to { opacity: 1; transform: scale(1.01); } }
+
+/* ---------- 비눗방울: bubbles drifting up from the caret and popping ---------- */
+.cw-bubble .bw-rise, .cw-bubble .bw-sway { left: 0; top: 0; width: 100%; height: 100%; }
+.cw-bubble .bw-rise { animation: cwBubRise 6s cubic-bezier(.3, .15, .6, 1) infinite; }
+.cw-bubble .bw-sway { animation: cwBubSway 2.2s ease-in-out infinite alternate; }
+.cw-bubble .bw-ball {
+  left: 50%; top: 50%; width: calc(var(--s) * min(100cqh, 20px)); aspect-ratio: 1; translate: -50% -50%; border-radius: 50%;
+  background: radial-gradient(circle at 34% 31%, var(--bw-hi) 0 9%, transparent 13%), radial-gradient(circle at 64% 70%, var(--bw-hi2) 0 5%, transparent 8%),
+    radial-gradient(circle, var(--bw-fill) 0 52%, var(--bw-blue) 61%, var(--bw-pink) 67%, transparent 71%);
+  animation: cwBubBall 6s linear infinite;
+}
+@keyframes cwBubRise { from { transform: translate(var(--x), -90%); } to { transform: translate(calc(var(--x) * 1.4), -520%); } }
+@keyframes cwBubSway { from { transform: translateX(-38%); } to { transform: translateX(38%); } }
+@keyframes cwBubBall {
+  0% { transform: scale(.55); opacity: 0; } 10% { opacity: .95; } 84% { transform: scale(1); opacity: .85; }
+  90% { transform: scale(1.3); opacity: 0; } 100% { transform: scale(1.3); opacity: 0; } /* pop */
+}
+
+/* ---------- 벚꽃: petals drifting down past the caret ---------- */
+.cw-sakura .sw-fall, .cw-sakura .sw-sway { left: 0; top: 0; width: 100%; height: 100%; }
+.cw-sakura .sw-fall { opacity: 0; animation: cwPetalFall 8.4s linear infinite; }
+.cw-sakura .sw-sway { animation: cwPetalSway 2.6s ease-in-out infinite alternate; }
+.cw-sakura .sw-spin { left: 50%; top: 50%; width: min(62cqh, 13px); height: min(62cqh, 13px); translate: -50% -50%; animation: cwPetalSpin 2s linear infinite; }
+.cw-sakura .sw-spin svg { left: 0; top: 0; width: 100%; height: 100%; }
+.cw-sakura .sw-spin path { fill: var(--sw-c); }
+.cw-sakura .sw-spin .sw-vein { fill: none; stroke: var(--sw-vein); stroke-width: 1.2; stroke-linecap: round; }
+@keyframes cwPetalFall {
+  0% { transform: translate(var(--x0), var(--y0)); opacity: 0; } 12% { opacity: var(--sw-o); } 82% { opacity: var(--sw-o); }
+  100% { transform: translate(var(--x1), var(--y1)); opacity: 0; }
+}
+@keyframes cwPetalSway { from { transform: translateX(-70%) rotate(-12deg); } to { transform: translateX(70%) rotate(12deg); } }
+@keyframes cwPetalSpin { /* tumbling: turning, and flipping over (narrow when edge-on) */
+  0% { transform: rotate(0deg) scaleX(1); } 25% { transform: rotate(80deg) scaleX(.25); } 50% { transform: rotate(170deg) scaleX(-1); }
+  75% { transform: rotate(260deg) scaleX(-.3); } 100% { transform: rotate(360deg) scaleX(1); }
+}
+
+/* ---------- 반딧불 커서: more fireflies wandering round the caret, glowing now and then ---------- */
+.cw-firefly .fw-fly { left: 0; top: 0; width: 100%; height: 100%; animation: 13s ease-in-out infinite; }
+.cw-firefly .fw-a { animation-name: cwFlyA; }
+.cw-firefly .fw-b { animation-name: cwFlyB; }
+.cw-firefly .fw-c { animation-name: cwFlyC; }
+.cw-firefly .fw-glow {
+  left: 50%; top: 50%; width: min(84cqh, 18px); height: min(84cqh, 18px); translate: -50% -50%; border-radius: 50%;
+  background: radial-gradient(closest-side, var(--fw-core) 0 13%, var(--fw-mid) 28%, var(--fw-out) 58%, transparent);
+  opacity: 0; animation: cwFlyBlink 3.6s ease-in-out infinite;
+}
+:root[data-theme="light"] .kind-firefly::after { background: #9cc200; box-shadow: 0 0 3px rgba(104, 150, 0, .8), 0 0 7px rgba(104, 150, 0, .35); }
+@keyframes cwFlyBlink { 0%, 30% { opacity: 0; } 44% { opacity: 1; } 68% { opacity: .85; } 86%, 100% { opacity: 0; } }
+@keyframes cwFlyA {
+  0%, 100% { transform: translate(-560%, -140%); } 18% { transform: translate(-340%, -330%); } 37% { transform: translate(-80%, -260%); }
+  55% { transform: translate(-260%, -160%); } 74% { transform: translate(-620%, 90%); } 88% { transform: translate(-760%, -40%); }
+}
+@keyframes cwFlyB {
+  0%, 100% { transform: translate(420%, -220%); } 20% { transform: translate(780%, -120%); } 41% { transform: translate(940%, 120%); }
+  60% { transform: translate(560%, 210%); } 80% { transform: translate(300%, -100%); }
+}
+@keyframes cwFlyC {
+  0%, 100% { transform: translate(-200%, -460%); } 24% { transform: translate(260%, -360%); } 48% { transform: translate(620%, -500%); }
+  70% { transform: translate(200%, -220%); } 86% { transform: translate(-420%, -320%); }
+}
+
+/* ==================== cursors redrawn in layers (first part of fx/cursor-wide.js): 고양이 · 촛불 · 병아리 · 하트 · 슬라임 · 젤리 =====
+   .cm-box is the drawing fitted to the caret cell: tall (20 x 40) or square (20 x 20), a little larger than the cell.
+   Origins are percentages of the box: x% = x * 5, y% = y * 2.5 (tall) or y * 5 (square). Edges that must not vanish at
+   small sizes keep a fixed width in screen pixels. Typing shows through .moving (on for about a quarter of a second). */
+
+.mt-cursor.kind-cat, .mt-cursor.kind-chick, .mt-cursor.kind-heart, .mt-cursor.kind-slime { container-type: size; }
+.cm-box { position: absolute; left: 50%; top: 50%; translate: -50% -50%; pointer-events: none; }
+.cm-tall { width: min(120cqw, 60cqh, 40px); aspect-ratio: 1 / 2; }
+.cm-sq { width: min(165cqw, 82cqh, 52px); aspect-ratio: 1; }
+.cm-box .cl { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+
+:root {
+  --cm-ct-edge: rgba(84, 40, 6, .55); --cm-ct-whisk: rgba(255, 255, 255, .62);
+  --cm-cn-edge: rgba(110, 84, 40, 0); --cm-cn-glow: #ffb24a; --cm-cn-glow-o: .5; --cm-cn-smoke: rgba(196, 200, 210, .55);
+  --cm-ck-edge: rgba(150, 84, 0, .7); --cm-ht-edge: rgba(110, 0, 30, .35); --cm-ht-ring: rgba(255, 110, 150, .7);
+  --cm-sl-edge: rgba(20, 90, 24, .4); --cm-sl-shadow: rgba(0, 0, 0, .45); --cm-jl-edge: rgba(255, 255, 255, .22);
+}
+:root[data-theme="light"] {
+  --cm-ct-edge: rgba(84, 40, 6, .8); --cm-ct-whisk: rgba(92, 52, 18, .55);
+  --cm-cn-edge: rgba(110, 84, 40, .6); --cm-cn-glow: #ff9a10; --cm-cn-glow-o: .4; --cm-cn-smoke: rgba(96, 100, 112, .5);
+  --cm-ck-edge: rgba(140, 80, 0, .75); --cm-ht-edge: rgba(110, 0, 30, .6); --cm-ht-ring: rgba(214, 40, 90, .6);
+  --cm-sl-edge: rgba(16, 80, 20, .7); --cm-sl-shadow: rgba(0, 0, 0, .18); --cm-jl-edge: rgba(0, 0, 0, .25);
+}
+
+/* ---------- 고양이 ---------- */
+.cm-cat .ct-fur { fill: url(#cm-ct-fur); stroke: var(--cm-ct-edge); stroke-width: .7px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.cm-cat .ct-in { fill: #ffb0bd; }
+.cm-cat .ct-stripe { fill: none; stroke: #c9651a; stroke-width: .8; stroke-linecap: round; }
+.cm-cat .ct-muzzle { fill: #fff4e2; opacity: .92; }
+.cm-cat .ct-nose { fill: #ef7f96; }
+.cm-cat .ct-mouth { fill: none; stroke: #6a3816; stroke-width: .45; stroke-linecap: round; }
+.cm-cat .ct-whisk { fill: none; stroke: var(--cm-ct-whisk); stroke-width: .32; stroke-linecap: round; }
+.cm-cat .ct-eye { fill: url(#cm-ct-eye); stroke: #5a3410; stroke-width: .35; }
+.cm-cat .ct-pupil { fill: #17120a; }
+.cm-cat .ct-glint { fill: #fff; }
+.cm-cat .ct-all { transform-origin: 50% 95%; }
+.kind-cat.moving .cm-cat .ct-all { animation: cmCatHop .32s ease-out; } /* typing: a hop */
+.cm-cat .ct-eyes { transform-origin: 50% 57.5%; animation: cmCatBlink 5.6s infinite; }
+.cm-cat .ct-earl { transform-origin: 29% 36%; animation: cmCatEarL 7.3s ease-in-out infinite; }
+.cm-cat .ct-earr { transform-origin: 71% 36%; animation: cmCatEarR 9.7s ease-in-out -3.1s infinite; }
+@keyframes cmCatHop { 0% { transform: none; } 40% { transform: translateY(-22%) rotate(-7deg); } 100% { transform: none; } }
+@keyframes cmCatBlink { /* a quick blink, and later a slow, contented one */
+  0%, 38%, 46%, 76%, 100% { transform: scaleY(1); } 42% { transform: scaleY(.08); }
+  81%, 88% { transform: scaleY(.32); }
+}
+@keyframes cmCatEarL { 0%, 70%, 76%, 82%, 100% { transform: rotate(0deg); } 73% { transform: rotate(-17deg); } 79% { transform: rotate(-11deg); } }
+@keyframes cmCatEarR { 0%, 64%, 70%, 100% { transform: rotate(0deg); } 67% { transform: rotate(16deg); } }
+
+/* ---------- 촛불 ---------- */
+.cm-cn .cn-wax { stroke: var(--cm-cn-edge); stroke-width: .6px; vector-effect: non-scaling-stroke; }
+.cm-cn .cn-dish { stroke: rgba(70, 46, 8, .45); stroke-width: .5px; vector-effect: non-scaling-stroke; }
+.cm-cn .cn-pool { fill: #fffdf4; }
+.cm-cn .cn-drip { fill: #fbf3e2; stroke: var(--cm-cn-edge); stroke-width: .5px; vector-effect: non-scaling-stroke; }
+.cm-cn .cn-wick { fill: none; stroke: #2b1d10; stroke-width: .8; stroke-linecap: round; }
+.cm-cn .cn-blue { fill: #4f9dff; opacity: .7; }
+.cm-cn .cn-core { fill: #fff; opacity: .85; }
+.cm-cn .cn-smoke path { fill: none; stroke: var(--cm-cn-smoke); stroke-width: .7; stroke-linecap: round; }
+/* the flame flickers in two layers; every 8.6 s it gutters (sinks twice, smokes, stands up again), and its light,
+   here and round the caret (.cdw-g, above), dims with it */
+.cm-cn .cn-lean { transform-origin: 52% 50%; transition: transform .5s cubic-bezier(.3, 1.5, .5, 1); }
+.kind-candle.moving .cm-cn .cn-lean { transform: skewX(-15deg); transition: transform .08s ease-out; } /* typing: it leans back */
+.cm-cn .cn-flame { transform-origin: 52% 50%; animation: cmCnGutter 8.6s ease-in-out infinite; }
+.cm-cn .cn-outer { transform-origin: 50% 50%; animation: cmCnOuter 1.3s ease-in-out infinite; }
+.cm-cn .cn-inner { transform-origin: 50% 48%; animation: cmCnInner .83s ease-in-out infinite alternate; }
+.cm-cn .cn-glowg { animation: cmCnLight 8.6s ease-in-out infinite; }
+.cm-cn .cn-glow { animation: cmCnFlick 1.3s ease-in-out infinite; }
+.cm-cn .cn-smoke { opacity: 0; transform-origin: 52% 11%; animation: cmCnSmoke 8.6s linear infinite; }
+@keyframes cmCnGutter {
+  0%, 78%, 96%, 100% { transform: none; } 81% { transform: scale(.66, .52) skewX(7deg); } 84% { transform: scale(.88, .84); }
+  86.5% { transform: scale(.5, .42) skewX(-6deg); } 90.5% { transform: scale(1.07, 1.06); } 93% { transform: scale(.97); }
+}
+@keyframes cmCnLight { 0%, 78%, 96%, 100% { opacity: 1; } 81% { opacity: .55; } 84% { opacity: .82; } 86.5% { opacity: .42; } 90.5% { opacity: 1; } }
+@keyframes cmCnOuter { 0%, 100% { transform: none; } 23% { transform: scale(.95, 1.06) skewX(-3deg); } 51% { transform: scale(1.04, .95) skewX(2.5deg); } 76% { transform: scale(.98, 1.03) skewX(-1deg); } }
+@keyframes cmCnInner { from { transform: scale(.94, 1.04); } to { transform: scale(1.04, .95); } }
+@keyframes cmCnFlick { 0%, 100% { opacity: .85; } 30% { opacity: 1; } 55% { opacity: .78; } 80% { opacity: .95; } }
+@keyframes cmCnSmoke { 0%, 82% { transform: translateY(0) scale(.6, .5); opacity: 0; } 86% { opacity: .9; } 100% { transform: translateY(-9%) scale(1.15, 1.3); opacity: 0; } }
+
+/* ---------- 병아리 ---------- */
+.cm-ck.cm-sq { width: min(190cqw, 95cqh, 58px); } /* a little bigger: a chick is mostly round, its face needs the room */
+.cm-ck .ck-fluff { stroke: var(--cm-ck-edge); stroke-width: .6px; vector-effect: non-scaling-stroke; }
+.cm-ck .ck-tuft { fill: #ffd83e; stroke: var(--cm-ck-edge); stroke-width: .5px; vector-effect: non-scaling-stroke; }
+.cm-ck .ck-blush { fill: #ff8f7a; opacity: .5; }
+.cm-ck .ck-beak { fill: #ff6c0a; stroke: rgba(150, 60, 0, .5); stroke-width: .4px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.cm-ck .ck-beakline { fill: none; stroke: rgba(150, 60, 0, .55); stroke-width: .3; }
+.cm-ck .ck-pupil { fill: #2a1c0e; }
+.cm-ck .ck-glint { fill: #fff; }
+.cm-ck .ck-wing path { fill: #eba01a; stroke: var(--cm-ck-edge); stroke-width: .5px; vector-effect: non-scaling-stroke; }
+.cm-ck .ck-feet path { fill: none; stroke: #f07a12; stroke-width: .75; stroke-linecap: round; }
+.cm-ck .ck-hop, .cm-ck .ck-waddle, .cm-ck .ck-peck { transform-origin: 50% 96%; }
+.cm-ck .ck-waddle { animation: cmCkWaddle .52s ease-in-out infinite alternate; }
+.cm-ck .ck-peck { animation: cmCkPeck 6.8s ease-in-out infinite; } /* now and then it pecks at the line */
+.cm-ck .ck-eye { transform-origin: 63% 50%; animation: cmCkBlink 4.3s infinite; }
+.cm-ck .ck-wing { transform-origin: 34% 63%; }
+.kind-chick.moving .cm-ck .ck-hop { animation: cmCkHop .3s ease-out; } /* typing: a hop and a flap */
+.kind-chick.moving .cm-ck .ck-wing { animation: cmCkFlap .3s ease-in-out; }
+@keyframes cmCkWaddle { from { transform: rotate(-8deg); } to { transform: rotate(8deg) translateY(-3%); } }
+@keyframes cmCkPeck { 0%, 74%, 92%, 100% { transform: none; } 78%, 86% { transform: translateX(8%) rotate(28deg); } 82% { transform: translateX(4%) rotate(12deg); } }
+@keyframes cmCkBlink { 0%, 44%, 50%, 100% { transform: scaleY(1); } 47% { transform: scaleY(.1); } }
+@keyframes cmCkHop { 0%, 100% { transform: none; } 45% { transform: translateY(-24%); } }
+@keyframes cmCkFlap { 0%, 100% { transform: none; } 25%, 75% { transform: rotate(-38deg); } 50% { transform: rotate(-6deg); } }
+
+/* ---------- 하트 ---------- */
+.cm-ht .ht-edge { fill: none; stroke: var(--cm-ht-edge); stroke-width: .6px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.cm-ht .ht-gloss { fill: none; stroke: #fff; stroke-width: .95; stroke-linecap: round; opacity: .78; }
+.cm-ht .ht-gloss2 { fill: #fff; opacity: .6; }
+.cm-ht .ht-ring path { fill: none; stroke: var(--cm-ht-ring); stroke-width: 1.1px; vector-effect: non-scaling-stroke; }
+.cm-ht .ht-pop path { fill: #ff6f97; }
+.cm-ht .ht-beat { transform-origin: 50% 55%; animation: cmHtBeat 1.1s ease-in-out infinite; }
+.cm-ht .ht-ring { transform-origin: 50% 55%; opacity: 0; animation: cmHtRing 1.1s ease-out infinite; }
+.cm-ht .ht-pop { opacity: 0; }
+.kind-heart.moving .cm-ht .ht-p1 { animation: cmHtPop .7s ease-out; } /* typing: two little hearts float up */
+.kind-heart.moving .cm-ht .ht-p2 { animation: cmHtPop .7s ease-out .12s; }
+@keyframes cmHtBeat { 0%, 60%, 100% { transform: scale(.84); } 14% { transform: scale(1.04); } 28% { transform: scale(.9); } 42% { transform: scale(1); } }
+@keyframes cmHtRing { 0%, 10% { transform: scale(.95); opacity: 0; } 16% { opacity: .75; } 70%, 100% { transform: scale(1.75); opacity: 0; } }
+@keyframes cmHtPop { 0% { transform: translateY(0) scale(.4); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-34%) scale(1.15) rotate(-12deg); opacity: 0; } }
+
+/* ---------- 슬라임 ---------- */
+.cm-sl .sl-shadow ellipse { fill: var(--cm-sl-shadow); }
+.cm-sl .sl-core { fill: #1f7a2c; opacity: .28; }
+.cm-sl .sl-edge { fill: none; stroke: var(--cm-sl-edge); stroke-width: .6px; vector-effect: non-scaling-stroke; }
+.cm-sl .sl-shine { fill: none; stroke: #fff; stroke-width: 1; stroke-linecap: round; opacity: .8; }
+.cm-sl .sl-shine2 { fill: #fff; opacity: .65; }
+.cm-sl .sl-mouth { fill: none; stroke: #143f18; stroke-width: .45; stroke-linecap: round; }
+.cm-sl .sl-eyes ellipse { fill: #10240f; }
+.cm-sl .sl-glint { fill: #fff; }
+.cm-sl .sl-bounce, .cm-sl .sl-squish { transform-origin: 50% 92%; }
+.cm-sl .sl-bounce { animation: cmSlBounce .9s ease-in-out infinite; }
+.cm-sl .sl-shadow { transform-origin: 50% 93.5%; animation: cmSlShadow .9s ease-in-out infinite; }
+.cm-sl .sl-eyes { transform-origin: 50% 66%; animation: cmSlLook 7.4s ease-in-out infinite; } /* it glances about and blinks */
+.kind-slime.moving .cm-sl .sl-squish { animation: cmSlSquish .34s ease-out; } /* typing: squashed flat for a moment */
+@keyframes cmSlBounce {
+  0%, 100% { transform: scale(1.12, .88); } 30% { transform: translateY(-24%) scale(.93, 1.08); }
+  52% { transform: translateY(-28%) scale(.97, 1.03); } 80% { transform: scale(1.06, .94); }
+}
+@keyframes cmSlShadow { 0%, 100% { transform: scale(1.05); opacity: 1; } 52% { transform: scale(.68); opacity: .55; } }
+@keyframes cmSlLook {
+  0%, 20%, 100% { transform: none; } 26%, 40% { transform: translateX(-9%); } 46%, 60% { transform: translateX(8%); } 66%, 84%, 88% { transform: none; }
+  86% { transform: scaleY(.1); }
+}
+@keyframes cmSlSquish { 0%, 100% { transform: none; } 30% { transform: scale(1.3, .7); } 65% { transform: scale(.92, 1.08); } }
+
+/* ---------- 젤리 ---------- */
+.cm-jl { position: absolute; inset: 6% 0; pointer-events: none; }
+.cm-jl .jl-body {
+  position: absolute; inset: 0; border-radius: 3px; transform-origin: 50% 100%;
+  background: linear-gradient(170deg, color-mix(in srgb, var(--cc) 55%, #fff), var(--cc) 45%, color-mix(in srgb, var(--cc) 70%, #000));
+  box-shadow: inset 0 0 0 1px var(--cm-jl-edge);
+  opacity: .78; animation: cmJlJiggle 4.6s ease-in-out infinite;
+}
+.cm-jl .jl-in { position: absolute; inset: 22% 18% 16%; border-radius: 2px; background: radial-gradient(closest-side, color-mix(in srgb, var(--cc) 30%, #fff), transparent); opacity: .5; }
+.cm-jl .jl-gloss { position: absolute; left: 16%; top: 8%; width: 26%; height: 30%; border-radius: 2px; background: linear-gradient(#fff, rgba(255, 255, 255, .2)); opacity: .75; }
+.kind-jelly.moving .cm-jl .jl-body { animation: jelly .38s ease-out; }
+body.idle .cm-jl .jl-body, .mt-cursor.blurred .cm-jl .jl-body { animation-play-state: paused; } /* 젤리 blinks, which cursors.css lets run when idle */ /* squishes as it moves (keyframes in cursors.css) */
+.pv-cur.kind-jelly .cm-jl .jl-body { animation: jelly .9s ease-out infinite; }
+@keyframes cmJlJiggle { 0%, 80%, 100% { transform: none; } 84% { transform: scale(1.08, .92); } 88% { transform: scale(.95, 1.05); } 92% { transform: scale(1.03, .97); } }

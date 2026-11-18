@@ -2,37 +2,6 @@
 
 Every clip below is **CC0 (public domain)** on freesound.org — free to use and redistribute, no attribution required. Listed anyway, with thanks.
 
-## meow
-- m1: https://freesound.org/s/448084/
-- m2: https://freesound.org/s/260179/
-- m3: https://freesound.org/s/163286/
-- m4: https://freesound.org/s/795848/
-- long: https://freesound.org/s/732521/
-- purr: https://freesound.org/s/436542/
-- prr: https://freesound.org/s/200344/
-
-## frog
-- r1: https://freesound.org/s/536759/
-- r2: https://freesound.org/s/251938/
-- r3: https://freesound.org/s/527528/
-- croak: https://freesound.org/s/354132/
-- croak2: https://freesound.org/s/716959/
-
-## pingpong
-- hit: https://freesound.org/s/269718/
-- hit2: https://freesound.org/s/418556/
-- table: https://freesound.org/s/785060/
-- drop: https://freesound.org/s/784990/
-
-## kitchen
-- chop1: https://freesound.org/s/839155/
-- chop2: https://freesound.org/s/684857/
-- chop3: https://freesound.org/s/862542/
-- sizzle: https://freesound.org/s/234124/
-- lid: https://freesound.org/s/389172/
-- boil: https://freesound.org/s/533147/
-- ding: https://freesound.org/s/11587/
-
 ## farm
 - chick: https://freesound.org/s/548096/
 - chicks: https://freesound.org/s/519193/
@@ -64,18 +33,6 @@ Every clip below is **CC0 (public domain)** on freesound.org — free to use and
 - gasp1: https://freesound.org/s/536757/
 - gasp2: https://freesound.org/s/253773/
 
-## gun
-- shot1: https://freesound.org/s/645317/
-- shot2: https://freesound.org/s/645316/
-- shot3: https://freesound.org/s/386845/
-- ready: https://freesound.org/s/448987/
-- ready2: https://freesound.org/s/371449/
-- mag: https://freesound.org/s/455921/
-- load: https://freesound.org/s/653033/
-- casing: https://freesound.org/s/777923/
-- shotgun: https://freesound.org/s/318973/
-- pump: https://freesound.org/s/449614/
-
 ## gross
 - f1: https://freesound.org/s/249583/
 - f2: https://freesound.org/s/145103/
@@ -87,19 +44,6 @@ Every clip below is **CC0 (public domain)** on freesound.org — free to use and
 - burplong: https://freesound.org/s/180377/
 - slurp: https://freesound.org/s/166158/
 - squish: https://freesound.org/s/536765/
-
-## choir
-- aah: https://freesound.org/s/47183/
-- short: https://freesound.org/s/444491/
-- epiphany: https://freesound.org/s/394226/
-- c5: https://freesound.org/s/729373/
-
-## holy
-- angel: https://freesound.org/s/608892/
-- bell: https://freesound.org/s/452379/
-
-## 주방 (kitchen) — Freesound, CC0
-- 839155, 684857, 862542 (chops) · 234124 (sizzle) · 389172 (pot lid) · 533147 (boiling) · 11587 (microwave ding)
 
 ## 농장 아침 (farm) — Freesound, CC0
 - 548096, 519193 (chicks) · 700380 (cow) · 805297 (goose) · 171149 (sheep) · 233167 (rooster)
@@ -158,9 +102,11 @@ Each background has its own loop: cut into a seamless loop (whole bars for rhyth
 | analog | [VHS VCR Magnetic Tape Cassette Background White Noise Hiss](https://freesound.org/s/719880/) + [square wave drone running through tape deck - 001](https://freesound.org/s/824177/), slowed down |
 | backrooms | [Fluorescent Ballast Buzz - Room Tone](https://freesound.org/s/273625/) |
 
-## Typing sounds made for MinsuTerm (슬롯머신 · 만화 효과음 · 마법 주문 · 스팀펑크 공방 · 해적선)
+## Typing sounds made for MinsuTerm
 
-Generated locally on an NVIDIA GPU with [Stable Audio 3 Medium](https://huggingface.co/stabilityai/stable-audio-3-medium) (Stability AI, Stability AI Community License), driven through [Audio Studio MCP](https://github.com/kanaworksai-hue/audio-studio-mcp) (MIT). Powered by Stability AI. Each set was cut from the generated takes (single hits for letters, a trimmed take for the other keys) and level-matched; the clips are bundled in src/renderer/samples-gen.js.
+슬롯머신 · 만화 효과음 · 마법 주문 · 스팀펑크 공방 · 해적선 · 다이얼업 해커 · 자판기 · 외계인 통신 · 빈티지 카메라 · 종이 공작 · 농구 코트 · 자동차 실내, and the remade 천상의 울림 · 드럼 · 합창단 · 총 · 냥냥이 · 탁구 랠리 · 개구리 연못 · 삑삑이 오리 · 주방.
+
+Generated locally on an NVIDIA GPU with [Stable Audio 3 Medium](https://huggingface.co/stabilityai/stable-audio-3-medium) (Stability AI, Stability AI Community License), driven through [Audio Studio MCP](https://github.com/kanaworksai-hue/audio-studio-mcp) (MIT). Powered by Stability AI. Each set was cut from the generated takes (single hits or steady notes for letters, a trimmed take for the other keys) and level-matched; the clips are bundled in src/renderer/samples-gen.js.
 
 ## Background video
 

@@ -1612,6 +1612,37 @@ async function runTestScript() {
         log.push(`drag ${x1},${y1} -> ${x2},${y2}`);
         continue;
       }
+      if (step.startsWith('hold:')) { // "hold:<char>*<n>": a key held down — one press, the OS's repeat delay, then auto-repeats
+        const [ch, nS] = step.slice(5).split('*');
+        const keyCode = ch === '\\b' ? 'Backspace' : ch, n = Number(nS) || 30, typed = ch !== '\\b';
+        win.webContents.focus();
+        for (let i = 0; i < n; i++) {
+          win.webContents.sendInputEvent({ type: 'keyDown', keyCode, isAutoRepeat: i > 0 });
+          if (typed) win.webContents.sendInputEvent({ type: 'char', keyCode: ch, isAutoRepeat: i > 0 });
+          await wait(i === 0 ? 500 : 33);
+          if (step.endsWith('*shots') && i > 0 && i % 8 === 0) await shot(`hold-${String(i).padStart(2, '0')}`); // what it looks like while held
+        }
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode });
+        log.push(`hold ${ch} x${n}`);
+        continue;
+      }
+      if (step === 'rec:start' || step === 'rec:stop') { // record what the window paints (other windows on top do not matter): rec/<n>_<ms>.jpg, ~30 fps
+        if (step === 'rec:stop') { win.webContents.endFrameSubscription(); log.push('rec stop'); continue; }
+        const dir = path.join(TEST_DIR, 'rec'); fs.mkdirSync(dir, { recursive: true });
+        let last = 0, n = 0; const t0 = Date.now();
+        win.webContents.beginFrameSubscription(false, (image) => {
+          const now = Date.now(); if (now - last < 32) return; last = now;
+          fs.writeFile(path.join(dir, `${String(n++).padStart(5, '0')}_${now - t0}.jpg`), image.toJPEG(95), () => {});
+        });
+        log.push('rec start');
+        continue;
+      }
+      if (step.startsWith('size:')) { // "size:<w>x<h>": resize the window (a maximised screen behaves differently from the default 1280 x 800)
+        const [w, h2] = step.slice(5).split('x').map(Number);
+        win.setBounds({ x: 0, y: 0, width: w, height: h2 });
+        await wait(800);
+        continue;
+      }
       if (step.startsWith('prof:')) { // "prof:<ms>|<keys>": CPU profiles of the renderer and of main while typing <keys>
         const [msS, keysS = ''] = step.slice(5).split('>>');
         const ms = Number(msS) || 5000, dbg = win.webContents.debugger;

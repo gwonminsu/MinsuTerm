@@ -654,19 +654,13 @@ body.resizing #body { transition: none; }
 @keyframes curBlink { 50% { opacity: 0; } }
 
 .kind-outline { border: 1.5px solid var(--cc); border-radius: 2px; }
-.kind-neon::before, .kind-glide::before, .kind-comet::before, .kind-rainbow::before {
+.kind-neon::before, .kind-glide::before, .kind-rainbow::before {
   content: ''; position: absolute; left: 0; top: 6%; bottom: 6%; width: 2px; border-radius: 2px; background: var(--cc);
 }
 .kind-neon::before { box-shadow: 0 0 4px var(--cc), 0 0 10px var(--cc), 0 0 18px var(--cc); }
 .kind-gradient { background: var(--grad); opacity: .6; border-radius: 2px; box-shadow: 0 0 10px rgba(143, 115, 255, .35); }
 .kind-glide { transition: transform .1s cubic-bezier(.2, .8, .2, 1); }
-.kind-comet { transition: transform .14s cubic-bezier(.2, .8, .2, 1); }
-.kind-comet::before { box-shadow: 0 0 6px var(--cc); }
-.kind-comet::after {
-  content: ''; position: absolute; right: 100%; top: 30%; height: 40%; width: 4.5em; border-radius: 6px;
-  background: linear-gradient(90deg, transparent, var(--cc)); filter: blur(1.5px); opacity: 0; transition: opacity .35s;
-}
-.kind-comet.moving::after { opacity: .65; transition: opacity .05s; }
+/* 혜성: redrawn in layers, fx/cursor-up-c.* */
 .kind-pulse { background: var(--cc); border-radius: 2px; animation: curPulse 1.6s ease-in-out infinite; }
 @keyframes curPulse { 0%, 100% { opacity: .15; } 50% { opacity: .62; } }
 .kind-rainbow::before { width: 3px; background: linear-gradient(180deg, #ff5f6d, #ffc371, #47e891, #49a7ff, #b06bff); animation: curHue 2.2s linear infinite; box-shadow: 0 0 8px rgba(255, 255, 255, .25); }
@@ -721,8 +715,7 @@ body.crt .term-host .xterm-screen { filter: drop-shadow(0 0 1.6px rgba(160, 200,
 .pv-cur.kind-bar-thick { border-left: 3px solid var(--violet); }
 .pv-cur.kind-block { background: var(--violet); opacity: .85; }
 .pv-cur.kind-underline { border-bottom: 2px solid var(--violet); }
-.pv-cur.kind-glide, .pv-cur.kind-comet { animation: pvMove 1.8s cubic-bezier(.5, 0, .2, 1) infinite; }
-.pv-cur.kind-comet::after { opacity: .65; }
+.pv-cur.kind-glide { animation: pvMove 1.8s cubic-bezier(.5, 0, .2, 1) infinite; }
 @keyframes pvMove { 0%, 100% { transform: translateX(-34px); } 45%, 55% { transform: translateX(0); } }
 .pk-pv .pv-term { font-size: 10px; }
 .pk-pv .pv-cur-wrap, .pk-pv .pv-cur.mt-cursor { width: 7px; height: 13px; }

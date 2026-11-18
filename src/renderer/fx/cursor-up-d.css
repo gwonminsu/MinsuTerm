@@ -1,0 +1,276 @@
+/* Upgraded cursors, group d (fx/cursor-up-d.js): 불꽃 · 용암 방울 · 플라즈마 · 홀로그램 · 글리치 · 잔상.
+
+   .cud-box is the 20 x 40 drawing fitted to the caret cell (a little larger than the cell). Every moving part is its
+   own layer (.cl) and only transform and opacity are animated (or the individual translate / scale properties), so the
+   compositor runs it all without repainting. Origins and distances are percentages of the box: x% = x * 5, y% = y * 2.5.
+   Lines that must not vanish at small sizes keep a width in screen pixels. Typing shows through .moving (on for about a
+   quarter of a second after the caret moves, and while it keeps moving). Unfocused or idle, everything holds still
+   (cursors.css). */
+
+.mt-cursor.kind-flame, .mt-cursor.kind-drip, .mt-cursor.kind-plasma, .mt-cursor.kind-hologram, .mt-cursor.kind-glitch, .mt-cursor.kind-ghost { container-type: size; }
+.cud-box { position: absolute; left: 50%; top: 50%; width: min(120cqw, 60cqh, 40px); aspect-ratio: 1 / 2; translate: -50% -50%; pointer-events: none; }
+.cud-box .cl { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+/* parts past the cell: faint, gone when the terminal loses focus, left out of the composer box */
+.cud-reach { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity .35s; }
+.mt-cursor.blurred .cud-reach { opacity: 0; }
+.composer-field .cud-reach { display: none; }
+
+:root {
+  --cud-fl-o1: #ff4a12; --cud-fl-o2: #ff7c1c; --cud-fl-o3: #ffb648; --cud-fl-m1: #ffcf3a; --cud-fl-m2: #ffa51c;
+  --cud-fl-c1: #fffbea; --cud-fl-c2: #fff09a; --cud-fl-b1: #2f6dff; --cud-fl-b2: #77b0ff;
+  --cud-fl-glow: #ff7a1e; --cud-fl-glow-o: .42; --cud-fl-edge: rgba(150, 40, 0, 0); --cud-fl-spark: #ffb040; --cud-fl-sparkc: #fff0b0;
+  --cud-dr-l1: #a3200a; --cud-dr-l2: #ff6a14; --cud-dr-l3: #ffc94a; --cud-dr-hot: #fff3c2;
+  --cud-dr-d1: #fff3c0; --cud-dr-d2: #ffb03a; --cud-dr-d3: #ff5c12; --cud-dr-d4: #b3240a;
+  --cud-dr-crust: #3a1307; --cud-dr-crack: #ffd27a; --cud-dr-edge: rgba(70, 14, 2, 0); --cud-dr-cinder: #4a1a0b; --cud-dr-ember: #ff7a2a;
+  --cud-dr-glow: #ff5a12; --cud-dr-glow-o: .4;
+  --cud-pz-s1: #5b3cf5; --cud-pz-s2: #b6a4ff; --cud-pz-s3: #ffffff; --cud-pz-fil: #ffffff;
+  --cud-pz-bolt: #f6f2ff; --cud-pz-halo: rgba(140, 110, 255, .55); --cud-pz-hit: #ffffff; --cud-pz-wr: rgba(236, 230, 255, .85);
+  --cud-pz-glow: #8a6cff; --cud-pz-glow2: #3fb6ff; --cud-pz-glow-o: .6;
+  --cud-ho-c: #6ff0ff; --cud-ho-hi: #dcfdff; --cud-ho-rim: rgba(120, 240, 255, .8); --cud-ho-line: rgba(120, 240, 255, .3);
+  --cud-ho-fill-o: .2; --cud-ho-beam-o: .34; --cud-ho-m1: #2a323d; --cud-ho-m2: #7c8a99; --cud-ho-plate: rgba(200, 230, 255, .35);
+  --cud-gl-c: #00e5ff; --cud-gl-m: #ff2e88; --cud-gl-w: #ffffff; --cud-gl-blend: screen; --cud-gl-tear-o: .4;
+}
+:root[data-theme="light"] {
+  --cud-fl-o1: #e0360a; --cud-fl-o2: #f2600c; --cud-fl-o3: #ff9420; --cud-fl-m1: #ffb300; --cud-fl-m2: #ff8a00;
+  --cud-fl-c1: #fff4b8; --cud-fl-c2: #ffd23a; --cud-fl-b1: #1a56e0; --cud-fl-b2: #4f8ff0;
+  --cud-fl-glow: #ff7a00; --cud-fl-glow-o: .24; --cud-fl-edge: rgba(150, 40, 0, .55); --cud-fl-spark: #ff8a00; --cud-fl-sparkc: #e05a00;
+  --cud-dr-l1: #7e1606; --cud-dr-l2: #ec4e0a; --cud-dr-l3: #ffab1a; --cud-dr-hot: #ffe27a;
+  --cud-dr-d1: #ffe07a; --cud-dr-d2: #ff9a1a; --cud-dr-d3: #ea4a0a; --cud-dr-d4: #8c1a06;
+  --cud-dr-crust: #4a1808; --cud-dr-crack: #ff9a2a; --cud-dr-edge: rgba(70, 14, 2, .6); --cud-dr-cinder: #3a1408; --cud-dr-ember: #e0480a;
+  --cud-dr-glow: #ff5a00; --cud-dr-glow-o: .2;
+  --cud-pz-s1: #2a149e; --cud-pz-s2: #4b2ed8; --cud-pz-s3: #6c50f2; --cud-pz-fil: #b4a2ff;
+  --cud-pz-bolt: #4b2ee0; --cud-pz-halo: rgba(120, 90, 255, .32); --cud-pz-hit: #6a4cff; --cud-pz-wr: rgba(220, 212, 255, .9);
+  --cud-pz-glow: #7a5cff; --cud-pz-glow2: #2aa0ff; --cud-pz-glow-o: .3;
+  --cud-ho-c: #0a8fc0; --cud-ho-hi: #0a6f9c; --cud-ho-rim: rgba(8, 112, 160, .78); --cud-ho-line: rgba(8, 112, 160, .24);
+  --cud-ho-fill-o: .14; --cud-ho-beam-o: .26; --cud-ho-m1: #3a424e; --cud-ho-m2: #9aa6b4; --cud-ho-plate: rgba(20, 30, 44, .45);
+  --cud-gl-c: #0090b0; --cud-gl-m: #d0006c; --cud-gl-w: #3a4058; --cud-gl-blend: normal; --cud-gl-tear-o: .36; /* screen blending vanishes on white */
+}
+
+/* ---------- 불꽃 ---------- */
+.cud-fl .fl-glowg { animation: cudFlGutGlow 7.3s ease-in-out infinite; }
+.cud-fl .fl-glow { transform-origin: 50% 67%; animation: cudFlGlow 2.3s ease-in-out infinite; }
+.cud-fl .fl-lean { transform-origin: 50% 99%; transition: transform .5s cubic-bezier(.3, 1.6, .5, 1); }
+.kind-flame.moving .cud-fl .fl-lean { transform: skewX(13deg) scale(1.05, 1.13); transition: transform .07s ease-out; } /* typing: it leans back and flares */
+.cud-fl .fl-gut { transform-origin: 50% 99%; animation: cudFlGutter 7.3s ease-in-out infinite; }
+.cud-fl .fl-o, .cud-fl .fl-m, .cud-fl .fl-c, .cud-fl .fl-b { transform-origin: 50% 99%; }
+.cud-fl .fl-o { animation: cudFlO 1.37s ease-in-out infinite; }
+.cud-fl .fl-m { animation: cudFlM .97s ease-in-out infinite; }
+.cud-fl .fl-c { animation: cudFlC .61s ease-in-out infinite alternate; }
+.cud-fl .fl-b { animation: cudFlB 1.9s ease-in-out infinite alternate; }
+.cud-fl .fl-tl { animation: cudFlLick 1.13s ease-in-out infinite; }
+.cud-fl .fl-tr { animation: cudFlLick .83s ease-in-out -.4s infinite; }
+.cud-fl .fl-edge { fill: none; stroke: var(--cud-fl-edge); stroke-width: .7px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.cud-fl .fl-wisp { opacity: 0; animation: cudFlWisp 1.7s ease-out infinite; }
+.cud-fl .fl-wisp2 { animation-duration: 2.3s; animation-delay: -.9s; }
+.cud-fl .fl-sp, .cud-fl .fl-pop circle { fill: var(--cud-fl-sparkc); }
+.cud-fl .fl-spark { opacity: 0; animation: cudFlSpark 3.3s linear infinite; }
+.cud-fl .fl-pop { opacity: 0; }
+.kind-flame.moving .cud-fl .fl-pop { animation: cudFlPop .6s ease-out; }
+@keyframes cudFlO { 0%, 100% { transform: scale(1, 1) skewX(0deg); } 21% { transform: scale(.95, 1.06) skewX(-3.5deg); } 47% { transform: scale(1.03, .94) skewX(2.5deg); } 74% { transform: scale(.97, 1.08) skewX(-1.2deg); } }
+@keyframes cudFlM { 0%, 100% { transform: scale(1, 1) skewX(0deg); } 30% { transform: scale(.94, 1.1) skewX(3deg); } 62% { transform: scale(1.05, .92) skewX(-2.5deg); } }
+@keyframes cudFlC { from { transform: scale(.92, 1.06); opacity: .85; } to { transform: scale(1.06, .93); opacity: 1; } }
+@keyframes cudFlB { from { transform: scale(.95, .9); opacity: .7; } to { transform: scale(1.04, 1.05); opacity: 1; } }
+@keyframes cudFlLick { 0%, 100% { transform: scale(.85, .55) rotate(0deg); opacity: .55; } 40% { transform: scale(1, 1.12) rotate(-5deg); opacity: 1; } 70% { transform: scale(.9, .78) rotate(3deg); opacity: .8; } }
+@keyframes cudFlWisp { 0%, 38% { transform: translateY(0) scale(.6); opacity: 0; } 44% { transform: translateY(0) scale(1); opacity: .95; } 90%, 100% { transform: translateY(-12%) scale(.35); opacity: 0; } }
+@keyframes cudFlGlow { 0%, 100% { transform: scale(1); opacity: .8; } 27% { transform: scale(1.04); opacity: 1; } 55% { transform: scale(.97); opacity: .72; } 80% { transform: scale(1.02); opacity: .95; } }
+@keyframes cudFlGutter { /* now and then it gutters low, staggers, and stands up again */
+  0%, 72%, 100% { transform: none; } 76% { transform: scale(.94, .7) skewX(6deg); } 80% { transform: scale(1.02, .8) skewX(-4deg); }
+  85% { transform: scale(.97, 1.09) skewX(2deg); } 90% { transform: scale(1.01, .97) skewX(-1deg); }
+}
+@keyframes cudFlGutGlow { 0%, 72%, 92%, 100% { opacity: 1; } 77% { opacity: .5; } 82% { opacity: .65; } 86% { opacity: 1; } }
+@keyframes cudFlSpark { 0%, 58% { transform: translate(0, 0) scale(1); opacity: 0; } 61% { opacity: 1; } 100% { transform: translate(var(--dx), -85%) scale(.4); opacity: 0; } }
+@keyframes cudFlPop { 0% { transform: translate(0, 0) scale(1); opacity: 1; } 100% { transform: translate(-30%, -40%) scale(.3); opacity: 0; } }
+
+/* ---------- 용암 방울 ---------- */
+/* one drip every 4.6 s: the drop swells (0-52 %), stretches on a neck (-64 %), lets go and falls onto the line below
+   (66-75 %), splashes, and the splash cools from orange to a dark cinder and fades */
+.mt-cursor.kind-drip { --cud-dr-fall: calc(130cqh - 42.25%); } /* from the drop's lower end down to the next line's baseline */
+.cud-dr .dr-glow { transform-origin: 50% 55%; animation: cudDrGlow 3.1s ease-in-out infinite alternate; transition: scale .5s ease-out; }
+.kind-drip.moving .cud-dr .dr-glow { scale: 1.12; transition: scale .05s; } /* typing stirs up the heat */
+.cud-dr .dr-edge, .cud-dr .dr-dedge { fill: none; stroke: var(--cud-dr-edge); stroke-width: .7px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.cud-dr .dr-crack { fill: none; stroke: var(--cud-dr-crack); stroke-width: .35; stroke-linejoin: round; opacity: .55; }
+.cud-dr .dr-crust path:first-child { fill: var(--cud-dr-crust); }
+.cud-dr .dr-crusthi { fill: none; stroke: var(--cud-dr-l2); stroke-width: .4; stroke-linecap: round; opacity: .6; }
+.cud-dr .dr-crust { animation: cudDrCrust 5.3s ease-in-out infinite alternate; }
+.cud-dr .dr-pulse { opacity: 0; animation: cudDrPulse 2.4s cubic-bezier(.4, 0, .7, 1) infinite; }
+.cud-dr .dr-pulse2 { animation-delay: -1.25s; animation-duration: 2.6s; }
+.cud-dr .dr-colw { transform-origin: 50% 2%; transition: transform .6s cubic-bezier(.3, 1.5, .5, 1); }
+.kind-drip.moving .cud-dr .dr-colw { transform: skewX(-4deg); transition: transform .08s ease-out; }
+.cud-dr .dr-swing { transform-origin: 50% 66.5%; transition: transform .7s cubic-bezier(.3, 1.7, .5, 1); }
+.kind-drip.moving .cud-dr .dr-swing { transform: rotate(17deg) scale(.96, 1.06); transition: transform .1s ease-out; } /* typing: the drop swings back */
+.cud-dr .dr-hang { transform-origin: 50% 66.5%; animation: cudDrHang 4.6s linear infinite; }
+.cud-dr .dr-glint { fill: #fffbe6; opacity: .8; }
+.cud-dr .dr-fall { opacity: 0; transform-origin: 50% 84%; animation: cudDrFall 4.6s linear infinite; }
+.cud-dr .dr-land { translate: 0 var(--cud-dr-fall); }
+.cud-dr .dr-land .cl { transform-origin: 50% 91%; }
+.cud-dr .dr-splat { opacity: 0; animation: cudDrSplat 4.6s linear infinite; }
+.cud-dr .dr-cinder ellipse { fill: var(--cud-dr-cinder); }
+.cud-dr .dr-cinder path { fill: none; stroke: var(--cud-dr-ember); stroke-width: .35; stroke-linecap: round; }
+.cud-dr .dr-cinder { opacity: 0; animation: cudDrCinder 4.6s linear infinite; }
+.cud-dr .dr-fleck circle, .cud-dr .dr-fling circle { fill: var(--cud-dr-d2); }
+.cud-dr .dr-fleck { opacity: 0; animation: cudDrFleck 4.6s cubic-bezier(.2, .7, .4, 1) infinite; }
+.cud-dr .dr-fling { opacity: 0; }
+.kind-drip.moving .cud-dr .dr-fling { animation: cudDrFling .55s ease-out; }
+.composer-field .cud-dr .dr-fall { display: none; } /* nothing below to land on */
+@keyframes cudDrGlow { from { transform: scale(.97); opacity: .75; } to { transform: scale(1.03); opacity: 1; } }
+@keyframes cudDrCrust { from { opacity: .7; } to { opacity: 1; } }
+@keyframes cudDrPulse { 0% { transform: translateY(0) scale(.7); opacity: 0; } 15% { opacity: .9; } 78% { opacity: .8; } 100% { transform: translateY(61%) scale(1); opacity: 0; } }
+@keyframes cudDrHang {
+  0% { transform: scale(.3); animation-timing-function: ease-in-out; }
+  52% { transform: scale(.92, .95); animation-timing-function: ease-in; }
+  64% { transform: translateY(2.5%) scale(.85, 1.24); }
+  65.5% { transform: scale(.28, .3); }
+  100% { transform: scale(.3); }
+}
+@keyframes cudDrFall {
+  0%, 65% { transform: translateY(0); opacity: 0; }
+  65.5% { transform: translateY(1%) scale(.95, 1.1); opacity: 1; animation-timing-function: cubic-bezier(.5, 0, 1, .55); }
+  75% { transform: translateY(var(--cud-dr-fall)) scale(.82, 1.28); opacity: 1; }
+  75.6%, 100% { transform: translateY(var(--cud-dr-fall)); opacity: 0; }
+}
+@keyframes cudDrSplat { 0%, 75% { transform: scale(.3, .5); opacity: 0; } 75.6% { transform: scale(.55, 1.5); opacity: 1; } 79% { transform: scale(1.12, .9); opacity: 1; } 84% { transform: scale(1, 1); opacity: .9; } 93%, 100% { transform: scale(.95, .9); opacity: 0; } }
+@keyframes cudDrCinder { 0%, 80% { transform: scale(.9); opacity: 0; } 88% { transform: scale(.92); opacity: .85; } 96% { opacity: .5; } 100% { transform: scale(.85, .8); opacity: 0; } }
+@keyframes cudDrFleck { 0%, 75.4% { transform: translate(0, 0) scale(1); opacity: 0; } 75.8% { opacity: 1; } 83% { transform: translate(var(--dx), -7%) scale(.6); opacity: 0; } 100% { opacity: 0; } }
+@keyframes cudDrFling { 0% { transform: translate(0, 0) scale(1); opacity: 1; } 100% { transform: translate(-55%, -10%) scale(.4); opacity: 0; } }
+
+/* ---------- 플라즈마 ---------- */
+/* each arc is lit for a moment in its own cycle (two shapes taking turns, so it crackles); the cycles differ, so arcs
+   jump about at irregular moments. The long ones reach past the cell, fainter and rarer. */
+.cud-pz .pz-surge { transform-origin: 50% 50%; transition: transform .5s ease-out; }
+.kind-plasma.moving .cud-pz .pz-surge { transform: scale(1.25, 1.1); transition: transform .06s; }
+.cud-pz .pz-glow { animation: cudPzGlow 1.9s ease-in-out infinite alternate; }
+.cud-pz .pz-core { animation: cudPzHum .37s ease-in-out infinite alternate; }
+.cud-pz .pz-fil { fill: var(--cud-pz-fil); }
+.cud-pz .pz-writhe path { fill: none; stroke: var(--cud-pz-wr); stroke-width: max(1px, 4.5cqh); vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.cud-pz .pz-writhe { opacity: 0; animation: cudPzWrithe 1.41s ease-in-out infinite; } /* three shapes of the filament fading into each other */
+.cud-pz .pz-flow { opacity: 0; animation: cudPzFlow 1.3s ease-in infinite; }
+.cud-pz .pz-flow2 { animation-duration: 1.7s; animation-delay: -.8s; }
+.cud-pz .pz-halo { fill: none; stroke: var(--cud-pz-halo); stroke-width: max(3px, 17cqh); vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.cud-pz .pz-bolt { fill: none; stroke: var(--cud-pz-bolt); stroke-width: max(1.1px, 6.5cqh); vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.cud-pz .pz-hit { fill: var(--cud-pz-hit); }
+.cud-pz .pz-arc { opacity: 0; animation-name: cudPzArcA; animation-timing-function: linear; animation-iteration-count: infinite; }
+.cud-pz .pz-b { animation-name: cudPzArcB; }
+.cud-pz .pz-long { animation-name: cudPzLong; }
+.cud-pz .pz-long .pz-bolt { stroke-width: max(.8px, 4cqh); }
+.kind-plasma.moving .cud-pz .pz-arc:not(.pz-long) { animation-duration: .9s !important; } /* typing: it crackles faster */
+.cud-pz .pz-burst { opacity: 0; }
+.kind-plasma.moving .cud-pz .pz-burst { animation: cudPzBurst .32s linear; }
+@keyframes cudPzGlow { from { opacity: .7; } to { opacity: 1; } }
+@keyframes cudPzWrithe { 0%, 100% { opacity: 0; } 33% { opacity: .75; } 60% { opacity: 0; } }
+@keyframes cudPzHum { from { opacity: .86; } to { opacity: 1; } }
+@keyframes cudPzFlow { 0% { transform: translateY(0) scale(.6); opacity: 0; } 20% { opacity: .9; } 100% { transform: translateY(-75%) scale(1); opacity: 0; } }
+@keyframes cudPzArcA { 0%, 100% { opacity: 0; } 1% { opacity: 1; } 2.6% { opacity: .5; } 3.1%, 100% { opacity: 0; } }
+@keyframes cudPzArcB { 0%, 3%, 100% { opacity: 0; } 3.1% { opacity: 1; } 4.6% { opacity: .4; } 5.4%, 100% { opacity: 0; } }
+@keyframes cudPzLong { 0%, 100% { opacity: 0; } .8% { opacity: .7; } 1.8% { opacity: .15; } 2.4% { opacity: .6; } 3.6%, 100% { opacity: 0; } }
+@keyframes cudPzBurst { 0% { opacity: 1; } 30% { opacity: .3; } 45% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ---------- 홀로그램 ---------- */
+.cud-ho .ho-beamw { opacity: .75; transition: opacity .5s; }
+.kind-hologram.moving .cud-ho .ho-beamw { opacity: 1; transition: opacity .05s; }
+.cud-ho .ho-beam { transform-origin: 50% 94%; animation: cudHoBeam 2.2s ease-in-out infinite alternate; }
+.cud-ho .ho-mote rect { fill: var(--cud-ho-hi); }
+.cud-ho .ho-mote { opacity: 0; animation: cudHoMote 2.4s linear infinite; }
+.cud-ho .ho-proj { transform-origin: 50% 94%; }
+.kind-hologram.moving .cud-ho .ho-proj { animation: cudHoRe .36s cubic-bezier(.2, .7, .3, 1); } /* typing: it re-projects out of the lens */
+.cud-ho .ho-flick { animation: cudHoFlick 6.1s linear infinite; }
+.cud-ho .ho-float { animation: cudHoFloat 3.4s ease-in-out infinite alternate; }
+.cud-ho .ho-rim { fill: none; stroke: var(--cud-ho-rim); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.cud-ho .ho-corner { fill: none; stroke: var(--cud-ho-hi); stroke-width: max(1.2px, 7cqh); vector-effect: non-scaling-stroke; stroke-linecap: square; }
+.cud-ho .ho-win { left: 13%; top: 6%; width: 74%; height: 72%; overflow: hidden; }
+.cud-ho .ho-lines { position: absolute; left: 0; right: 0; top: -6px; bottom: -6px; background: repeating-linear-gradient(0deg, var(--cud-ho-line) 0 1px, transparent 1px 3px); animation: cudHoScan .9s linear infinite; }
+.cud-ho .ho-sweep { position: absolute; left: 0; right: 0; top: 100%; height: 32%; background: linear-gradient(0deg, transparent, var(--cud-ho-line) 60%, var(--cud-ho-rim) 82%, transparent); opacity: .7; animation: cudHoSweep 2.7s cubic-bezier(.4, 0, .6, 1) infinite; }
+.cud-ho .ho-slip { opacity: 0; animation: cudHoSlip 6.1s linear infinite; }
+.cud-ho .ho-plate { fill: none; stroke: var(--cud-ho-plate); stroke-width: .6px; vector-effect: non-scaling-stroke; }
+.cud-ho .ho-lens { fill: var(--cud-ho-hi); }
+.cud-ho .ho-led { fill: var(--cud-ho-c); }
+.cud-ho .ho-lensglow { animation: cudHoBeam 2.2s ease-in-out infinite alternate; }
+@keyframes cudHoBeam { from { opacity: .65; } to { opacity: 1; } }
+@keyframes cudHoMote { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: .9; } 100% { transform: translateY(var(--dy)); opacity: 0; } }
+@keyframes cudHoRe { 0% { transform: scale(1.18, .06); opacity: .25; } 55% { transform: scale(.97, 1.05); opacity: 1; } 100% { transform: none; opacity: 1; } }
+@keyframes cudHoFloat { from { transform: translateY(.9%); } to { transform: translateY(-.9%); } }
+@keyframes cudHoScan { to { transform: translateY(-6px); } }
+@keyframes cudHoSweep { 0%, 30% { transform: translateY(0); opacity: 0; } 34% { opacity: .75; } 92% { opacity: .5; } 100% { transform: translateY(-420%); opacity: 0; } }
+@keyframes cudHoFlick { /* the picture dips and slips for a moment, twice in a cycle at uneven times */
+  0%, 36.9%, 39%, 70.9%, 74%, 100% { opacity: 1; transform: none; }
+  37% { opacity: .45; transform: translateX(3%) skewX(-5deg); } 38% { opacity: .85; transform: translateX(-1.5%); }
+  71% { opacity: .6; transform: none; } 72.2% { opacity: 1; } 72.6% { opacity: .7; transform: translateX(-2%); }
+}
+@keyframes cudHoSlip { 0%, 70.9%, 73.4%, 100% { opacity: 0; transform: none; } 71% { opacity: 1; transform: translateX(9%); } 72.2% { opacity: 1; transform: translateX(-6%); } }
+
+/* ---------- 글리치 ---------- */
+/* the two thin bars of old, cyan on the left and magenta on the right of the cell's edge. Everything jumps in steps (a
+   glitch does not glide), on cycles of different lengths, so the moments come irregularly. Parts that come and go are
+   hidden by a zero scale, not by opacity: an opacity animation resting at 0 kept the main thread busy here (6 % of a
+   core in an earlier version). */
+.cud-gl, .cud-gl .gl-all { position: absolute; inset: 0; pointer-events: none; }
+.cud-gl i { position: absolute; display: block; }
+.cud-gl .gl-bar { position: absolute; top: 6%; bottom: 6%; width: max(2px, 12cqw); mix-blend-mode: var(--cud-gl-blend); animation: 5.3s steps(1, end) infinite; transition: translate .3s; }
+.cud-gl .gl-c { left: -1px; animation-name: cudGlJumpC; }
+.cud-gl .gl-m { left: 1px; animation-name: cudGlJumpM; }
+.cud-gl .gl-seg { left: 0; width: 100%; animation: cudGlSeg steps(1, end) infinite; } /* a slice of both bars tears sideways together */
+.cud-gl .gl-c .gl-seg { background: var(--cud-gl-c); }
+.cud-gl .gl-m .gl-seg { background: var(--cud-gl-m); }
+.cud-gl .gl-seg1 { top: 0; height: 34%; --sa: -38cqw; --sb: 22cqw; animation-duration: 3.7s; animation-delay: -1.1s; }
+.cud-gl .gl-seg2 { top: 34%; height: 30%; --sa: 30cqw; --sb: -26cqw; animation-duration: 4.9s; animation-delay: -3.4s; }
+.cud-gl .gl-seg3 { top: 64%; height: 36%; --sa: -26cqw; --sb: 34cqw; animation-duration: 6.1s; animation-delay: -.6s; }
+.cud-gl .gl-px { width: max(2px, 12cqw); aspect-ratio: 1; transform: scale(0); animation: cudGlPx steps(1, end) infinite; }
+.cud-gl .gl-pc { background: var(--cud-gl-c); }
+.cud-gl .gl-pm { background: var(--cud-gl-m); }
+.cud-gl .gl-pw { background: var(--cud-gl-w); }
+.kind-glitch.moving .cud-gl .gl-all { animation: cudGlBurst .34s steps(1, end); } /* typing: a burst, and the colours split wider while it goes on */
+.kind-glitch.moving .cud-gl .gl-c { translate: -20cqw 0; transition: translate .04s; }
+.kind-glitch.moving .cud-gl .gl-m { translate: 20cqw 0; transition: translate .04s; }
+/* now and then the row tears: two thin broken lines along the top and bottom of the line, for a moment */
+.gl-row { opacity: var(--cud-gl-tear-o); }
+.gl-row .gl-tear {
+  position: absolute; left: calc(var(--pl, 3000cqw) * -1); width: calc(var(--pl, 3000cqw) + var(--pr, 3000cqw)); top: 16%; height: max(1px, 5cqh);
+  background: repeating-linear-gradient(90deg, var(--cud-gl-c) 0 34px, transparent 34px 41px, var(--cud-gl-c) 41px 58px, transparent 58px 92px, var(--cud-gl-c) 92px 150px, transparent 150px 166px);
+  box-shadow: 0 max(1px, 5cqh) 0 color-mix(in srgb, var(--cud-gl-m) 80%, transparent);
+  transform: scaleY(0); animation: cudGlRow 10.6s steps(1, end) infinite; /* with the bars' big jump, every other time */
+}
+.gl-row .gl-tear2 { top: 88%; animation-duration: 12.7s; animation-delay: -5.3s; background-position: 60px 0; }
+@keyframes cudGlJumpC {
+  0%, 100% { transform: none; } 11% { transform: translate(-22cqw, 1px); } 12.4% { transform: none; } 37% { transform: translate(28cqw, -2px); }
+  37.8% { transform: translate(-14cqw, 0); } 38.8% { transform: none; } 71% { transform: translate(-12cqw, 2px) scaleY(.6); } 72.4% { transform: none; }
+  90% { transform: translateX(16cqw); } 90.7% { transform: none; }
+}
+@keyframes cudGlJumpM {
+  0%, 100% { transform: none; } 11.3% { transform: translate(22cqw, -1px); } 12.7% { transform: none; } 37% { transform: translate(-28cqw, 2px); }
+  37.8% { transform: translate(14cqw, 0); } 38.8% { transform: none; } 71.3% { transform: translate(12cqw, -2px) scaleY(1.3); } 72.7% { transform: none; }
+  90% { transform: translateX(-16cqw); } 90.7% { transform: none; }
+}
+@keyframes cudGlSeg { 0%, 100% { transform: none; } 47% { transform: translateX(var(--sa)); } 48.6% { transform: translateX(var(--sb)); } 50% { transform: none; } }
+@keyframes cudGlRow { 0%, 100% { transform: scaleY(0); } 18.5% { transform: translateX(-6px); } 18.9% { transform: translateX(9px); } 19.4% { transform: scaleY(0); } }
+@keyframes cudGlBurst { 0% { transform: translateX(-30cqw); } 25% { transform: translate(24cqw, -1px) skewX(-10deg); } 50% { transform: translateX(-12cqw); } 75% { transform: translateX(8cqw); } 100% { transform: none; } }
+@keyframes cudGlPx { 0%, 100% { transform: scale(0); } 47% { transform: none; } 49.5% { transform: scale(0); } 81% { transform: none; } 82.5% { transform: scale(0); } }
+
+/* ---------- 잔상 ---------- */
+/* the caret is a soft bar of light on the cell's left edge; fx/cursor-up-d.js pins an afterimage to each place it has
+   just left and fades it there (Web Animations, opacity and scale only) */
+.cud-gh { position: absolute; inset: 0; pointer-events: none; }
+.cud-gh > span { position: absolute; display: block; }
+.cud-gh { --cud-gh-core: color-mix(in srgb, var(--cc) 38%, #fff); --cud-gh-glow: color-mix(in srgb, var(--cc) 40%, transparent); --cud-gh-echo: color-mix(in srgb, var(--cc) 55%, transparent); }
+:root[data-theme="light"] .cud-gh { --cud-gh-core: color-mix(in srgb, var(--cc) 75%, #000); --cud-gh-glow: color-mix(in srgb, var(--cc) 24%, transparent); --cud-gh-echo: color-mix(in srgb, var(--cc) 38%, transparent); }
+.cud-gh .gh-bar { left: 0; top: 7%; bottom: 7%; width: max(2px, 12cqw); border-radius: 2px; background: linear-gradient(90deg, var(--cc), var(--cud-gh-core) 50%, var(--cc)); }
+.cud-gh .gh-glow { left: calc(1px - 120cqw); width: 240cqw; top: -12%; height: 124%; background: radial-gradient(closest-side, var(--cud-gh-glow), transparent); animation: cudGhGlow 3.6s ease-in-out infinite alternate; }
+.cud-gh .gh-echo, .cud-gh .gh-shed { left: 0; top: 0; width: 100%; height: 100%; opacity: 0; transform-origin: 1px 50%; }
+.cud-gh .gh-echo i, .cud-gh .gh-shed i {
+  position: absolute; left: calc(1px - 60cqw); width: 120cqw; top: 5%; bottom: 5%;
+  background: linear-gradient(90deg, transparent calc(50% - max(1px, 6cqw)), var(--cc) calc(50% - max(1px, 6cqw)) calc(50% + max(1px, 6cqw)), transparent calc(50% + max(1px, 6cqw))),
+    radial-gradient(closest-side, var(--cud-gh-echo), transparent);
+  border-radius: 40%;
+}
+.cud-gh .gh-shed { animation: cudGhShed 4.7s cubic-bezier(.3, .5, .4, 1) infinite; }
+.cud-gh .gh-smear { left: 1px; top: 30%; height: 40%; width: 0; opacity: 0; border-radius: 3px; background: linear-gradient(90deg, color-mix(in srgb, var(--cc) 50%, transparent), transparent); }
+.kind-ghost.moving .cud-gh .gh-shed { animation: none; } /* busy leaving real afterimages */
+@keyframes cudGhGlow { from { opacity: .65; } to { opacity: 1; } }
+@keyframes cudGhShed { 0%, 66% { transform: none; opacity: 0; } 68% { transform: none; opacity: .5; } 100% { transform: translateX(-150%) scale(1.8, .94); opacity: 0; } }
+/* the picker preview: the caret glides along (pvMove, ui.css) and its trail follows */
+.pv-cur.kind-ghost { animation: pvMove 1.8s cubic-bezier(.5, 0, .2, 1) infinite; }
+.pv-cur .cud-gh .gh-shed { display: none; }
+.pv-cur .cud-gh .gh-echo { animation: cudGhPv 1.8s ease-out infinite; }
+.pv-cur .cud-gh .gh-echo:nth-child(1) { translate: -5px 0; }
+.pv-cur .cud-gh .gh-echo:nth-child(2) { translate: -10px 0; animation-delay: .05s; }
+.pv-cur .cud-gh .gh-echo:nth-child(3) { translate: -15px 0; animation-delay: .1s; }
+.pv-cur .cud-gh .gh-echo:nth-child(4) { translate: -20px 0; animation-delay: .15s; }
+@keyframes cudGhPv { 0%, 4% { opacity: 0; transform: none; } 12% { opacity: .55; transform: none; } 48% { opacity: 0; transform: scale(2, .9); } 100% { opacity: 0; } }

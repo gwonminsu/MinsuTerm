@@ -1,0 +1,266 @@
+/* The redrawn cursors of fx/cursor-up-b.js: 보석 · 모래시계 · 미니 시계 · 행성 · 눈알.
+
+   .cub-box is the drawing fitted to the caret cell: square (20 x 20) or tall (20 x 40), a little larger than the cell.
+   Every moving part is its own layer (.cl) and only transform and opacity are animated. Origins are percentages of the
+   box: x% = x * 5, y% = y * 5 (square) or y * 2.5 (tall). Edges that must not vanish at small sizes keep a fixed width
+   in screen pixels. Typing shows through .moving (on for about a quarter of a second after the caret moves). */
+
+.mt-cursor.kind-gem, .mt-cursor.kind-hourglass, .mt-cursor.kind-clock, .mt-cursor.kind-planet, .mt-cursor.kind-eye { container-type: size; }
+.cub-box { position: absolute; left: 50%; top: 50%; translate: -50% -50%; pointer-events: none; }
+.cub-sq { width: min(165cqw, 82cqh, 52px); aspect-ratio: 1; }
+.cub-tall { width: min(120cqw, 60cqh, 40px); aspect-ratio: 1 / 2; }
+.cub-box .cl { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+/* what reaches out over the terminal (행성's moon) leaves when the terminal loses focus, and stays out of the composer */
+.cub-reach { position: absolute; left: 50%; top: 50%; pointer-events: none; transition: opacity .35s; }
+.cub-reach svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.mt-cursor.blurred .cub-reach { opacity: 0; }
+.composer-field .cub-reach { display: none; }
+
+:root {
+  --cub-gm-edge: rgba(255, 255, 255, .5); --cub-gm-seam: rgba(255, 255, 255, .2); --cub-gm-glow-p: 40%; --cub-gm-spark: #ffffff; --cub-gm-sparkline: rgba(255, 255, 255, 0);
+  --cub-hg-s1: #d9a04a; --cub-hg-s2: #fbe0a0; --cub-hg-s3: #c0832f; --cub-hg-glass: rgba(190, 225, 255, .1); --cub-hg-rim: rgba(214, 236, 255, .72);
+  --cub-hg-hi: rgba(255, 255, 255, .7); --cub-hg-wood-edge: rgba(0, 0, 0, 0);
+  --cub-ck-edge: rgba(255, 255, 255, .38); --cub-ck-leg: #b9a27c; --cub-ck-shadow: rgba(0, 0, 0, .35); --cub-ck-wave: rgba(255, 236, 170, .9);
+  --cub-pl-ring: #efd9ad; --cub-pl-ring2: #c7a06a; --cub-pl-edge: rgba(255, 228, 186, .3); --cub-pl-moonedge: rgba(255, 255, 255, .35);
+  --cub-ey-lid: #9a8fb8; --cub-ey-lid2: #756b94; --cub-ey-corner: #d6cbe4;
+}
+:root[data-theme="light"] {
+  --cub-gm-edge: rgba(22, 12, 54, .62); --cub-gm-seam: rgba(255, 255, 255, .26); --cub-gm-glow-p: 22%; --cub-gm-spark: #ffffff; --cub-gm-sparkline: rgba(40, 20, 90, .7);
+  --cub-hg-s1: #c4862a; --cub-hg-s2: #efc66a; --cub-hg-s3: #9c6716; --cub-hg-glass: rgba(70, 120, 180, .08); --cub-hg-rim: rgba(40, 68, 108, .72);
+  --cub-hg-hi: rgba(96, 150, 210, .75); --cub-hg-wood-edge: rgba(60, 30, 8, .55);
+  --cub-ck-edge: rgba(26, 16, 56, .55); --cub-ck-leg: #5a4630; --cub-ck-shadow: rgba(0, 0, 0, .16); --cub-ck-wave: rgba(176, 110, 0, .85);
+  --cub-pl-ring: #a9803f; --cub-pl-ring2: #765526; --cub-pl-edge: rgba(84, 42, 8, .55); --cub-pl-moonedge: rgba(30, 36, 56, .55);
+  --cub-ey-lid: #2b2238; --cub-ey-lid2: #5c5170; --cub-ey-corner: #e2d8ee;
+}
+
+/* ---------- 보석 ---------- */
+.cub-gm { --g1: color-mix(in srgb, var(--cc) 26%, #fff); --g2: color-mix(in srgb, var(--cc) 58%, #fff); --g3: var(--cc); --g4: color-mix(in srgb, var(--cc) 66%, #000); --g5: color-mix(in srgb, var(--cc) 40%, #000); }
+.cub-gm .gm-face polygon { stroke: var(--cub-gm-seam); stroke-width: .16; stroke-linejoin: round; }
+.cub-gm .gw { fill: #fff; } .cub-gm .g1 { fill: var(--g1); } .cub-gm .g2 { fill: var(--g2); } .cub-gm .g3 { fill: var(--g3); } .cub-gm .g4 { fill: var(--g4); } .cub-gm .g5 { fill: var(--g5); }
+.cub-gm .gm-glow { left: -6%; top: -6%; width: 112%; height: 112%; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--cc) var(--cub-gm-glow-p), transparent), color-mix(in srgb, var(--cc) calc(var(--cub-gm-glow-p) * .3), transparent) 55%, transparent); }
+.cub-gm .gm-rim path { fill: none; stroke: var(--cub-gm-edge); stroke-width: .6px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.cub-gm .gm-star path, .cub-gm .gm-pop path { fill: var(--cub-gm-spark); stroke: var(--cub-gm-sparkline); stroke-width: .3; }
+.cub-gm .gm-fire .f1 { fill: #ff7b7b; } .cub-gm .gm-fire .f2 { fill: #ffd56b; } .cub-gm .gm-fire .f3 { fill: #6fe6a6; } .cub-gm .gm-fire .f4 { fill: #78b6ff; }
+/* the turn: four drawings a quarter of a facet apart, each fading in over the one before (no dip in between) */
+.cub-gm .gm-p1 { animation: cubGmP1 2.2s linear infinite; }
+.cub-gm .gm-p2 { animation: cubGmP2 2.2s linear infinite; }
+.cub-gm .gm-p3 { animation: cubGmP3 2.2s linear infinite; }
+@keyframes cubGmP1 { 0% { opacity: 0; } 25%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+@keyframes cubGmP2 { 0%, 25% { opacity: 0; } 50%, 75% { opacity: 1; } 75.01%, 100% { opacity: 0; } }
+@keyframes cubGmP3 { 0%, 50% { opacity: 0; } 75% { opacity: 1; } 100% { opacity: 0; } }
+.cub-gm .gm-bob { animation: cubGmBob 3.8s ease-in-out infinite alternate; }
+.cub-gm .gm-s1 { animation: cubGmGlint 4.6s ease-in-out infinite; }
+.cub-gm .gm-s2 { animation: cubGmGlint 6.9s ease-in-out -2.6s infinite; }
+.cub-gm .gm-glow { animation: cubGmGlow 4.6s ease-in-out infinite; }
+.cub-gm .gm-fire { opacity: 0; transform-origin: 50% 50%; animation: cubGmFire 4.6s ease-out infinite; }
+.cub-gm .gm-pop { opacity: 0; }
+/* typing: it jumps and spins, striking sparks */
+.cub-gm .gm-hop { transform-origin: 50% 85%; transition: transform .6s cubic-bezier(.3, 1.6, .5, 1); }
+.kind-gem.moving .cub-gm .gm-hop { transform: translateY(-15%) rotate(-7deg); transition: transform .09s ease-out; }
+.kind-gem.moving .cub-gm .gm-spin { animation: cubGmSpin .44s ease-in-out; }
+.kind-gem.moving .cub-gm .gm-pop1 { animation: cubGmPop .44s ease-out; }
+.kind-gem.moving .cub-gm .gm-pop2 { animation: cubGmPop .44s ease-out .07s; }
+.kind-gem.moving .cub-gm .gm-pop3 { animation: cubGmPop .4s ease-out .13s; }
+.kind-gem.moving .cub-gm .gm-fire { animation: cubGmFireHit .5s ease-out; }
+@keyframes cubGmBob { from { transform: translateY(-3%); } to { transform: translateY(3%); } }
+@keyframes cubGmGlint { 0%, 70%, 100% { transform: scale(0) rotate(0deg); opacity: 0; } 77% { transform: scale(1) rotate(40deg); opacity: 1; } 87% { transform: scale(0) rotate(90deg); opacity: 0; } }
+@keyframes cubGmGlow { 0%, 66%, 100% { opacity: .7; } 77% { opacity: 1; } }
+@keyframes cubGmFire { 0%, 72% { opacity: 0; transform: scale(.75); } 78% { opacity: .9; } 96%, 100% { opacity: 0; transform: scale(1.18); } }
+@keyframes cubGmFireHit { 0% { opacity: 0; transform: scale(.6); } 25% { opacity: 1; } 100% { opacity: 0; transform: scale(1.3); } }
+@keyframes cubGmSpin { 0% { transform: scaleX(1); } 45% { transform: scaleX(.1); } 100% { transform: scaleX(1); } }
+@keyframes cubGmPop { 0% { transform: scale(0) rotate(0deg); opacity: 1; } 40% { transform: scale(1.2) rotate(30deg); opacity: 1; } 100% { transform: scale(0) rotate(70deg); opacity: 0; } }
+
+/* ---------- 모래시계 ---------- */
+.cub-hg .hg-glass { fill: var(--cub-hg-glass); }
+.cub-hg .hg-far { fill: none; stroke: var(--cub-hg-hi); stroke-width: .4; stroke-linecap: round; opacity: .35; }
+.cub-hg .hg-rim { fill: none; stroke: var(--cub-hg-rim); stroke-width: .6px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.cub-hg .hg-shine { fill: none; stroke: var(--cub-hg-hi); stroke-width: .6; stroke-linecap: round; }
+.cub-hg .hg-shine2 { fill: none; stroke: var(--cub-hg-hi); stroke-width: .35; stroke-linecap: round; opacity: .55; }
+.cub-hg .hg-sandhi { fill: none; stroke: #fff6d8; stroke-width: .35; stroke-linecap: round; opacity: .55; }
+.cub-hg .hg-stream path { fill: none; stroke: var(--cub-hg-s2); stroke-width: .55; }
+.cub-hg .hg-grain circle { fill: var(--cub-hg-s2); }
+.cub-hg .hg-post, .cub-hg .hg-cap { stroke: var(--cub-hg-wood-edge); stroke-width: .5px; vector-effect: non-scaling-stroke; }
+.cub-hg .hg-bead { fill: #b07a45; }
+.cub-hg .hg-caphi { fill: none; stroke: #f2c894; stroke-width: .35; stroke-linecap: round; opacity: .7; }
+/* one round (8 s): the sand runs out, the glass is lifted, turned over past upright and set down with a bump; while it
+   turns, the heap slides down to the neck so that the round can start again from a full top bulb */
+.cub-hg .hg-turn { transform-origin: 50% 50%; animation: cubHgTurn 8s infinite; }
+.cub-hg .hg-lift { transform-origin: 50% 97%; animation: cubHgLift 8s infinite; }
+.cub-hg .hg-top { transform-origin: 50% 52.5%; animation: cubHgTop 8s infinite; }
+.cub-hg .hg-heap { transform-origin: 50% 89%; animation: cubHgHeap 8s infinite; }
+.cub-hg .hg-hang { opacity: 0; transform-origin: 50% 50%; animation: cubHgHang 8s infinite; }
+.cub-hg .hg-flow { animation: cubHgFlow 8s infinite; }
+.cub-hg .hg-stream { transform-origin: 50% 51.5%; animation: cubHgStream 8s infinite; }
+.cub-hg .hg-grain { opacity: 0; animation: cubHgGrain .48s linear infinite; }
+/* typing rocks it on its base */
+.cub-hg .hg-nudge { transform-origin: 50% 97%; }
+.kind-hourglass.moving .cub-hg .hg-nudge { animation: cubHgNudge .62s ease-out; }
+@keyframes cubHgTurn {
+  0%, 85% { transform: rotate(0deg); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  93.5% { transform: rotate(196deg); animation-timing-function: ease-in-out; } 96.2% { transform: rotate(176deg); animation-timing-function: ease-in-out; }
+  98.4% { transform: rotate(182deg); animation-timing-function: ease-in-out; } 100% { transform: rotate(180deg); }
+}
+@keyframes cubHgLift {
+  0%, 82% { transform: none; animation-timing-function: ease-out; } 85.5%, 92% { transform: translateY(-6%); animation-timing-function: ease-in; }
+  95% { transform: scale(1.05, .93); animation-timing-function: ease-out; } 97.5% { transform: scale(.98, 1.02); } 100% { transform: none; }
+}
+@keyframes cubHgTop { 0% { transform: scale(1); animation-timing-function: cubic-bezier(.4, .12, .85, .62); } 78%, 100% { transform: scale(0); } }
+@keyframes cubHgHeap {
+  0% { transform: scale(.75, 0); animation-timing-function: cubic-bezier(.15, .55, .45, 1); } 78%, 88% { transform: none; opacity: 1; animation-timing-function: ease-in; }
+  95%, 100% { transform: translateY(-22%) scale(.9, .6); opacity: 0; }
+}
+@keyframes cubHgHang { 0%, 88% { opacity: 0; transform: translateY(14%) scale(1, .7); animation-timing-function: ease-out; } 95%, 100% { opacity: 1; transform: none; } }
+@keyframes cubHgFlow { 0%, 75% { opacity: 1; } 79%, 100% { opacity: 0; } }
+@keyframes cubHgStream { 0% { transform: scaleY(1); animation-timing-function: cubic-bezier(.15, .55, .45, 1); } 78%, 100% { transform: scaleY(.644); } }
+@keyframes cubHgGrain { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: 1; } 80% { opacity: .9; } 100% { transform: translateY(17%); opacity: 0; } }
+@keyframes cubHgNudge { 0% { transform: rotate(0deg); } 16% { transform: rotate(-9deg); } 40% { transform: rotate(6deg); } 62% { transform: rotate(-3deg); } 82% { transform: rotate(1.2deg); } 100% { transform: rotate(0deg); } }
+
+/* ---------- 미니 시계 ---------- */
+.cub-ck.cub-sq { width: min(185cqw, 90cqh, 56px); }
+.cub-ck .ck-shadow ellipse { fill: var(--cub-ck-shadow); }
+.cub-ck .ck-legs path { fill: none; stroke: var(--cub-ck-leg); stroke-width: .95; stroke-linecap: round; }
+.cub-ck .ck-legs circle { fill: var(--cub-ck-leg); }
+.cub-ck .ck-bell { stroke: rgba(90, 60, 10, .45); stroke-width: .3; }
+.cub-ck .ck-bellrim { fill: #b98a2a; } .cub-ck .ck-knob { fill: #e2bb5c; }
+.cub-ck .ck-bellhi { fill: none; stroke: #fff; stroke-width: .35; stroke-linecap: round; opacity: .6; }
+.cub-ck .ck-stem { fill: none; stroke: #9a7428; stroke-width: .5; stroke-linecap: round; }
+.cub-ck .ck-head { fill: #e2bb5c; }
+.cub-ck .ck-case { fill: var(--cc); }
+.cub-ck .ck-caseedge { fill: none; stroke: var(--cub-ck-edge); stroke-width: .6px; vector-effect: non-scaling-stroke; }
+.cub-ck .ck-casehi { fill: none; stroke: #fff; stroke-width: .45; stroke-linecap: round; opacity: .45; }
+.cub-ck .ck-faceedge { fill: none; stroke: rgba(40, 30, 20, .35); stroke-width: .3; }
+.cub-ck .ck-tick { fill: none; stroke: #463d52; stroke-width: .55; stroke-linecap: round; }
+.cub-ck .ck-tick2 { fill: none; stroke: #8a8294; stroke-width: .3; stroke-linecap: round; }
+.cub-ck .ck-hand path { fill: #1d1726; }
+.cub-ck .ck-sec path { fill: none; stroke: #e2463a; stroke-width: .28; stroke-linecap: round; }
+.cub-ck .ck-sec circle { fill: #e2463a; }
+.cub-ck .ck-capdot { fill: #5a3a0a; }
+.cub-ck .ck-glare { fill: none; stroke: #fff; stroke-width: .45; stroke-linecap: round; opacity: .7; }
+.cub-ck .ck-waves path { fill: none; stroke: var(--cub-ck-wave); stroke-width: .45; stroke-linecap: round; }
+/* real time: the delays come from the clock (fx/cursor-up-b.js); the second hand jumps each second (steps) and, at
+   the same moment, overshoots a hair and settles (a second animation one second long) */
+.cub-ck .ck-h, .cub-ck .ck-m, .cub-ck .ck-s, .cub-ck .ck-settle { transform-origin: 50% 55%; }
+.cub-ck .ck-h { animation: cubCkHour 43200s linear infinite; }
+.cub-ck .ck-m { animation: cubCkMin 3600s linear infinite; }
+.cub-ck .ck-s { animation: cubCkSec 60s steps(60, end) infinite; }
+.cub-ck .ck-settle { animation: cubCkSettle 1s infinite; }
+.cub-ck .ck-ham, .cub-ck .ck-hamw { transform-origin: 50% 23%; }
+.cub-ck .ck-ham { animation: cubCkTing 60s infinite; } /* on the minute the hammer taps a bell ... */
+.cub-ck .ck-amin { transform-origin: 50% 96%; animation: cubCkJolt 60s infinite; } /* ... and the clock gives a little jolt */
+.cub-ck .ck-waves { opacity: 0; transform-origin: 50% 25%; }
+/* typing: it rings for a moment */
+.cub-ck .ck-ring { transform-origin: 50% 96%; }
+.kind-clock.moving .cub-ck .ck-ring { animation: cubCkRing .56s linear; }
+.kind-clock.moving .cub-ck .ck-hamw { animation: cubCkRattle .56s linear; }
+.kind-clock.moving .cub-ck .ck-waves { animation: cubCkWaves .56s ease-out; }
+@keyframes cubCkHour { to { transform: rotate(360deg); } }
+@keyframes cubCkMin { to { transform: rotate(360deg); } }
+@keyframes cubCkSec { to { transform: rotate(360deg); } }
+@keyframes cubCkSettle { 0% { transform: rotate(3.4deg); animation-timing-function: ease-out; } 13% { transform: rotate(-1.3deg); animation-timing-function: ease-in-out; } 28% { transform: rotate(.5deg); } 42%, 100% { transform: rotate(0deg); } }
+@keyframes cubCkTing { 0% { transform: rotate(0deg); } .35% { transform: rotate(-30deg); } .7% { transform: rotate(22deg); } 1.05% { transform: rotate(-12deg); } 1.5% { transform: rotate(5deg); } 2%, 100% { transform: rotate(0deg); } }
+@keyframes cubCkJolt { 0% { transform: rotate(0deg); } .4% { transform: rotate(-2.4deg); } .8% { transform: rotate(1.7deg); } 1.3% { transform: rotate(-.8deg); } 1.8%, 100% { transform: rotate(0deg); } }
+@keyframes cubCkRing {
+  0% { transform: rotate(0deg); } 7% { transform: rotate(-6deg); } 14% { transform: rotate(6deg); } 21% { transform: rotate(-5.4deg); } 28% { transform: rotate(5deg); }
+  35% { transform: rotate(-4.4deg); } 42% { transform: rotate(3.8deg); } 50% { transform: rotate(-3.2deg); } 58% { transform: rotate(2.6deg); } 66% { transform: rotate(-1.8deg); }
+  75% { transform: rotate(1.2deg); } 85% { transform: rotate(-.5deg); } 100% { transform: rotate(0deg); }
+}
+@keyframes cubCkRattle {
+  0%, 100% { transform: rotate(0deg); } 5%, 15%, 25%, 35%, 45%, 55%, 65% { transform: rotate(-32deg); } 10%, 20%, 30%, 40%, 50%, 60%, 70% { transform: rotate(32deg); } 80% { transform: rotate(-12deg); } 90% { transform: rotate(5deg); }
+}
+@keyframes cubCkWaves { 0% { opacity: 0; transform: scale(.8); } 18% { opacity: 1; } 100% { opacity: 0; transform: scale(1.18); } }
+
+/* ---------- 행성 ---------- */
+.cub-pl .pl-ring { fill: none; stroke-linecap: round; }
+.cub-pl .pl-outer { stroke: var(--cub-pl-ring); stroke-width: 1.3; }
+.cub-pl .pl-inner { stroke: var(--cub-pl-ring2); stroke-width: .7; }
+.cub-pl .pl-back { opacity: .62; }
+.cub-pl .pl-ringhi { fill: none; stroke: #fff; stroke-width: .3; stroke-linecap: round; opacity: .5; }
+.cub-pl .pl-band { fill: none; }
+.cub-pl .b1 { stroke: #f7e3c0; opacity: .7; } .cub-pl .b2 { stroke: #c98c55; opacity: .75; } .cub-pl .b3 { stroke: #f4d9a8; opacity: .7; }
+.cub-pl .b4 { stroke: #b67542; opacity: .8; } .cub-pl .b5 { stroke: #ebc591; opacity: .7; } .cub-pl .b6 { stroke: #a5643a; opacity: .75; }
+.cub-pl .pl-st1 { fill: #b94c28; } .cub-pl .pl-st2 { fill: #f1c09a; opacity: .75; } .cub-pl .pl-st3 { fill: #fff3dc; opacity: .8; }
+.cub-pl .pl-atmo { fill: none; stroke: #fff4dc; stroke-width: .45; stroke-linecap: round; opacity: .6; }
+.cub-pl .pl-edge { fill: none; stroke: var(--cub-pl-edge); stroke-width: .5px; vector-effect: non-scaling-stroke; }
+.cub-pl .pl-bob { animation: cubPlBob 4.8s ease-in-out infinite alternate; }
+.cub-pl .pl-tilt { transform-origin: 50% 52%; animation: cubPlTilt 6.2s ease-in-out infinite alternate; }
+/* storms turning across the face: quick in the middle, foreshortened and slow at the limbs, then round the back */
+.cub-pl .pl-storm { opacity: 0; transform-origin: 50% 62%; animation: cubPlStorm 14s linear infinite; }
+.cub-pl .pl-storm.pl-sb { transform-origin: 50% 43%; animation-delay: -7s; animation-duration: 15.5s; }
+/* typing knocks it askew; it springs back */
+.cub-pl .pl-wob { transform-origin: 50% 52%; transition: transform .9s cubic-bezier(.25, 1.7, .45, 1); }
+.kind-planet.moving .cub-pl .pl-wob { transform: rotate(14deg) translateY(-6%); transition: transform .1s ease-out; }
+@keyframes cubPlBob { from { transform: translateY(-3%); } to { transform: translateY(3%); } }
+@keyframes cubPlTilt { from { transform: rotate(-19deg); } to { transform: rotate(-12deg); } }
+@keyframes cubPlStorm {
+  0% { transform: translate(-21.7%, -1.3%) scaleX(.26); opacity: 0; } 8.3% { transform: translate(-15.9%, -.7%) scaleX(.71); opacity: .9; }
+  20.8% { transform: translate(0, 0) scaleX(1); opacity: 1; } 33.3% { transform: translate(15.9%, -.7%) scaleX(.71); opacity: .9; }
+  41.7%, 100% { transform: translate(21.7%, -1.3%) scaleX(.26); opacity: 0; }
+}
+/* the moon: two copies on the same orbit, one under the planet and one over it, each shown on its half. The orbit is
+   two oscillations a quarter turn apart (sideways and up-down, eased like a sine), squashed into a tilted ellipse
+   2 x 1.6 boxes wide; the moon grows as it comes round in front. */
+.pl-orbit { width: min(528cqw, 262cqh, 166px); height: min(119cqw, 59cqh, 37px); translate: -50% -50%; rotate: -9deg; }
+.pl-mx, .pl-my { position: absolute; inset: 0; }
+.pl-mx { animation: cubPlX 9s cubic-bezier(.37, 0, .63, 1) -6.75s infinite, cubPlBack 9s linear infinite; }
+.pl-front .pl-mx { animation-name: cubPlX, cubPlFront; }
+.pl-my { animation: cubPlY 9s cubic-bezier(.37, 0, .63, 1) infinite; }
+.pl-moonw { position: absolute; left: 50%; top: 50%; width: min(36cqw, 18cqh, 11.4px); aspect-ratio: 1; translate: -50% -50%; animation: cubPlNear 9s cubic-bezier(.37, 0, .63, 1) infinite; }
+.pl-moon .pl-crater { fill: #8e97a8; opacity: .55; }
+.pl-moon .pl-moonedge { fill: none; stroke: var(--cub-pl-moonedge); stroke-width: .5px; vector-effect: non-scaling-stroke; }
+@keyframes cubPlX { 0%, 100% { transform: translateX(-50%); } 50% { transform: translateX(50%); } }
+@keyframes cubPlY { 0%, 100% { transform: translateY(-50%); } 50% { transform: translateY(50%); } }
+@keyframes cubPlNear { 0%, 100% { transform: scale(.7); } 50% { transform: scale(1.12); } }
+@keyframes cubPlFront { 0%, 24.9% { opacity: 0; } 25%, 74.9% { opacity: 1; } 75%, 100% { opacity: 0; } }
+@keyframes cubPlBack { 0%, 24.9% { opacity: .72; } 25%, 74.9% { opacity: 0; } 75%, 100% { opacity: .72; } }
+
+/* ---------- 눈알 ---------- */
+.cub-ey.cub-sq { width: min(185cqw, 90cqh, 58px); }
+.cub-ey { --cub-ey-i1: color-mix(in srgb, var(--cc) 30%, #fff); --cub-ey-i3: color-mix(in srgb, var(--cc) 40%, #000); }
+.cub-ey .ey-irisbase { fill: var(--cc); }
+.cub-ey .ey-fibre { fill: none; stroke: var(--cub-ey-i1); stroke-width: .22; stroke-linecap: round; opacity: .5; }
+.cub-ey .ey-limbus { fill: none; stroke: var(--cub-ey-i3); stroke-width: .45; }
+.cub-ey .ey-pupil circle { fill: #0c0912; }
+.cub-ey .ey-glint ellipse, .cub-ey .ey-glint circle { fill: #fff; }
+.cub-ey .ey-line { fill: none; stroke: var(--cub-ey-lid); stroke-width: 1.15; stroke-linecap: round; }
+.cub-ey .ey-lash { fill: none; stroke: var(--cub-ey-lid); stroke-width: .55; stroke-linecap: round; }
+.cub-ey .ey-crease { fill: none; stroke: var(--cub-ey-lid); stroke-width: .35; stroke-linecap: round; opacity: .5; }
+.cub-ey .ey-lower path { fill: none; stroke: var(--cub-ey-lid2); stroke-width: .45; stroke-linecap: round; opacity: .85; }
+/* the glance: two rhythms that do not line up (darts and holds sideways, up and down), so it never quite repeats */
+.cub-ey .ey-gx { animation: cubEyX 7.3s cubic-bezier(.2, .8, .3, 1) infinite; }
+.cub-ey .ey-gy { animation: cubEyY 5.1s cubic-bezier(.2, .8, .3, 1) infinite; }
+.cub-ey .ey-pupil { transform-origin: 50% 52%; animation: cubEyPupil 8.9s ease-in-out infinite; transition: scale .5s ease-in-out; }
+/* blinking (once, later twice) and, now and then, a suspicious squint: the eye squashes towards where the lids meet,
+   the upper lid comes down and curls into a closed-eye arc */
+.cub-ey .ey-bl { transform-origin: 50% 62%; animation: cubEyBlink 6.3s infinite; }
+.cub-ey .ey-lidbl { transform-origin: 50% 52%; animation: cubEyLidBlink 6.3s infinite; }
+.cub-ey .ey-lowbl { transform-origin: 50% 54.5%; animation: cubEyLowBlink 6.3s infinite; }
+.cub-ey .ey-sq { transform-origin: 50% 60%; animation: cubEySquint 17.3s ease-in-out infinite; }
+.cub-ey .ey-lidsq { transform-origin: 50% 52%; animation: cubEyLidSquint 17.3s ease-in-out infinite; }
+.cub-ey .ey-lowsq { transform-origin: 50% 54.5%; animation: cubEyLowSquint 17.3s ease-in-out infinite; }
+/* typing: eyes wide, the pupil tightens and it looks down at what was just typed; afterwards it drifts back */
+.cub-ey .ey-wide, .cub-ey .ey-lidwide, .cub-ey .ey-follow { transform-origin: 50% 52%; transition: transform .7s ease-in-out; }
+.kind-eye.moving .cub-ey .ey-wide { transform: scale(1.04, 1.1); transition: transform .12s ease-out; }
+.kind-eye.moving .cub-ey .ey-lidwide { transform: translateY(-5.5%); transition: transform .12s ease-out; }
+.kind-eye.moving .cub-ey .ey-follow { transform: translate(6%, 2.5%); transition: transform .12s ease-out; }
+.kind-eye.moving .cub-ey .ey-pupil { scale: .72; transition: scale .12s ease-out; }
+@keyframes cubEyX {
+  0%, 10% { transform: translateX(0); } 11.4%, 26% { transform: translateX(-8%); } 27.2%, 35% { transform: translateX(-5%); } 36.6%, 50% { transform: translateX(7%); }
+  51.2%, 61% { transform: translateX(3%); } 62.6%, 69% { transform: translateX(8%); } 70.6%, 88% { transform: translateX(-2.5%); } 89.4%, 100% { transform: translateX(0); }
+}
+@keyframes cubEyY { 0%, 18% { transform: translateY(0); } 19.5%, 41% { transform: translateY(2.5%); } 42.5%, 60% { transform: translateY(-2.5%); } 61.5%, 84% { transform: translateY(1%); } 85.5%, 100% { transform: translateY(0); } }
+@keyframes cubEyPupil { 0%, 30% { transform: scale(1); } 40%, 55% { transform: scale(1.22); } 65% { transform: scale(.86); } 80%, 100% { transform: scale(1); } }
+@keyframes cubEyBlink {
+  0%, 40% { transform: none; animation-timing-function: ease-in; } 41.2% { transform: scaleY(.05); animation-timing-function: ease-out; } 43.6%, 84% { transform: none; animation-timing-function: ease-in; }
+  85.2% { transform: scaleY(.05); animation-timing-function: ease-out; } 87.2% { transform: none; animation-timing-function: ease-in; } 88.4% { transform: scaleY(.05); animation-timing-function: ease-out; } 90.8%, 100% { transform: none; }
+}
+@keyframes cubEyLidBlink {
+  0%, 40% { transform: none; animation-timing-function: ease-in; } 41.2% { transform: translateY(6%) scaleY(-.34); animation-timing-function: ease-out; } 43.6%, 84% { transform: none; animation-timing-function: ease-in; }
+  85.2% { transform: translateY(6%) scaleY(-.34); animation-timing-function: ease-out; } 87.2% { transform: none; animation-timing-function: ease-in; } 88.4% { transform: translateY(6%) scaleY(-.34); animation-timing-function: ease-out; } 90.8%, 100% { transform: none; }
+}
+@keyframes cubEyLowBlink {
+  0%, 40% { transform: none; animation-timing-function: ease-in; } 41.2% { transform: scaleY(.45); animation-timing-function: ease-out; } 43.6%, 84% { transform: none; animation-timing-function: ease-in; }
+  85.2% { transform: scaleY(.45); animation-timing-function: ease-out; } 87.2% { transform: none; animation-timing-function: ease-in; } 88.4% { transform: scaleY(.45); animation-timing-function: ease-out; } 90.8%, 100% { transform: none; }
+}
+@keyframes cubEySquint { 0%, 55% { transform: none; } 59%, 70% { transform: scaleY(.55); } 74%, 100% { transform: none; } }
+@keyframes cubEyLidSquint { 0%, 55% { transform: none; } 59%, 70% { transform: translateY(3.6%) scaleY(.45); } 74%, 100% { transform: none; } }
+@keyframes cubEyLowSquint { 0%, 55% { transform: none; } 59%, 70% { transform: translateY(-1.5%) scaleY(.8); } 74%, 100% { transform: none; } }

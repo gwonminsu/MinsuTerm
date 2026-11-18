@@ -148,3 +148,233 @@
   56%, 100% { transform: translateY(35%) scale(1); opacity: 0; }
 }
 @keyframes caBlSide { from { transform: scale(.7); } to { transform: scale(1.05); } }
+
+/* ==================== 등대 · 레이더 · 나침반 · 회오리 · 해파리 (second part of fx/cursor-art.js) ====================
+   The same rules: one layer per moving part, transform and opacity only. A turning lamp or a rope of wind are layers
+   sliding and squashing, not animations inside a drawing. */
+
+.mt-cursor.kind-lighthouse, .mt-cursor.kind-radar, .mt-cursor.kind-compass, .mt-cursor.kind-tornado, .mt-cursor.kind-jellyfish { container-type: size; }
+
+/* Reaching out over the terminal (like 십자선 and 스포트라이트; #stage clips them): a point at the caret that the wide
+   parts are laid round. Drawn once, then only turned, scaled or faded; faint, so the text reads through. No CSS mask
+   or clip-path on anything that moves (that is redrawn every frame): the fading is drawn into the SVG. They leave when
+   the terminal loses focus, and stay out of the composer (nothing there would clip them). */
+.ca-reach { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; transition: opacity .35s; }
+.ca-reach svg { display: block; overflow: visible; }
+.mt-cursor.blurred .ca-reach { opacity: 0; }
+.composer-field .ca-reach { display: none; }
+
+:root {
+  --ca-lh-light: #fff1b8; --ca-lh-core: #ffffff; --ca-lh-glow-o: .75; --ca-lh-beam-o: .6; --ca-lh-edge: rgba(0, 0, 0, .3);
+  --ca-lh-farc: #ffe496; --ca-lh-far-o: .2;
+  --ca-lh-sea1: #1d5aa8; --ca-lh-sea2: #3a8de6; --ca-lh-foam: rgba(232, 247, 255, .95); --ca-lh-rock: #3f4552; --ca-lh-spray: #e2f4ff;
+  --ca-rd: #44ff9c; --ca-rd-hi: #e2ffee; --ca-rd-dk: #14a85a; --ca-rd-glow-o: .32;
+  --ca-rd-swc: #44ff9c; --ca-rd-sw-o: .17; --ca-rd-edge: rgba(150, 255, 196, .5);
+  --ca-rd-ring: rgba(68, 255, 156, .1); --ca-rd-ping: rgba(110, 255, 176, .55); --ca-rd-blip: #d8ffe8; --ca-rd-blipglow: rgba(68, 255, 156, .4);
+  --ca-cp-line: rgba(196, 210, 238, .5); --ca-cp-face: rgba(150, 175, 225, .07); --ca-cp-edge: rgba(0, 0, 0, .35); --ca-cp-shadow: .38;
+  --ca-tn-a1: #e3e8f0; --ca-tn-a2: #a6b0c2; --ca-tn-a3: #5a6579; --ca-tn-b1: #ccd3df; --ca-tn-b2: #8e99ad; --ca-tn-b3: #4b5568;
+  --ca-tn-c1: #a3adc0; --ca-tn-c2: #3a4150; --ca-tn-lip: rgba(255, 255, 255, .45); --ca-tn-streak: rgba(255, 255, 255, .75);
+  --ca-tn-bit: #c9a877; --ca-tn-dust: #a89c86; --ca-tn-g: rgba(200, 212, 232, .32);
+  --ca-jf-b1: #effcff; --ca-jf-b2: #84dcff; --ca-jf-b3: #3aa6ff; --ca-jf-rim: rgba(178, 242, 255, .95); --ca-jf-gon: #ff8fd8;
+  --ca-jf-tent: rgba(150, 228, 255, .85); --ca-jf-arm: rgba(255, 168, 228, .62); --ca-jf-dot: #effeff; --ca-jf-glow: #45c6ff; --ca-jf-glow-o: .42;
+}
+:root[data-theme="light"] {
+  --ca-lh-light: #ffab00; --ca-lh-core: #fff3c0; --ca-lh-glow-o: .6; --ca-lh-beam-o: .55; --ca-lh-edge: rgba(70, 38, 26, .62);
+  --ca-lh-farc: #ffaa00; --ca-lh-far-o: .17;
+  --ca-lh-sea1: #1a55a0; --ca-lh-sea2: #2c7fd8; --ca-lh-foam: #ffffff; --ca-lh-rock: #555b68; --ca-lh-spray: #4f9ad8;
+  --ca-rd: #0b9a52; --ca-rd-hi: #6ff0a8; --ca-rd-dk: #05673a; --ca-rd-glow-o: .22;
+  --ca-rd-swc: #08964f; --ca-rd-sw-o: .14; --ca-rd-edge: rgba(8, 140, 74, .45);
+  --ca-rd-ring: rgba(8, 150, 80, .12); --ca-rd-ping: rgba(8, 150, 80, .5); --ca-rd-blip: #087a42; --ca-rd-blipglow: rgba(8, 150, 80, .3);
+  --ca-cp-line: rgba(50, 62, 92, .45); --ca-cp-face: rgba(60, 80, 130, .05); --ca-cp-edge: rgba(48, 20, 20, .6); --ca-cp-shadow: .2;
+  --ca-tn-a1: #9aa5b8; --ca-tn-a2: #6b778c; --ca-tn-a3: #3a4352; --ca-tn-b1: #8b97ab; --ca-tn-b2: #5f6b80; --ca-tn-b3: #333b49;
+  --ca-tn-c1: #5c6578; --ca-tn-c2: #2c323e; --ca-tn-lip: rgba(255, 255, 255, .35); --ca-tn-streak: rgba(255, 255, 255, .6);
+  --ca-tn-bit: #7a5a2c; --ca-tn-dust: #8f8370; --ca-tn-g: rgba(60, 72, 96, .32);
+  --ca-jf-b1: #dff4ff; --ca-jf-b2: #52b4ec; --ca-jf-b3: #1673c4; --ca-jf-rim: rgba(8, 92, 160, .9); --ca-jf-gon: #d6338f;
+  --ca-jf-tent: rgba(18, 112, 182, .8); --ca-jf-arm: rgba(214, 51, 143, .5); --ca-jf-dot: #1c86d1; --ca-jf-glow: #3aa0e8; --ca-jf-glow-o: .3;
+}
+
+/* ---------- 등대 ---------- */
+/* one turn of the lamp: the beam shortens as it swings towards you (a flash), reaches out on the other side, and
+   passes behind the lantern dimmed. Seen side-on a turning beam is a scaleX between 1 and -1 on a sine; the long faint
+   beam over the terminal and the bright one at the lamp turn together. */
+.ca-lh .lh-beam { transform-origin: 50% 22.25%; animation: caLhSweep 5.2s infinite; }
+.ca-lh .lh-farw { top: 22.25%; }
+.ca-lh .lh-far { position: absolute; left: 0; top: -11vw; width: 80vw; height: 22vw; transform-origin: 0 50%; animation: caLhSweep 5.2s infinite; }
+.ca-lh .lh-far path { fill: url(#ca-lh-far); }
+.ca-lh .lh-flash { transform-origin: 50% 22.25%; animation: caLhFlash 5.2s ease-out infinite; }
+.ca-lh .lh-flash path { fill: #fffbe8; }
+.ca-lh .lh-glow { animation: caLhGlow 5.2s ease-in-out infinite; }
+.ca-lh .lh-white { fill: #f4f0e8; }
+.ca-lh .lh-red { fill: #d9302a; }
+.ca-lh .lh-edge { fill: none; stroke: var(--ca-lh-edge); stroke-width: .7px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.ca-lh .lh-win, .ca-lh .lh-door { fill: #2a2420; }
+.ca-lh .lh-lit { fill: #ffd25a; }
+.ca-lh .lh-gallery, .ca-lh .lh-eave { fill: #262a33; }
+.ca-lh .lh-rail { fill: none; stroke: #262a33; stroke-width: .5; }
+.ca-lh .lh-mull { fill: none; stroke: #4a3416; stroke-width: .45; opacity: .7; }
+.ca-lh .lh-spike { fill: none; stroke: #262a33; stroke-width: .55; stroke-linecap: round; }
+.ca-lh .lh-ball { fill: #c9302a; }
+.ca-lh .lh-rock { fill: var(--ca-lh-rock); }
+.ca-lh .lh-rockhi { fill: none; stroke: #fff; stroke-opacity: .22; stroke-width: .5; stroke-linecap: round; }
+.ca-lh .lh-back path { fill: var(--ca-lh-sea1); }
+.ca-lh .lh-front path { fill: var(--ca-lh-sea2); }
+.ca-lh .lh-front .lh-foam { fill: none; stroke: var(--ca-lh-foam); stroke-width: .7; stroke-linecap: round; }
+.ca-lh .lh-back { animation: caLhWave 3.3s ease-in-out infinite alternate; }
+.ca-lh .lh-front { animation: caLhWave 2.5s ease-in-out -1s infinite alternate-reverse; }
+.ca-lh .lh-spray circle { fill: var(--ca-lh-spray); }
+.ca-lh .lh-spray { opacity: 0; transform-origin: 50% 92%; transform: translateY(5%) scale(.5); transition: transform .8s ease-out, opacity .8s ease-in; }
+.kind-lighthouse.moving .ca-lh .lh-spray { opacity: 1; transform: none; transition: transform .14s ease-out, opacity .06s; } /* typing: the surf breaks on the rock */
+@keyframes caLhSweep {
+  0% { transform: scaleX(1); opacity: 1; animation-timing-function: cubic-bezier(.12, 0, .39, 0); }
+  25% { transform: scaleX(.02); opacity: 1; animation-timing-function: cubic-bezier(.61, 1, .88, 1); }
+  50% { transform: scaleX(-1); opacity: 1; animation-timing-function: cubic-bezier(.12, 0, .39, 0); }
+  75% { transform: scaleX(-.02); opacity: .15; animation-timing-function: cubic-bezier(.61, 1, .88, 1); }
+  100% { transform: scaleX(1); opacity: 1; }
+}
+@keyframes caLhFlash { 0%, 17%, 34%, 100% { transform: scale(.3); opacity: 0; } 25% { transform: scale(1.15); opacity: 1; } }
+@keyframes caLhGlow { 0%, 50%, 100% { opacity: .7; } 25% { opacity: 1; } 75% { opacity: .35; } }
+@keyframes caLhWave { from { transform: translate(-5%, .5%); } to { transform: translate(5%, -.5%); } }
+
+/* ---------- 레이더 ---------- */
+.mt-cursor.kind-radar { --rd-r: min(700cqh, 300px); } /* the screen's radius: about seven lines */
+.rd-wide > * { position: absolute; border-radius: 50%; }
+.rd-rings, .rd-sweep, .rd-ping { left: calc(var(--rd-r) * -1); top: calc(var(--rd-r) * -1); width: calc(var(--rd-r) * 2); height: calc(var(--rd-r) * 2); }
+.rd-rings { background: radial-gradient(closest-side, transparent 32.6%, var(--ca-rd-ring) 33.3%, transparent 34%, transparent 65.9%, var(--ca-rd-ring) 66.6%, transparent 67.3%, transparent 98.4%, var(--ca-rd-ring) 99.2%, transparent 100%); }
+.rd-sweep { animation: caRdSweep 4.4s linear infinite; }
+.rd-sweep path { fill: url(#ca-rd-sw); }
+.rd-sweep .rd-edge { fill: none; stroke: var(--ca-rd-edge); stroke-width: 1.2px; vector-effect: non-scaling-stroke; stroke-linecap: round; }
+.rd-ping { box-sizing: border-box; border: 1.5px solid var(--ca-rd-ping); animation: caRdPing 2.2s cubic-bezier(.2, .6, .35, 1) infinite; }
+.rd-blip { /* an echo lights up as the beam passes over it (each one's delay is its bearing) and fades like phosphor */
+  left: calc(var(--rd-r) * var(--x) - 45cqh); top: calc(var(--rd-r) * var(--y) - 45cqh); width: 90cqh; height: 90cqh;
+  background: radial-gradient(circle, var(--ca-rd-blip) 0 18%, var(--ca-rd-blipglow) 34%, transparent 68%);
+  opacity: 0; animation: caRdBlip 4.4s ease-out infinite;
+}
+.ca-rd .rd-glow { animation: caRdHum 2.7s ease-in-out infinite alternate; }
+.ca-rd .rd-ticks { fill: none; stroke: var(--ca-rd); stroke-width: .5; opacity: .7; }
+.ca-rd .rd-ring circle { fill: none; stroke: var(--ca-rd-hi); stroke-width: .8; }
+.ca-rd .rd-ring { transform-origin: 50% 50%; animation: caRdRing 2.2s cubic-bezier(.2, .6, .35, 1) infinite; }
+.ca-rd .rd-dot circle { fill: var(--ca-rd-hi); }
+.ca-rd .rd-dot { transform-origin: 50% 50%; animation: caRdDot 2.2s ease-out infinite; }
+@keyframes caRdSweep { to { transform: rotate(360deg); } }
+@keyframes caRdPing { from { transform: scale(.04); opacity: .9; } to { transform: scale(1); opacity: 0; } }
+@keyframes caRdBlip { 0% { transform: scale(1.3); opacity: 1; } 12% { transform: scale(1); opacity: .9; } 72%, 100% { transform: scale(.85); opacity: 0; } }
+@keyframes caRdRing { 0% { transform: scale(.6); opacity: 1; } 70%, 100% { transform: scale(2.4); opacity: 0; } }
+@keyframes caRdDot { 0% { transform: scale(1.4); } 40%, 100% { transform: scale(1); } }
+@keyframes caRdHum { from { opacity: .7; } to { opacity: 1; } }
+
+/* ---------- 나침반 ---------- */
+.ca-cp .cp-ring { fill: var(--ca-cp-face); stroke: var(--ca-cp-line); stroke-width: .55; }
+.ca-cp .cp-ticks { fill: none; stroke: var(--ca-cp-line); stroke-width: .6; stroke-linecap: round; }
+.ca-cp .cp-star { fill: var(--ca-cp-line); opacity: .75; }
+.ca-cp .cp-shadow { fill: #000; opacity: var(--ca-cp-shadow); }
+.ca-cp .cp-edge { fill: none; stroke: var(--ca-cp-edge); stroke-width: .7px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.ca-cp .cp-capring { fill: none; stroke: #5b3c0a; stroke-width: .5; }
+.ca-cp .cp-jewel { fill: #8c1c2a; }
+.ca-cp .cp-capglint { fill: #fff; opacity: .85; }
+.ca-cp .cp-glint path { fill: #fff; }
+/* knocked aside while the cursor moves; when it stops, a damped swing back to north (the animation starts afresh each
+   time .moving goes away). Under that, the needle never quite stops trembling. */
+.ca-cp .cp-swing { transform-origin: 50% 50%; animation: caCpSettle 2.2s ease-in-out both; }
+.kind-compass.moving .ca-cp .cp-swing { animation: caCpKick .4s ease-out both; }
+.ca-cp .cp-needle { transform-origin: 50% 50%; animation: caCpQuiver 2.9s ease-in-out infinite alternate; }
+.ca-cp .cp-glint { transform-origin: 50% 11%; animation: caCpGlint 3.7s ease-in-out infinite; }
+.pv-cur.kind-compass .ca-cp .cp-swing { animation: caCpDemo 4.4s ease-in-out infinite; } /* the picker shows the swing over and over */
+@keyframes caCpKick { 0% { transform: rotate(0deg); } 45% { transform: rotate(-31deg); } 100% { transform: rotate(-26deg); } }
+@keyframes caCpSettle {
+  0% { transform: rotate(-26deg); } 14% { transform: rotate(17deg); } 28% { transform: rotate(-11deg); } 42% { transform: rotate(7deg); }
+  56% { transform: rotate(-4.2deg); } 70% { transform: rotate(2.4deg); } 84% { transform: rotate(-1.1deg); } 100% { transform: rotate(0deg); }
+}
+@keyframes caCpDemo {
+  0% { transform: rotate(0deg); } 7% { transform: rotate(-28deg); } 15% { transform: rotate(17deg); } 23% { transform: rotate(-11deg); }
+  31% { transform: rotate(7deg); } 39% { transform: rotate(-4.2deg); } 47% { transform: rotate(2.4deg); } 55% { transform: rotate(-1.1deg); } 64%, 100% { transform: rotate(0deg); }
+}
+@keyframes caCpQuiver { from { transform: rotate(-1.8deg); } to { transform: rotate(2.2deg); } }
+@keyframes caCpGlint { 0%, 66%, 100% { transform: scale(0) rotate(0deg); opacity: 0; } 78% { transform: scale(1) rotate(45deg); opacity: 1; } 90% { transform: scale(0) rotate(90deg); opacity: 0; } }
+
+/* ---------- 회오리 ---------- */
+/* the funnel is eight bands, each swinging sideways a little after the one above (a wave running down a rope), least at
+   the cloud and at the touchdown so the caret stays put; a streak crosses each band's face as it turns. */
+.ca-tn .tn-all { transform-origin: 50% 97%; transition: transform .6s cubic-bezier(.3, 1.6, .5, 1); }
+.kind-tornado.moving .ca-tn .tn-all { transform: skewX(13deg); transition: transform .07s ease-out; } /* typing bends it back */
+.ca-tn .tn-band { animation: caTnSway 1.7s ease-in-out infinite alternate; }
+.ca-tn .tn-a path:first-child { fill: url(#ca-tn-a); }
+.ca-tn .tn-b path:first-child { fill: url(#ca-tn-b); }
+.ca-tn .tn-cloudlo { fill: none; stroke: var(--ca-tn-c2); stroke-width: .9; stroke-linecap: round; opacity: .8; }
+.ca-tn .tn-lip, .ca-tn .tn-cloudhi { fill: none; stroke: var(--ca-tn-lip); stroke-width: .45; stroke-linecap: round; }
+.ca-tn .tn-streak path { fill: none; stroke: var(--ca-tn-streak); stroke-width: .6; stroke-linecap: round; }
+.ca-tn .tn-streak { animation: caTnStreak 1.05s linear infinite; }
+.ca-tn .tn-cloud { animation: caTnCloud 4.6s ease-in-out infinite alternate; }
+.ca-tn .tn-bit path { fill: var(--ca-tn-bit); }
+.ca-tn .tn-bit { animation: caTnOrbit 1.4s linear infinite; }
+.ca-tn .tn-base ellipse { fill: var(--ca-tn-dust); opacity: .75; }
+.ca-tn .tn-dust ellipse { fill: var(--ca-tn-dust); }
+.ca-tn .tn-dust { transform-origin: 50% 96%; animation: caTnDust 1.4s ease-out infinite; }
+/* gusts: arcs of wind circling the caret, round rings with a fading tail squashed flat (seen from the side) */
+.mt-cursor.kind-tornado { --tn-r1: min(320cqh, 140px); --tn-r2: min(520cqh, 230px); --tn-r3: min(760cqh, 330px); }
+.tn-wsq { position: absolute; left: 0; top: 0; width: 0; height: 0; transform: scaleY(.3); }
+.tn-gust { position: absolute; left: calc(var(--r) * -1); top: calc(var(--r) * -1); width: calc(var(--r) * 2); height: calc(var(--r) * 2); }
+.tn-gust path { fill: none; stroke: var(--ca-tn-g); stroke-width: 2.4px; vector-effect: non-scaling-stroke; }
+.tn-g1 { --r: var(--tn-r1); animation: caTnGust 1.5s linear infinite; }
+.tn-g2 { --r: var(--tn-r2); animation: caTnGust 2.3s linear -.8s infinite; }
+.tn-g3 { --r: var(--tn-r3); animation: caTnGust 3.4s linear -2s infinite; }
+@keyframes caTnSway { from { transform: translateX(calc(var(--a) * -1)); } to { transform: translateX(var(--a)); } }
+@keyframes caTnStreak { 0% { transform: translateX(calc(var(--s) * -1)); opacity: 0; } 25%, 70% { opacity: 1; } 100% { transform: translateX(var(--s)); opacity: 0; } }
+@keyframes caTnCloud { from { transform: translateX(-3%); } to { transform: translateX(3%); } }
+@keyframes caTnDust { 0% { transform: scale(.35, .5); opacity: .85; } 100% { transform: translateY(-1%) scale(1.9, 1.5); opacity: 0; } }
+@keyframes caTnGust { to { transform: rotate(-360deg); } } /* the near side runs left to right, like the streaks */
+@keyframes caTnOrbit { /* round the funnel, in front (lower half of the ellipse) bright, behind it faint, tumbling */
+  0% { transform: translate(calc(var(--rx) * -1), 0) rotate(0deg); opacity: .6; }
+  8.333% { transform: translate(calc(var(--rx) * -.866), calc(var(--ry) * .5)) rotate(60deg); opacity: .85; }
+  16.667% { transform: translate(calc(var(--rx) * -.5), calc(var(--ry) * .866)) rotate(120deg); opacity: 1; }
+  25% { transform: translate(0, var(--ry)) rotate(180deg); opacity: 1; }
+  33.333% { transform: translate(calc(var(--rx) * .5), calc(var(--ry) * .866)) rotate(240deg); opacity: 1; }
+  41.667% { transform: translate(calc(var(--rx) * .866), calc(var(--ry) * .5)) rotate(300deg); opacity: .85; }
+  50% { transform: translate(var(--rx), 0) rotate(360deg); opacity: .6; }
+  58.333% { transform: translate(calc(var(--rx) * .866), calc(var(--ry) * -.5)) rotate(420deg); opacity: .35; }
+  66.667% { transform: translate(calc(var(--rx) * .5), calc(var(--ry) * -.866)) rotate(480deg); opacity: .2; }
+  75% { transform: translate(0, calc(var(--ry) * -1)) rotate(540deg); opacity: .15; }
+  83.333% { transform: translate(calc(var(--rx) * -.5), calc(var(--ry) * -.866)) rotate(600deg); opacity: .2; }
+  91.667% { transform: translate(calc(var(--rx) * -.866), calc(var(--ry) * -.5)) rotate(660deg); opacity: .35; }
+  100% { transform: translate(calc(var(--rx) * -1), 0) rotate(720deg); opacity: .6; }
+}
+
+/* ---------- 해파리 ---------- */
+/* one stroke: the bell squeezes and the body darts up, the tentacles stream and draw in; then the bell opens and it
+   sinks back slowly */
+.ca-jf .jf-glow { animation: caJfGlow 2.8s ease-in-out infinite; }
+.ca-jf .jf-swim { animation: caJfSwim 2.8s infinite; }
+.ca-jf .jf-tilt { transform-origin: 50% 25%; transition: transform .7s cubic-bezier(.3, 1.5, .5, 1); }
+.kind-jellyfish.moving .ca-jf .jf-tilt { transform: rotate(9deg); transition: transform .12s ease-out; }
+.ca-jf .jf-tents { transform-origin: 50% 40%; transition: transform .8s cubic-bezier(.3, 1.4, .5, 1); }
+.kind-jellyfish.moving .ca-jf .jf-tents { transform: skewX(-18deg); transition: transform .14s ease-out; } /* ... and the tentacles sweep back */
+.ca-jf .jf-tl, .ca-jf .jf-tr, .ca-jf .jf-arms { transform-origin: 50% 40%; }
+.ca-jf .jf-tl { animation: caJfTent 2.8s ease-in-out infinite; }
+.ca-jf .jf-tr { animation: caJfTent 2.8s ease-in-out -.3s infinite; }
+.ca-jf .jf-arms { animation: caJfArms 2.8s ease-in-out -.15s infinite; }
+.ca-jf .jf-bellw { transform-origin: 50% 22.5%; animation: caJfBell 2.8s infinite; }
+.ca-jf .jf-dots { animation: caJfDots 1.4s ease-in-out infinite alternate; }
+.ca-jf .jf-mote { animation: caJfMote 4.4s linear infinite; }
+.ca-jf .jf-rim { fill: none; stroke: var(--ca-jf-rim); stroke-width: .8px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.ca-jf .jf-sub { fill: none; stroke: var(--ca-jf-rim); stroke-width: .45; opacity: .55; }
+.ca-jf .jf-gon ellipse { fill: var(--ca-jf-gon); fill-opacity: .28; stroke: var(--ca-jf-gon); stroke-width: .55; stroke-opacity: .9; }
+.ca-jf .jf-hi { fill: #fff; opacity: .55; }
+.ca-jf .jf-dots circle { fill: var(--ca-jf-dot); }
+.ca-jf .jf-tent path { fill: none; stroke: var(--ca-jf-tent); stroke-width: .62; stroke-linecap: round; }
+.ca-jf .jf-arms path { fill: var(--ca-jf-arm); }
+.ca-jf .jf-mote circle { fill: var(--ca-jf-dot); }
+@keyframes caJfSwim {
+  0% { transform: translateY(0); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
+  24% { transform: translateY(-6%); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  100% { transform: translateY(0); }
+}
+@keyframes caJfBell {
+  0% { transform: scale(1, 1); animation-timing-function: cubic-bezier(.3, 0, .6, 1); }
+  13% { transform: scale(.8, 1.07); animation-timing-function: cubic-bezier(.3, 0, .4, 1); }
+  34% { transform: scale(1.07, .94); animation-timing-function: ease-in-out; }
+  58%, 100% { transform: scale(1, 1); }
+}
+@keyframes caJfTent { 0%, 100% { transform: skewX(0deg) scale(1, 1); } 22% { transform: skewX(-4deg) scale(.82, 1.07); } 62% { transform: skewX(4deg) scale(1.05, .96); } }
+@keyframes caJfArms { 0%, 100% { transform: skewX(0deg) scaleY(1); } 24% { transform: skewX(3deg) scaleY(1.08); } 64% { transform: skewX(-3deg) scaleY(.95); } }
+@keyframes caJfGlow { 0%, 100% { opacity: .6; } 15% { opacity: 1; } 60% { opacity: .55; } }
+@keyframes caJfDots { from { opacity: .35; } to { opacity: 1; } }
+@keyframes caJfMote { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: .9; } 100% { transform: translateY(-45%); opacity: 0; } }

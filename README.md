@@ -24,7 +24,7 @@
 - **세션 복원** 껐다 켜도 탭과 대화가 그대로 이어집니다.
 - **화면 분할** 탭을 끌어다 놓으면 끝.
 - **프롬프트 작성기** 긴 프롬프트는 따로 편하게 쓰고 한 번에 보내기.
-- **꾸미기** 일하는 동안 테두리를 달리는 계주 선수, 끝나면 터지는 축하 효과, 배경과 타이핑 효과까지.
+- **꾸미기** 일하는 동안 테두리를 달리는 계주 선수, 끝나면 터지는 축하 효과, 배경, 타이핑 효과와 효과음, 움직이는 커서까지.
 - **한국어 / English / 日本語 / 中文**
 
 ### 화면 분할
@@ -45,11 +45,11 @@
 
 <img src="docs/media/border.gif" width="880" alt="작업 중 테두리가 계주, 추격전, 기차, 산타 썰매, 개미 행렬로 바뀌고 테마와 라이트 모드로 바뀌는 화면">
 
-### 배경과 타이핑 효과
+### 배경, 타이핑 효과, 커서
 
-뇌우, 블랙홀, 오로라... 배경과 타이핑 효과를 기분 따라 바꿔 보세요.
+밤하늘 불꽃, 마왕성, 한국의 밤... 배경과 타이핑 효과, 커서를 기분 따라 바꿔 보세요.
 
-<img src="docs/media/deco.gif" width="880" alt="배경과 타이핑 효과를 바꾸며 타이핑하는 화면">
+<img src="docs/media/deco.gif" width="880" alt="배경, 타이핑 효과, 커서를 바꾸며 타이핑하는 화면">
 
 ## 다운로드
 
@@ -99,7 +99,7 @@ Run `claude` or `codex` in your usual shell (cmd, PowerShell, zsh) and the tab s
 - **Session restore.** Close the app and your tabs and Claude / Codex conversations come back next time.
 - **Split panes.** Drag a tab onto the terminal to split it.
 - **Prompt composer.** Write long, multi-line prompts in a separate editor and send them in one go.
-- **Decorations.** Working borders (a relay race, Santa's sleigh...), celebrations when a task is done, animated backgrounds, typing effects and sounds, dark and light themes.
+- **Decorations.** Working borders (a relay race, Santa's sleigh...), celebrations when a task is done, animated backgrounds, typing effects and sounds, animated cursors, dark and light themes.
 - **Languages.** Korean, English, Japanese, Chinese.
 
 **Download** from [Releases](../../releases/latest): the `.exe` for Windows, or the `.zip` for your Mac (`arm64` for Apple Silicon, `x64` for Intel). On Windows, choose *More info > Run anyway* if SmartScreen appears. On macOS, if the app is reported as damaged, run `xattr -cr .` in the unzipped folder, then `bash "MinsuTerm 설치.command"`. The app isn't notarized yet.
@@ -108,4 +108,4 @@ Run `claude` or `codex` in your usual shell (cmd, PowerShell, zsh) and the tab s
 
 **Support.** It's a one-person project. If you like it, [buy me a coffee](https://buymeacoffee.com/minsugwon) or sponsor on GitHub. It goes toward Apple notarization and Windows code signing first.
 
-<sub>Claude and Claude Code are trademarks of Anthropic. Codex is a trademark of OpenAI. MinsuTerm is an independent project. Sound credits: [SOUND-CREDITS.md](SOUND-CREDITS.md)</sub>
+<sub>Claude and Claude Code are trademarks of Anthropic. Codex is a trademark of OpenAI. MinsuTerm is an independent project. Sound credits: [SOUND-CREDITS.md](SOUND-CREDITS.md). Icon font: Symbols Nerd Font, MIT ([license](src/renderer/fonts/NERD-FONTS-LICENSE.txt)).</sub>

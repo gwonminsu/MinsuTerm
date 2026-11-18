@@ -130,7 +130,8 @@ window.SceneKit = (() => {
   }
   /** The scene's static layers, rebuilt when the size, pixel ratio or light / dark mode changes. */
   function scene(bg, V, build) {
-    const key = `${V.W}x${V.H}@${bg.dpr}${light() ? 'L' : 'D'}`;
+    // the kind is part of the key: switching from one scene to another at the same size must not hand over its layers
+    const key = `${bg.kind}:${V.W}x${V.H}@${bg.dpr}${light() ? 'L' : 'D'}`;
     if (!bg.scene || bg.scene.key !== key) { bg.scene = build(); bg.scene.key = key; }
     return bg.scene;
   }
