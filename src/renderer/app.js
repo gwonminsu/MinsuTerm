@@ -1707,14 +1707,45 @@ function findDrawnCaret(tab) {
   }
   return prompt || lowest;
 }
+/** The cell just past the last non-blank one on screen row y (0 for a blank row). */
+function rowEnd(tab, y) {
+  const b = tab.term.buffer.active, line = b.getLine(b.viewportY + y), cell = b.getNullCell();
+  if (!line) return 0;
+  for (let x = tab.term.cols - 1; x >= 0; x--) {
+    if (!line.getCell(x, cell)) continue;
+    const ch = cell.getChars();
+    if (ch && ch !== ' ') return x + Math.max(1, cell.getWidth());
+  }
+  return 0;
+}
+/** Where the text of row y starts, past a prompt mark (❯ › >) and the indent: a wrapped input goes on from here. */
+function rowStart(tab, y) {
+  const b = tab.term.buffer.active, line = b.getLine(b.viewportY + y);
+  const m = line ? /^\s*(?:[❯›>]\s+)?/.exec(line.translateToString(false)) : null;
+  return m && m[0].length <= 8 ? m[0].length : 2;
+}
+function setCaret(tab, c) { tab.caret = c; tab.caretAt = performance.now(); }
 function settleCaret(tab) {
   const t = tab.term;
   const b = t.buffer.active;
   if (b.viewportY !== b.baseY) return;
   let hidden = false;
   try { hidden = !!t._core.coreService.isCursorHidden; } catch { /* ignore */ }
-  if (!hidden) { tab.caret = { x: b.cursorX, y: b.cursorY }; tab.curShownAt = performance.now(); }
-  else if (tab.agent && !(performance.now() - (tab.curShownAt || 0) < CURSOR_REDRAW_MS)) { const c = findDrawnCaret(tab); if (c) tab.caret = c; }
+  if (!hidden) {
+    setCaret(tab, { x: b.cursorX, y: b.cursorY }); tab.curShownAt = performance.now();
+    tab.caretAtEnd = b.cursorX >= rowEnd(tab, b.cursorY); // typing at the end of the input (not editing in the middle of it)
+  } else if (tab.agent && !(performance.now() - (tab.curShownAt || 0) < CURSOR_REDRAW_MS)) {
+    const c = findDrawnCaret(tab);
+    if (c) setCaret(tab, c);
+    else if (tab.caret && tab.caretAtEnd) {
+      // Claude Code (a long session, a background one attached) keeps its cursor hidden for as long as keys keep
+      // coming: held down, the caret stayed where the key went down and the effects lost their place. Typing at the
+      // end of the input, the caret is the end of the text on its row (the box grows upward as the input wraps, so
+      // the row stays put).
+      const n = rowEnd(tab, tab.caret.y);
+      if (n >= 1 && n <= t.cols - 1 && n !== tab.caret.x) setCaret(tab, { x: n, y: tab.caret.y });
+    }
+  }
   // (an agent that showed its cursor a moment ago is only redrawing: the caret stays where it was)
 }
 function stableCaret(tab) {
@@ -1784,10 +1815,14 @@ function spawnFx(tab, data, jamo = false) {
       const edge = g0.left + (tab.term.cols - 1 - c0.x) * g0.cw; // the last column
       let left = g0.left;
       // keys arrive faster than the echo (a held key, a slow session): carry on from the previous key's cell; if the
-      // box moved a row meanwhile, the column still holds. Not when the caret is far behind that cell (a long prompt
-      // wrapped onto a new line: the caret went back to its start) or the cell would lie past the last column \u2014 the
-      // effects ran on past the right edge then, until typing paused.
-      if (pr && !pr.del && now - pr.t < 1500 && pr.left > left && pr.left - left < 24 * g0.cw && pr.left + (cells - 1) * g0.cw <= edge + 0.5) left = pr.left;
+      // box moved a row meanwhile, the column still holds. Not when the caret has moved since and is far behind that
+      // cell: a long prompt wrapped onto a new line, the caret went back to its start. (A caret that has not moved
+      // since says nothing: falling back to it sent the effects of a held key back to where it went down, again and
+      // again.) A cell past the last column goes on at the start of the next line, which takes the same row.
+      if (pr && !pr.del && now - pr.t < 1500 && pr.left > left && !((tab.caretAt || 0) > pr.t && pr.left - left >= 24 * g0.cw)) {
+        left = pr.left;
+        if (left + (cells - 1) * g0.cw > edge + 0.5) left = g0.left + (rowStart(tab, c0.y) - c0.x) * g0.cw;
+      }
       pre = { left, top: g0.top, cells };
       tab.fxPred = { left: left + cells * g0.cw, top: g0.top, t: now };
     }
@@ -1798,8 +1833,12 @@ function spawnFx(tab, data, jamo = false) {
     const g0 = cursorGeometry(tab), c0 = stableCaret(tab);
     if (g0) {
       const now = performance.now(), pr = tab.fxPred, b = tab.term.buffer.active, line = b.getLine(b.viewportY + c0.y);
-      let col = pr && pr.del && now - pr.t < 1500 && pr.col < c0.x ? pr.col : c0.x;
-      for (let i = 0; i < data.length && col > 0; i++) {
+      // (not when the caret has moved since and is far ahead of that cell: deleting back across a wrapped line brought
+      // the previous line onto the caret's row, its end far to the right; nor into the prompt mark before the text)
+      let col = pr && pr.del && now - pr.t < 1500 && pr.col < c0.x && !((tab.caretAt || 0) > pr.t && c0.x - pr.col >= 24) ? pr.col : c0.x;
+      const start = tab.agent ? Math.min(c0.x, rowStart(tab, c0.y)) : 0;
+      if (col <= start && c0.x > col) col = c0.x;
+      for (let i = 0; i < data.length && col > start; i++) {
         col--;
         const cell = line && line.getCell(col);
         if (cell && cell.getWidth() === 0 && col > 0) col--; // the second half of a wide character
@@ -5793,7 +5832,7 @@ function createTab(opts = {}) {
     let hidden = false;
     try { hidden = !!term._core.coreService.isCursorHidden; } catch { /* ignore */ }
     if (!hidden) tab.curShownAt = performance.now(); // see updateCursor: a redraw hides the cursor for a moment
-    if (!hidden && tab.caret && b.cursorY === tab.caret.y && b.cursorX < term.cols - 1 && b.viewportY === b.baseY) tab.caret = { x: b.cursorX, y: b.cursorY };
+    if (!hidden && tab.caret && b.cursorY === tab.caret.y && b.cursorX < term.cols - 1 && b.viewportY === b.baseY) { setCaret(tab, { x: b.cursorX, y: b.cursorY }); tab.caretAtEnd = b.cursorX >= rowEnd(tab, b.cursorY); }
     // While the user types (or holds a key) an agent keeps redrawing and the output never pauses for 24 ms:
     // then the caret is read at least every 60 ms anyway, or it would stay where the typing began.
     const now = performance.now();
@@ -5881,7 +5920,7 @@ function createTab(opts = {}) {
     if (isTerminalReport(d)) return;
     tab.lastIn = Date.now();
     if (tab.agent && !d.startsWith('\x1b[200~') && !/[\x00-\x1f\x7f]/.test(d)) {
-      // (a lead that no longer holds \u2014 the caret went back left as a long prompt wrapped \u2014 starts again from the caret)
+      // (a lead that no longer holds (the caret went back left as a long prompt wrapped) starts again from the caret)
       const c = stableCaret(tab), now = performance.now(), ah = tab.ahead;
       const prev = ah && now - ah.t < 700 && ah.y === c.y && c.x >= ah.base && c.x >= (ah.seen || 0) ? ah : null;
       const cells = [...d].reduce((n, ch) => n + (/[\u1100-\u115f\u2e80-\u303e\u3041-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(ch) ? 2 : 1), 0);
