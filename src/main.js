@@ -465,7 +465,8 @@ const PROBE_SCRIPT = [
   '  if ($null -eq $line) { break }',
   '  foreach ($p in (Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,Name,CommandLine)) {',
   '    $c = ""',
-  '    if ($p.Name -eq "node.exe" -or $p.Name -eq "bun.exe") { $c = [string]$p.CommandLine; $c = $c -replace "[\\r\\n\\t]", " " }',
+  // the command line of node / bun (which script it runs) and of the agents themselves (the session they resume)
+  '    if ($p.Name -eq "node.exe" -or $p.Name -eq "bun.exe" -or $p.Name -eq "claude.exe" -or $p.Name -eq "codex.exe") { $c = [string]$p.CommandLine; $c = $c -replace "[\\r\\n\\t]", " " }',
   '    [Console]::Out.WriteLine("$($p.ProcessId)`t$($p.ParentProcessId)`t$($p.Name)`t$c")',
   '  }',
   '  [Console]::Out.WriteLine("<<END>>")',
@@ -543,6 +544,18 @@ function classify(name, cmdline) {
   return null;
 }
 
+/**
+ * The session an agent was started on, from its command line (`claude --resume <id>`, `--session-id <id>`): a
+ * session typed by hand is known at once, not guessed later from the transcripts that changed lately in its folder,
+ * which picked another session working in the same folder. A forked resume starts a new session: not this id.
+ */
+function sessionArg(cmd) {
+  const c = String(cmd || '');
+  if (/--fork-session/.test(c)) return '';
+  const m = /(?:^|\s)(?:--resume|-r|--session-id)(?:\s+|=)"?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(c);
+  return m ? m[1].toLowerCase() : '';
+}
+
 function analyze(snap) {
   const children = new Map();
   const info = new Map();
@@ -564,17 +577,20 @@ function analyze(snap) {
     if (!root || !info.has(root)) continue;
     const stack = [...(children.get(root) || [])];
     const seen = new Set();
+    let sid = '';
     while (stack.length && !found) {
       const id = stack.shift();
       if (seen.has(id)) continue;
       seen.add(id);
       const it = info.get(id);
       if (it) found = classify(it.name, it.cmd);
+      if (found) sid = sessionArg(it.cmd);
       if (!found) stack.push(...(children.get(id) || []));
     }
-    if (found !== rec.agent) {
+    if (found !== rec.agent || (found && sid && sid !== rec.sid)) {
       rec.agent = found;
-      send('pty:agent', tabId, found);
+      rec.sid = found ? sid : '';
+      send('pty:agent', tabId, found, rec.sid);
     }
   }
 }
@@ -642,6 +658,27 @@ const samePath = (a, b) => normPath(a).toLowerCase() === normPath(b).toLowerCase
 
 function claudeDirFor(cwd) {
   return path.join(CLAUDE_PROJECTS, normPath(cwd).replace(/[^A-Za-z0-9]/g, '-'));
+}
+/**
+ * A Claude session's transcript: in the folder for the tab's directory, or else wherever it is under the projects
+ * folder (`cd /d C:\ && claude --resume <id>` on one line: the tab's directory still says where the shell was).
+ */
+const claudeFound = new Map(); // id → transcript found elsewhere, or the time it was looked for in vain
+function claudeFile(cwd, id) {
+  const f = path.join(claudeDirFor(cwd), `${id}.jsonl`);
+  if (exists(f)) return f;
+  const hit = claudeFound.get(id);
+  if (typeof hit === 'string' && exists(hit)) return hit;
+  if (typeof hit === 'number' && Date.now() - hit < 10000) return f; // looked a moment ago: not there
+  try {
+    for (const d of fs.readdirSync(CLAUDE_PROJECTS)) {
+      const g = path.join(CLAUDE_PROJECTS, d, `${id}.jsonl`);
+      if (exists(g)) { claudeFound.set(id, g); return g; }
+    }
+  } catch { /* ignore */ }
+  claudeFound.set(id, Date.now());
+  if (claudeFound.size > 100) claudeFound.delete(claudeFound.keys().next().value);
+  return f;
 }
 
 function readHead(file, size, max) {
@@ -959,7 +996,7 @@ ipcMain.handle('agent:has', (_e, agent, cwd, id) => hasSession(agent, cwd, id));
 function lastPrompt(agent, cwd, id) {
   if (!UUID_RE.test(String(id || ''))) return '';
   let file = '';
-  if (agent === 'claude') file = path.join(claudeDirFor(cwd), `${id}.jsonl`);
+  if (agent === 'claude') file = claudeFile(cwd, id);
   else if (agent === 'codex') file = codexFile(id);
   if (!file || !exists(file)) return '';
   try {
@@ -996,7 +1033,7 @@ ipcMain.handle('agent:lastPrompt', (_e, agent, cwd, id) => lastPrompt(agent, cwd
 function turnState(agent, cwd, id) {
   if (!UUID_RE.test(String(id || ''))) return 'unknown';
   let file = '';
-  if (agent === 'claude') file = path.join(claudeDirFor(cwd), `${id}.jsonl`);
+  if (agent === 'claude') file = claudeFile(cwd, id);
   else if (agent === 'codex') file = codexFile(id);
   if (!file || !exists(file)) return 'unknown';
   try {
@@ -1038,6 +1075,7 @@ function turnState(agent, cwd, id) {
  */
 const SUB_TAIL = 16 * 1024 * 1024; // how far back the first look at a transcript goes
 const SUB_LOST = 30 * 60 * 1000;   // a background sub-agent whose own transcript has been still this long is gone
+const SHELL_LOST = 6 * 3600 * 1000; // a background command running this long without an end is taken to be gone
 const subCache = new Map();        // session id → { file, pos, carry, dec, map, skip, live }
 
 function subagentLine(agent, c, line) {
@@ -1078,8 +1116,10 @@ function subagentLine(agent, c, line) {
     const m = /"id":"(msg_[A-Za-z0-9_-]+)"/.exec(line);
     if (m) for (const x of map.values()) if (x.status === 'running' && !x.bg && x.msg && x.msg !== m[1]) map.delete(x.id);
   }
-  // only two kinds of entry matter: a launch, and the result of a launch we know (lines can be megabytes long)
-  const launch = line.includes('"tool_use"') && (line.includes('"Agent"') || line.includes('"Task"'));
+  // only two kinds of entry matter: a launch, and the result of a launch we know (lines can be megabytes long). A
+  // launch is a sub-agent, a message that may set a finished sub-agent to work again, or a command left running in
+  // the background: each goes on after the agent's own turn ends, which must not count as done before they are.
+  const launch = line.includes('"tool_use"') && (line.includes('"Agent"') || line.includes('"Task"') || line.includes('"SendMessage"') || /"run_in_background":\s*true/.test(line));
   let result = false;
   if (!launch && map.size && line.includes('"tool_use_id"')) {
     const re = /"tool_use_id":\s*"([^"]+)"/g;
@@ -1093,15 +1133,30 @@ function subagentLine(agent, c, line) {
   const content = o.message && o.message.content;
   if (!Array.isArray(content)) return;
   if (o.type === 'assistant') {
+    const start = Date.parse(o.timestamp || '') || 0, msg = String((o.message && o.message.id) || '');
     for (const q of content) {
-      if (q.type !== 'tool_use' || (q.name !== 'Agent' && q.name !== 'Task')) continue;
+      if (q.type !== 'tool_use') continue;
       const inp = q.input || {};
-      map.set(q.id, { id: q.id, kind: inp.subagent_type || 'agent', name: String(inp.description || '').slice(0, 60), status: 'running', start: Date.parse(o.timestamp || '') || 0, end: 0, msg: String((o.message && o.message.id) || '') });
+      if (q.name === 'Agent' || q.name === 'Task') {
+        map.set(q.id, { id: q.id, kind: inp.subagent_type || 'agent', name: String(inp.description || '').slice(0, 60), status: 'running', start, end: 0, msg });
+      } else if (q.name === 'SendMessage' && inp.to) {
+        // to a sub-agent that had finished, it starts another run (its result says so); the run shows as that agent
+        const to = String(inp.to), was = [...map.values()].reverse().find((x) => x.agentId && (x.agentId === to || x.agentId.startsWith(to)));
+        map.set(q.id, { id: q.id, kind: was ? was.kind : 'agent', name: was ? was.name : '', status: 'running', start, end: 0, msg, resume: to });
+      } else if (inp.run_in_background === true) { // a shell command left running in the background
+        map.set(q.id, { id: q.id, kind: 'shell', name: String(inp.description || inp.command || '').replace(/\s+/g, ' ').slice(0, 60), status: 'running', start, end: 0, msg, bg: true, shell: true });
+      }
     }
   } else if (o.type === 'user') {
     for (const q of content) {
       if (q.type !== 'tool_result' || !map.has(q.tool_use_id)) continue;
       const x = map.get(q.tool_use_id), r = o.toolUseResult || {};
+      if (x.resume) { // a message: only one that woke a finished sub-agent starts a run of its own
+        const id = r.resumedAgentId || r.revivedAgentId;
+        if (id && !q.is_error) { x.bg = true; x.agentId = String(id); } else map.delete(x.id);
+        continue;
+      }
+      if (x.shell) { if (q.is_error || !r.backgroundTaskId) { x.status = 'failed'; x.end = c.live ? Date.now() : 0; } continue; } // started: it goes on
       if (r.isAsync) { x.bg = true; x.agentId = String(r.agentId || ''); } // launched in the background: it goes on
       else { x.status = q.is_error ? 'failed' : 'done'; x.end = c.live ? Date.now() : 0; }
     }
@@ -1111,7 +1166,7 @@ function subagentLine(agent, c, line) {
 function subagents(agent, cwd, id, since = 0) {
   if (!UUID_RE.test(String(id || ''))) return [];
   let file = '';
-  if (agent === 'claude') file = path.join(claudeDirFor(cwd), `${id}.jsonl`);
+  if (agent === 'claude') file = claudeFile(cwd, id);
   else if (agent === 'codex') file = (codexFiles(30).find(({ file: f }) => path.basename(f).toLowerCase().includes(String(id).toLowerCase())) || {}).file || '';
   if (!file || !exists(file)) return [];
   let c = subCache.get(id);
@@ -1142,15 +1197,19 @@ function subagents(agent, cwd, id, since = 0) {
   } catch { /* ignore */ }
   if (!c) return [];
   const now = Date.now(), out = [];
+  const latest = new Map(); // a sub-agent set to work again shows once, as its latest run
+  for (const x of c.map.values()) if (x.agentId) latest.set(x.agentId, x.id);
   for (const x of c.map.values()) {
+    if (x.agentId && latest.get(x.agentId) !== x.id) continue;
     if (x.status === 'running' && x.bg && x.agentId) { // still writing its own transcript?
       try {
         if (now - fs.statSync(path.join(path.dirname(file), id, 'subagents', `agent-${x.agentId}.jsonl`)).mtimeMs > SUB_LOST) { c.map.delete(x.id); continue; }
       } catch { /* not there (yet) */ }
     }
     if (x.status === 'running' && agent !== 'claude' && now - (c.mtime || now) > SUB_LOST) { c.map.delete(x.id); continue; } // Codex: no end was ever written
+    if (x.status === 'running' && x.shell && now - (x.start || now) > SHELL_LOST) { c.map.delete(x.id); continue; } // its end never came (the agent was closed)
     if (x.status !== 'running' && x.start < since && x.end < since) { if (now - Math.max(x.start, x.end) > 3600000) c.map.delete(x.id); continue; }
-    out.push({ id: x.id, kind: x.kind, name: x.name, status: x.status, start: x.start });
+    out.push({ id: x.id, look: x.agentId ? `ag:${x.agentId}` : x.id, kind: x.kind, name: x.name, status: x.status, start: x.start });
   }
   return out.slice(-12);
 }
@@ -1160,7 +1219,7 @@ ipcMain.handle('agent:subagents', (_e, agent, cwd, id, since) => subagents(agent
 const compactCache = new Map(); // file → { pos, carry, dec, times }: the place in the transcript is kept, like subagents() does
 ipcMain.handle('agent:compactedSince', (_e, agent, cwd, id, since) => {
   if (agent !== 'claude' || !UUID_RE.test(String(id || ''))) return false;
-  const file = path.join(claudeDirFor(cwd), `${id}.jsonl`);
+  const file = claudeFile(cwd, id);
   try {
     const size = fs.statSync(file).size;
     let rec = compactCache.get(file);
@@ -1194,7 +1253,7 @@ ipcMain.handle('agent:turn', (_e, agent, cwd, id) => {
   const state = turnState(agent, cwd, id);
   let mtime = 0;
   try {
-    const f = agent === 'claude' ? path.join(claudeDirFor(cwd), `${id}.jsonl`) : codexFile(id);
+    const f = agent === 'claude' ? claudeFile(cwd, id) : codexFile(id);
     if (f) mtime = fs.statSync(f).mtimeMs;
   } catch { /* ignore */ }
   return { state, mtime };

@@ -7031,9 +7031,19 @@ window.mt.pty.onExit((id, code) => {
   saveLayout();
 });
 
-window.mt.pty.onAgent((id, agent) => {
+window.mt.pty.onAgent((id, agent, sid) => {
   const tab = tabById(id);
-  if (tab) setAgent(tab, agent);
+  if (!tab) return;
+  setAgent(tab, agent);
+  // started on a session named on its command line (claude --resume <id>, typed by hand): that one, at once — its
+  // sub-agents and background commands are read from it
+  if (agent && sid && tab.sessionId !== sid) {
+    tab.sessionId = sid;
+    S.sessionCache.delete(normP(tab.cwd));
+    saveLayout();
+    if (tab.id === S.activeId) renderStatus();
+    renderProjects();
+  }
 });
 
 function setAgent(tab, agent) {
@@ -7545,7 +7555,7 @@ MINION_PROPS.book = '<svg class="mn-prop" viewBox="0 0 12 12"><path d="M6 3.2C4.
 MINION_PROPS.radio = '<svg class="mn-prop" viewBox="0 0 12 12"><rect x="2" y="4.6" width="5" height="6.8" rx="1" fill="#4a5163"/><rect x="3" y="5.6" width="3" height="1.6" rx=".3" fill="#69db7c"/><path d="M5.6 4.6V1" stroke="#9aa3b5" stroke-width=".9"/></svg>';
 const MINION_FX = { weld: 4, hammer: 1, laptop: 3, papers: 3, dig: 3, magnify: 0, gear: 0, paint: 1, saw: 3, broom: 3, flask: 3, drill: 3, water: 3, book: 0, radio: 3 }; // particles per action
 
-const SUBAGENT_KIND = { 'general-purpose': '범용', claude: '범용', fork: '분신', explore: '탐색', plan: '계획', 'statusline-setup': '설정', 'claude-code-guide': '안내', 'code-reviewer': '리뷰', 'test-runner': '테스트' };
+const SUBAGENT_KIND = { 'general-purpose': '범용', claude: '범용', shell: '명령', fork: '분신', explore: '탐색', plan: '계획', 'statusline-setup': '설정', 'claude-code-guide': '안내', 'code-reviewer': '리뷰', 'test-runner': '테스트' };
 const subagentKind = (k) => SUBAGENT_KIND[String(k).toLowerCase()] || k;
 
 /** Rows for the sub-agents an agent's running task launched, hung under the task. */
@@ -7561,12 +7571,12 @@ function subagentRowsHtml(tab) {
   const rows = list.map((a) => `
     <div class="item child subagent sa-${a.status}" title="${esc(a.kind)}${a.name ? ' · ' + esc(a.name) : ''}">
       ${(() => {
-        const w = MINION_WORK[minionHash(a.id + ':work') % MINION_WORK.length];
+        const w = MINION_WORK[minionHash((a.look || a.id) + ':work') % MINION_WORK.length];
         const live = a.status === 'running';
-        const paint = MINION_COLORS[minionHash(a.id + ':paint') % MINION_COLORS.length];
+        const paint = MINION_COLORS[minionHash((a.look || a.id) + ':paint') % MINION_COLORS.length];
         const fx = live ? Array.from({ length: MINION_FX[w] || 0 }, (_, i) => `<i class="mfx f${i}"></i>`).join('') : '';
         const fresh = a.status === 'done' && !!(tab.subCheer && tab.subCheer.has(a.id));
-        return `<span class="minion mw-${w}${fresh ? ' mn-cheer' : ''}" style="--paint:${paint}">${minionSvg(a.id, live ? w : '')}${live ? MINION_PROPS[w] : ''}${fx}${badge(a)}</span>`;
+        return `<span class="minion mw-${w}${fresh ? ' mn-cheer' : ''}" style="--paint:${paint}">${minionSvg(a.look || a.id, live ? w : '')}${live ? MINION_PROPS[w] : ''}${fx}${badge(a)}</span>`;
       })()}
       <span class="sa-text"><b>${esc(subagentKind(a.kind))}</b>${a.name ? `<span class="sa-sum no-i18n">(${esc(a.name)})</span>` : ''}</span>
       <span class="sa-state">${a.status === 'running' ? '<i></i><i></i><i></i>' : a.status === 'failed' ? icon('x') : ''}</span>
