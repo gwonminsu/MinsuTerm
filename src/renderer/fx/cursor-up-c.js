@@ -228,9 +228,9 @@
   };
 
   /*
-   * One small watcher on the terminal's cursor element: each time it moves (updateCursor sets a new translate) it turns
-   * the comet's tail to point back the way the caret came (--cuc-cm-a, and --cuc-cm-k: how far the tail stretches, more
-   * for a long jump), and gives these cursors a "kick": it restarts a one-shot animation on the next .cuc-kick element
+   * One small watcher on the terminal's cursor element (and on the composer's): each time it moves (updateCursor sets a
+   * new translate) it turns the comet's tail to point back the way the caret came (--cuc-cm-a, and --cuc-cm-k: how far
+   * the tail stretches, more for a long jump), and gives these cursors a "kick": it restarts a one-shot animation on the next .cuc-kick element
    * of the drawing by swapping its class between .cuc-ka and .cuc-kb (two copies of the same keyframes, so the swap
    * starts it again). Kicks are at most one per 110 ms and go round the drawing's kick elements in turn, so a held key
    * keeps up a steady spray instead of restarting one burst over and over. updateCursor rewrites the cursor's className,
@@ -283,6 +283,7 @@
     const el = document.querySelector('#stage > .mt-cursor');
     if (el) watch(el); else setTimeout(find, 800);
   };
+  (window.CURSOR_INIT = window.CURSOR_INIT || []).push(watch); // the composer's cursor, a copy made when it opens, is watched the same way
   const start = () => { mount(); find(); };
   if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
 })();

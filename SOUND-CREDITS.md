@@ -89,7 +89,7 @@ Each background has its own loop: cut into a seamless loop (whole bars for rhyth
 | warp | [Space Arp F Chords.wav](https://freesound.org/s/473996/) |
 | tunnel | [Cosmic Glow](https://freesound.org/s/391438/) |
 | lanterns | [Lake Night.wav](https://freesound.org/s/744098/) |
-| lavalamp | [lofi.wav](https://freesound.org/s/587897/) |
+| lavalamp | [lofi.wav](https://freesound.org/s/587897/), extended for MinsuTerm with six more bars generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI) |
 | dna | [Sci-fi Ambient Drone.wav](https://freesound.org/s/534018/) |
 | code | [Scanner Reel.wav](https://freesound.org/s/466445/) |
 | circuit | [Circuit Synthwave](https://freesound.org/s/460357/) |
@@ -106,7 +106,7 @@ Each background has its own loop: cut into a seamless loop (whole bars for rhyth
 | castle | [Orchestral Suspense Loop 1](https://freesound.org/s/387223/) |
 | ruins | made for MinsuTerm: generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI) |
 | hell | [Drone Horror Music 03](https://freesound.org/s/465858/) + [fire roar and crackle](https://freesound.org/s/386560/) |
-| cyberpunk | [Cyberpunk Beat](https://freesound.org/s/525290/) |
+| cyberpunk | [Cyberpunk Beat](https://freesound.org/s/525290/), extended for MinsuTerm with four more bars generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI) |
 | arcade | made for MinsuTerm: an arcade-hall bed generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI), with synthesized 8-bit game sounds and a chiptune tune |
 | korea | Original gugak-style piece (gayageum and daegeum), generated for MinsuTerm with ACE-Step 1.5 |
 | cheonma | made for MinsuTerm: generated locally with Stable Audio 3 Medium (Stability AI Community License; Powered by Stability AI) |

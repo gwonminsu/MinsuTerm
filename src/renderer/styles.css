@@ -833,10 +833,16 @@ body.grabbing, body.grabbing * { cursor: grabbing !important; }
 /* composer: the terminal's input decorations (cursor, typing effect) live in this field */
 .composer-field { position: relative; }
 .composer-field textarea { position: relative; z-index: 1; }
-.composer-field .mt-cursor { z-index: 2; }
+/* the cursor's box: the textarea inside its border. What a cursor spreads round the caret (레이더's screen, 십자선's
+   lines, 등대's beam …) stays in it, under its round corners, as the terminal's stays in its pane */
+.composer-curbox { position: absolute; z-index: 2; overflow: hidden; border-radius: 9px; pointer-events: none; }
+/* the cursors xterm draws in the terminal, drawn here (the native caret would be 1 px and blink on its own) */
 .composer-field .mt-cursor.kind-block { background: var(--cc); opacity: 0.55; border-radius: 1px; }
+.composer-field .mt-cursor.kind-block.blurred { opacity: .25; }
 .composer-field .mt-cursor.kind-underline::after { content: ''; position: absolute; left: 0; right: 0; bottom: 2px; height: 2px; background: var(--cc); }
-.composer-field .mt-cursor.kind-bar-thick::after { content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 3px; background: var(--cc); }
+.composer-field .mt-cursor:is(.kind-bar-thin, .kind-bar, .kind-bar-thick)::after { content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 3px; background: var(--cc); }
+.composer-field .mt-cursor.kind-bar-thin::after { width: 1px; }
+.composer-field .mt-cursor.kind-bar::after { width: 2px; }
 .composer-mirror {
   position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none;
   white-space: pre-wrap; overflow-wrap: break-word; border-style: solid; border-color: transparent; box-sizing: border-box;

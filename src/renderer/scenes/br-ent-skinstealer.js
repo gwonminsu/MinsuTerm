@@ -94,7 +94,7 @@
 
   // ---- what the parts are made of: the borrowed skin, the face, holes, nails, hair, a wet eye, the shade of an edge,
   // cloth, the dark wrong thing under the skin where it does not cover, lips
-  const SKIN = 0, FACE = 1, VOID = 2, NAIL = 3, HAIR = 4, WET = 5, HALO = 6, CLOTH = 7, FRAME = 8, LIP = 9;
+  const SKIN = 0, FACE = 1, VOID = 2, NAIL = 3, HAIR = 4, WET = 5, HALO = 6, CLOTH = 7, FRAME = 8, LIP = 9, HOLE = 10; // (HOLE: cut through, whatever is under it shows)
 
   /** Wrinkles: short creases (u along them, v across them, dens per metre), wavy and broken, each running only part way. 0..1 how deep one is here. */
   function wrinkle(u, v, dens, b) {
@@ -312,7 +312,14 @@
     headBase(x, y, o, b);
     const hm = hair(x, y, o, b, 0.14, 0.05);
     if (hm < 0.5 && o.m === SKIN) { o.m = FRAME; o.t = vn(x * 250, y * 250); } // under the face, nothing like a face
+    if (o.m !== FRAME) return;
+    for (const [ex, ey, r] of HEYE) { // and its own eyes in it, set wider and lower than a person's: wet, round, staring
+      const q = Math.hypot(x - ex, (y - ey) * 1.08);
+      if (q < r * 1.9) { o.ao *= 1 - 0.55 * Math.exp(-(((q - r * 1.15) / (r * 0.45)) ** 2)); o.h -= 0.004 * Math.exp(-((q / (r * 1.6)) ** 2)); } // a deep socket round it
+      if (q < r) { o.h += 0.005 * Math.sqrt(1 - (q / r) ** 2); const qi = Math.hypot(x - ex - r * 0.3 * Math.sign(ex), y - ey + r * 0.1); o.m = qi < r * 0.22 ? VOID : qi < r * 0.36 ? HAIR : WET; o.t = 0.15; o.gl = 1.5; } // (the pupil off to the side: it is looking at us out of the corner)
+    }
   } };
+  const HEYE = [[-0.026, 0.112, 0.0135], [0.036, 0.094, 0.0125]];
   PART.headB = { x0: -0.095, x1: 0.095, y0: -0.015, y1: 0.255, yN: 2.24, nx: 13.3, ny: 2.1, shape(x, y, o, b) {
     headBase(x, y, o, b);
     const hm = hair(x, y, o, b, -0.1, -0.035);
@@ -326,18 +333,26 @@
    * mouth too wide, its corners dragged down. open: how far the lips have parted. human: the man's own face.
    */
   function facePart(open, human) {
-    return { x0: -0.08, x1: 0.08, y0: -0.02, y1: 0.205, yN: 2.24, nx: human ? 3.7 : 17.7, ny: 6.6, shape(x, y, o, b) {
+    return { x0: -0.09, x1: 0.09, y0: -0.03, y1: 0.205, yN: 2.24, nx: human ? 3.7 : 17.7, ny: 6.6, shape(x, y, o, b) {
       // the outline: a long face with jowls hanging at the bottom
-      const jw = human ? 0 : 0.008 * ss(0.07, 0.02, y);
-      const fd = ell(x, y, 0, 0.096, (human ? 0.058 : 0.059) + jw, human ? 0.084 : 0.09) + 0.0014 * (vn(x * 80 + 3, y * 80) - 0.5);
-      if (fd > 0) { if (!human && fd < 0.008) { o.d = -1; o.m = HALO; o.t = (1 - fd / 0.008) ** 1.5; } return; } // the shade its edge throws
-      o.d = fd; o.m = human ? SKIN : FACE; o.h = headH(x, y * 0.95) + 0.0025 * ss(-0.005, -0.001, fd);
-      if (!human) o.ao *= 1 - 0.35 * Math.exp(-(-fd / 0.003)); // its edge, lifting off
+      const jw = human ? 0 : 0.008 * ss(0.07, 0.02, y) + 0.012 * ss(0.04, -0.01, y); // the jowls of it, hanging slack below a jaw that is not there
+      const fd = ell(x, y, 0, 0.096, (human ? 0.058 : 0.059) + jw, human ? 0.084 : 0.09) + (human ? 0.0014 : 0.0026) * (vn(x * 80 + 3, y * 80) - 0.5) + (human ? 0 : 0.0012 * (vn(x * 400, y * 400) - 0.5));
+      if (fd > 0) { if (!human && fd < 0.008) { o.d = -1; o.m = HALO; o.t = (1 - fd / 0.008) ** 1.5 * (x < 0 ? 1.25 : 0.7); } return; } // the shade its edge throws (deeper where it stands off)
+      o.d = fd; o.m = human ? SKIN : FACE; o.h = headH(x, y * 0.95) + (human ? 0.0025 * ss(-0.005, -0.001, fd) : -0.004 * ss(-0.006, 0, fd));
+      if (!human) { // its edge, lifting off: down the left side and round the jaw it has come away and curls, catching the light
+        const lift = ss(0.01, -0.06, x) * (0.6 + 0.4 * ss(0.14, 0.05, y)) + 0.5 * ss(0.03, 0.0, y);
+        o.h += 0.008 * lift * Math.exp(-(((-fd - 0.0026) / 0.002) ** 2)); if (-fd < 0.0018 && lift > 0.3) o.gl = 0.5 * lift; o.ao *= 1 - (0.35 + 0.4 * lift) * Math.exp(-(-fd / 0.0024)) - 0.3 * lift * Math.exp(-(((-fd - 0.0068) / 0.0022) ** 2));
+      }
       const E = human ? [[-0.026, 0.112, 0], [0.026, 0.112, 0]] : [[-0.027, 0.113, 1], [0.028, 0.104, 2]]; // (the right one has slid lower)
       for (const [ex, ey, kind] of E) {
         // an eye opening the shape of an eye, with lids; the brow above, sparse
         const lx = (x - ex) / 0.0135, upper = 0.0058 * (1 - lx * lx), lower = 0.0042 * (1 - lx * lx), dy = y - ey;
         const inEye = Math.abs(lx) < 1 && dy < upper && dy > -lower;
+        if (!human) { // cut out: a ragged hole too big for an eye, see-through
+          const hr = 0.0145 + 0.0012 * (vn(Math.atan2(dy, x - ex) * 3 + kind * 5, 2.2) - 0.5), hq = Math.hypot((x - ex) / 1.12, dy * 1.05) - hr;
+          if (hq < 0) { o.m = HOLE; o.t = cl(-hq * b / 1.6); o.ao *= 0.6; continue; }
+          o.ao *= 1 - 0.5 * Math.exp(-hq / 0.0018); o.h += 0.0012 * Math.exp(-(((hq - 0.0018) / 0.0016) ** 2)); // its rim, cut
+        }
         const lid = Math.abs(lx) < 1.25 ? Math.exp(-(((dy - upper - 0.003) / 0.0028) ** 2)) : 0, bag = Math.abs(lx) < 1.2 ? Math.exp(-(((dy + lower + 0.005) / 0.004) ** 2)) : 0;
         o.h += 0.0035 * lid + 0.003 * bag - 0.004 * Math.exp(-((Math.hypot(lx * 0.0135, dy) / 0.012) ** 2));
         o.ao *= 1 - 0.45 * lid * 0.6 - 0.3 * Math.exp(-(((dy - upper - 0.0055) / 0.002) ** 2)) * (Math.abs(lx) < 1.1 ? 1 : 0);
@@ -380,7 +395,7 @@
       // stretched: lines across the forehead, a sag under each cheek; and the other face pushing up under it, faintly
       crease(o, wrinkle(x, y, 260, b), ss(0.15, 0.17, y) * 0.8);
       o.h += 0.0026 * Math.exp(-((sdist(x, y, -0.024, 0.152, 0.05, 0.141) / 0.0075) ** 2)) + 0.004 * Math.exp(-(((x - 0.019) ** 2 + (y - 0.097) ** 2) / 0.0095 ** 2));
-      o.t = vn(x * 40, y * 40);
+      if (o.m !== HOLE) o.t = vn(x * 40, y * 40);
     } };
   }
   PART.face0 = facePart(0); PART.face1 = facePart(0.45); PART.face2 = facePart(1); PART.faceH = facePart(0, true);
@@ -514,10 +529,10 @@
   /** The colour of the surface at (x, y) (metres plus the part's place on the noise): returns how glossy it is. */
   function albedo(x, y, m, t, b, col) {
     if (m === VOID) { AL[0] = 0.03; AL[1] = 0.022; AL[2] = 0.022; return 0; }
-    if (m === WET) { AL[0] = 0.82; AL[1] = 0.78; AL[2] = 0.72; return 1.8; }
+    if (m === WET) { AL[0] = 0.9; AL[1] = 0.86; AL[2] = 0.76; return 1.8; }
     if (m === HAIR) { const k = 0.6 + 0.8 * t; AL[0] = 0.085 * k; AL[1] = 0.07 * k; AL[2] = 0.058 * k; return 0.5; }
     if (m === CLOTH) { const n = 0.85 + 0.3 * fbm(x * 40, y * 40, 2) - 0.15 * vn(x * 400, y * 400) * fine(b, 0.006); AL[0] = col[0] * n; AL[1] = col[1] * n; AL[2] = col[2] * n; return 0.05; }
-    if (m === FRAME) { const k = 0.65 + 0.7 * t; AL[0] = 0.13 * k; AL[1] = 0.115 * k; AL[2] = 0.13 * k; return 0.8; } // the thing underneath: dark, wet, a bruised grey-brown
+    if (m === FRAME) { const k = 0.65 + 0.7 * t; AL[0] = 0.19 * k; AL[1] = 0.15 * k; AL[2] = 0.16 * k; return 1.3; } // the thing underneath: dark, wet, a bruised grey-brown
     if (m === LIP) { const n = vn(x * 220, y * 700); AL[0] = 0.86 - 0.08 * n; AL[1] = 0.52 - 0.05 * n; AL[2] = 0.52; return 0.7; }
     // a person's skin: pale and pink, blotched red and sallow, bruised where it creases, veins showing through
     const n1 = fbm(x * 7.3, y * 7.3, 3), n2 = fbm(x * 24 + 5.1, y * 24 + 2.3, 2), n3 = vn(x * 95, y * 95);
@@ -564,6 +579,7 @@
         if (a <= 0) continue;
         const m = M[k], p = k * 4;
         if (m === HALO) { D[p + 3] = Math.round(T[k] * a * (L ? 120 : 160)); continue; }
+        if (m === HOLE) { const v = L ? 0.1 : 0.05; D[p] = v * 255; D[p + 1] = v * 230; D[p + 2] = v * 220; D[p + 3] = Math.round(a * (1 - T[k]) * 255); continue; } // the cut edge, dark; through it, nothing of this sprite
         const nx0 = -(HF[i < W - 1 ? k + 1 : k] - HF[i ? k - 1 : k]) * hb, ny0 = -(HF[j ? k - W : k] - HF[j < H - 1 ? k + W : k]) * hb;
         const il = 1 / Math.sqrt(nx0 * nx0 + ny0 * ny0 + 1), nx = nx0 * il, ny = ny0 * il, nz = il;
         const gloss = albedo(X0 + (i + 0.5) * ib + P.nx, y + P.ny, m, T[k], b, col) + GL[k];
@@ -592,6 +608,14 @@
     const sp = Math.ceil(2 + b * 0.008), sh = mk(W + 2 * sp, H + 2 * sp), sx = sh.getContext('2d');
     sx.filter = `blur(${(1 + b * 0.004).toFixed(1)}px)`; sx.drawImage(cv, sp, sp); sx.filter = 'none';
     sx.globalCompositeOperation = 'source-in'; sx.fillStyle = '#000'; sx.fillRect(0, 0, sh.width, sh.height);
+    let nh = 0; for (let k = 0; k < n; k++) if (M[k] === HOLE && A[k] > 0) nh++;
+    if (nh) { // no shade of its own inside its eyeholes: what is under them is seen as it is
+      const hc = mk(W, H), hx = hc.getContext('2d'), hi = hx.createImageData(W, H);
+      for (let k = 0; k < n; k++) if (M[k] === HOLE) hi.data[k * 4 + 3] = Math.round(A[k] * 255);
+      hx.putImageData(hi, 0, 0); sx.globalCompositeOperation = 'destination-out'; sx.filter = 'blur(1px)'; sx.drawImage(hc, sp, sp); sx.drawImage(hc, sp, sp); sx.filter = 'none';
+      hc.width = hc.height = 0;
+    }
+    sx.globalCompositeOperation = 'source-over';
     out.cv = cv; out.sh = sh; out.sp = sp; out.u0 = -X0 * b; out.v0 = Y1 * b; out.b = b; out.len = P.len || 1;
   }
 
@@ -604,10 +628,29 @@
     twin: ['jumper', 'trousers', 'sleeveU', 'sleeveF', 'legT', 'legS', 'shoe', 'faceH', 'handH'],
   };
   const bucketFor = (k) => { for (const b of BUCKETS) if (b >= k / 1.14) return b; return BUCKETS[BUCKETS.length - 1]; };
+  // Kept: the last few sets used per page (a visit asks for two sizes), the newest last; the others are let go, their
+  // canvases emptied (the memory comes back at once). A while after the last visit ended all of them go, and the
+  // offscreen pictures shrink back: the next visit bakes again, a few ms a frame, before it shows.
+  const KEEP = 4, IDLE_MS = 40000;
+  const zap = (c) => { if (c && c.getContext) { c.width = 0; c.height = 0; } };
+  function freeSet(S) { for (const n of Object.keys(S.parts)) { const q = S.parts[n]; zap(q.cv); zap(q.sh); } S.parts = {}; S.jobs = []; S.gen = null; S.cur = null; S.out = null; }
+  let lastUse = 0, idleT = 0;
+  function dropAll() { for (const S of SETS.values()) freeSet(S); SETS.clear(); for (const c of OFF) { c.width = 64; c.height = 64; } }
+  function idleCheck() { const t = performance.now() - lastUse; if (t >= IDLE_MS - 20) { idleT = 0; dropAll(); } else idleT = setTimeout(idleCheck, IDLE_MS - t); }
+  function touch() { lastUse = performance.now(); if (!idleT) idleT = setTimeout(idleCheck, IDLE_MS); }
+  function mem() {
+    let b = 0; const c = (v) => { if (v && v.getContext) b += v.width * v.height * 4; };
+    for (const S of SETS.values()) for (const n of Object.keys(S.parts)) { c(S.parts[n].cv); c(S.parts[n].sh); }
+    for (const o of OFF) c(o);
+    return { bytes: b, sets: SETS.size };
+  }
   function setFor(b, L) {
     const key = (L ? 'L' : 'D') + b;
     let S = SETS.get(key);
-    if (!S) { S = { b, L, parts: {}, jobs: [], gen: null, cur: null, out: null }; SETS.set(key, S); }
+    if (S) { SETS.delete(key); SETS.set(key, S); return S; } // (the newest last)
+    let n = 0; for (const T of SETS.values()) if (T.L === L) n++;
+    for (const [k2, T] of SETS) { if (n < KEEP) break; if (T.L === L) { freeSet(T); SETS.delete(k2); n--; } } // the least lately used go
+    S = { b, L, parts: {}, jobs: [], gen: null, cur: null, out: null }; SETS.set(key, S);
     return S;
   }
   function want(S, names) { for (const n of names) if (!S.parts[n] && S.cur !== n && !S.jobs.includes(n)) S.jobs.push(n); }
@@ -729,8 +772,8 @@
     out.push({ p: hb ? 'headB' : 'head', x: q.H[0], y: q.H[1], a: q.hd, m: 1, sx: (q.sw < 0.6 && !hb ? 0.86 : 1) * HZ, sy: HZ, L: 1, sh: 0.55 });
     if (q.face && !hb) {
       const f = q.face, [fx, fy] = rot(q.hd, f.x * HZ, f.y * HZ);
-      const big = dress === 'man' ? 1 : 1.14;
-      out.push({ p: f.f, x: q.H[0] + fx, y: q.H[1] + fy, a: q.hd + f.rot, m: 1, sx: (f.sx || 1) * HZ * big, sy: f.sy * HZ * big, L: 1, sh: 0, gco: f.clip ? 'source-atop' : 'source-over' });
+      const big = dress === 'man' ? 1 : 1.2;
+      out.push({ p: f.f, x: q.H[0] + fx, y: q.H[1] + fy, a: q.hd + f.rot, m: 1, sx: (f.sx || 1) * HZ * big, sy: f.sy * HZ * big, L: 1, sh: 0, gco: f.clip ? 'source-atop' : 'source-over', fsh: dress === 'man' ? 0 : 0.85, fdx: -0.006 - (f.x || 0) * 0.3, fdy: -0.007 });
     }
     return out;
   }
@@ -770,6 +813,11 @@
       if (it.sh && it.L === 0) { // its shadow on what is already there
         x.globalCompositeOperation = 'source-atop'; x.globalAlpha = it.sh;
         x.setTransform(m[0], m[1], m[2], m[3], m[4] - x0, m[5] - y0 + drop); x.drawImage(pt.sh, -pt.u0 - pt.sp, -pt.v0 - pt.sp);
+        x.globalAlpha = 1;
+      }
+      if (it.fsh) { // the mask's shade on the head under it, deepest where its edge stands off (the light is overhead: it falls down and to the side)
+        x.globalCompositeOperation = 'source-atop'; x.globalAlpha = it.fsh;
+        x.setTransform(m[0], m[1], m[2], m[3], m[4] - x0 + it.fdx * k, m[5] - y0 - it.fdy * k); x.drawImage(pt.sh, -pt.u0 - pt.sp, -pt.v0 - pt.sp);
         x.globalAlpha = 1;
       }
       x.globalCompositeOperation = it.gco || 'source-over';
@@ -855,8 +903,28 @@
     return g.camZ + lo + 0.5;
   }
 
-  /** The face on its head, never quite where a face goes: low, off to one side, crooked, stretched, slipping in jerks. */
-  const faceOn = (e, f, extra) => { const t = Math.floor(e.tt / 5) * 5; return Object.assign({ x: 0.006 + 0.004 * Math.sin(t * 0.031), y: -0.026 - 0.006 * (0.5 + 0.5 * Math.sin(t * 0.047 + 1)), rot: 0.07 + 0.04 * Math.sin(t * 0.023), sy: 1.07 + 0.03 * Math.sin(t * 0.05), f }, extra); };
+  /**
+   * The face on its head, never quite where a face goes: too big for it, low, off to one side, crooked, and slipping:
+   * stop-motion, a jerk at a time (it holds, then jumps), further down and off the head, now and then shoved back up
+   * roughly; the head shows dark at the temple and the jaw where it has come away, and its own eyes stay where they
+   * are while the holes slide over them. extra: ox / oy / orot added on top, clip (only over the head), sx.
+   */
+  function slipOf(e) {
+    const k = Math.floor(e.tt / 7);
+    let s = e.slip; if (!s) s = e.slip = { x: 0.01, y: -0.028, r: 0.07, k: -1 };
+    for (let i = s.k + 1; i <= k; i++) {
+      const h = BR_hash(i, 3, 71), h2 = BR_hash(i, 4, 71), h3 = BR_hash(i, 5, 71);
+      if (h < 0.42) continue; // held
+      if (h > 0.9 || s.x > 0.034) { s.x -= 0.01 + 0.012 * h2; s.y += 0.01 + 0.012 * h3; s.r -= 0.06 + 0.05 * h2; } // shoved back, roughly
+      else { s.x += 0.004 + 0.007 * h2; s.y -= 0.003 + 0.007 * h3; s.r += 0.05 * (h2 - 0.3); } // slipping down and off
+      s.x = Math.min(0.04, Math.max(0.0, s.x)); s.y = Math.min(-0.012, Math.max(-0.056, s.y)); s.r = Math.min(0.26, Math.max(-0.02, s.r));
+    }
+    s.k = k; return s;
+  }
+  const faceOn = (e, f, extra) => {
+    const s = slipOf(e), x = extra || {};
+    return { x: s.x + (x.ox || 0), y: s.y + (x.oy || 0), rot: s.r + (x.orot || 0), sy: 1.08 + 0.05 * (-0.012 - s.y) / 0.038, f, clip: x.clip, sx: x.sx };
+  };
   const twitch = (e, k) => (BR_hash(e.tt >> 2, k, 31) < 0.14 ? 'hand1' : 'hand0');
   let BR_hash = null;
   const hang = (a1, a2, hf, extra) => Object.assign({ a1, a2, hf }, extra);
@@ -1025,7 +1093,7 @@
       // the face: not there at first; then sliding round onto the head from the side it turned from, overshooting, slipping back, settling crooked
       const fin = ss(132, 148, held(e, 2)), over = bump(142, 149, 155, a), back2 = ss(155, 157, a);
       const fx = dir * (-0.105 * (1 - fin) + 0.026 * over - 0.006 * back2), fr = dir * (0.2 * (1 - fin) - 0.08 * back2);
-      if (!back && a > 131) p.face = faceOn(e, a > 205 ? 'face2' : a > 186 ? 'face1' : 'face0', { x: fx + 0.006 * back2, rot: fr + 0.07, clip: fin < 0.85 });
+      if (!back && a > 131) { const sl = slipOf(e); p.face = faceOn(e, a > 205 ? 'face2' : a > 186 ? 'face1' : 'face0', { ox: fx + 0.006 * back2 - sl.x * (1 - fin), orot: fr + (0.07 - sl.r) * (1 - back2), clip: fin < 0.85 }); }
       // under the skin of its back, something crawling across the shoulders
       if (back) { const u = ((t + 20) % 80) / 80; p.bul = [{ x: lerp(-0.13, 0.13, u) * dir, y: p.W[1] + 0.33 + 0.04 * Math.sin(u * 6), s: 1.3 }, { x: 0.04, y: p.N[1] + 0.12 * ((t % 60) / 60), s: 0.8 }]; }
       return p;
@@ -1128,7 +1196,7 @@
         const t = e.tt, still = a < 140;
         const tilt = still ? 0.04 : 0.04 + 0.45 * (Math.floor(ss(140, 200, t) * 6) / 6) + snapv(e, 7, 14, 0.05) - 1.15 * ss(228, 230, a);
         const q = stand({ px: 0, bN: 0.05, ln: NECK * 0.75, tilt, kink: false, asym: false, arms: [hang(0.03, 0.0, 'hand0'), hang(0.03, 0.0, still ? 'hand0' : twitch(e, 8))] });
-        q.face = still ? { x: 0, y: -0.002, rot: 0.02, sy: 1, f: 'face0' } : faceOn(e, a > 205 ? 'face2' : a > 180 ? 'face1' : 'face0', { y: -0.006 - 0.02 * (Math.floor(ss(150, 215, t) * 5) / 5) });
+        q.face = still ? { x: 0, y: -0.002, rot: 0.02, sy: 1, f: 'face0' } : faceOn(e, a > 205 ? 'face2' : a > 180 ? 'face1' : 'face0', { oy: 0.02 - 0.02 * (Math.floor(ss(150, 215, t) * 5) / 5) });
         figure(e, g, BR, e.x, e.z, scalePose(q, 0.86), e.vis * BR.far(e.z - g.camZ), g.lum(0, j) * g.glob, names, 'twin', [0, (j + 0.5) * BR.C, j * BR.C + BR.TH]);
       }
     },
@@ -1164,6 +1232,7 @@
     step(e, g, st, BR) {
       BR_hash = BR.hash;
       if (!e.own) return;
+      touch();
       BR.tick(e, 0.07);
       if (e.gx > 0) e.gx--;
       VAR[e.v].step(e, g, st, BR);
@@ -1177,4 +1246,14 @@
       VAR[e.v].draw(e, g, j, c, BR);
     },
   };
+  Object.defineProperty(window.BR_ENT.skinstealer, 'dbg', { value: { mem, dropAll, // for the test harness only: (and) a head with its face on, at k px per metre
+    face(k, L, f, lit) {
+      const S = setFor(bucketFor(k), L); want(S, ['head', f.f || 'face0']); while (!work(S, 200));
+      const HZ = 1.22, big = 1.2, [fx, fy] = rot(0, (f.x || 0) * HZ, (f.y || 0) * HZ);
+      const its = [{ p: 'head', x: 0, y: 0, a: 0, m: 1, sx: HZ, sy: HZ, L: 1, sh: 0 },
+        { p: f.f || 'face0', x: fx, y: fy, a: f.rot || 0, m: 1, sx: HZ * big, sy: (f.sy || 1.08) * HZ * big, L: 1, sh: 0, fsh: 0.85, fdx: -0.006 - (f.x || 0) * 0.3, fdy: -0.007 }];
+      const l = lit == null ? 1 : lit; if (!compose(S, its, k, L ? 0.58 + 0.42 * l : 0.26 + 0.74 * l, L ? 0.85 + 0.15 * l : 0.5 + 0.5 * l, L)) return null;
+      return { c: OFF[0], x: BOX[0], y: BOX[1], w: BOX[2], h: BOX[3] };
+    },
+  } });
 })();

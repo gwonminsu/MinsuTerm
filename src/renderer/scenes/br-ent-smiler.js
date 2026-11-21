@@ -213,7 +213,30 @@
   }
   const base = () => warmBase(1e9);
   const later = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 1500 }) : (f) => setTimeout(() => f(null), 120);
-  setTimeout(function idle() { later((dl) => { if (!warmBase(Math.max(2, Math.min(5, dl && dl.timeRemaining ? dl.timeRemaining() - 1 : 5)))) setTimeout(idle, 60); }); }, 4000); // in the background, a few ms at a time
+  setTimeout(function idle() { // in the background, a few ms at a time (if the backrooms are what is up)
+    try { if (typeof S === 'undefined' || !S.settings || S.settings.bgAnim !== 'backrooms') return; } catch (err) { return; }
+    later((dl) => { if (!warmBase(Math.max(2, Math.min(5, dl && dl.timeRemaining ? dl.timeRemaining() - 1 : 5)))) setTimeout(idle, 60); });
+  }, 4000);
+
+  // ---- memory: the eyes and mouths are let go when a visit ends; the base (teeth, whites, irises) a while after that.
+  // Letting go empties the canvases (the memory comes back at once, not when the collector gets to it); the next visit
+  // bakes the base again, a few ms a frame, and does not show until it is done.
+  const IDLE_MS = 40000;
+  const zap = (c) => { if (c && c.getContext) { c.width = 0; c.height = 0; } };
+  const zapAll = (M) => { for (const v of M.values()) zap(v && v.c ? v.c : v); M.clear(); };
+  let lastUse = 0, idleT = 0;
+  function dropBase() {
+    for (const k of Object.keys(B)) { const v = B[k]; if (Array.isArray(v)) v.forEach((q) => zap(q && q.c ? q.c : q)); else if (v && typeof v === 'object') zap(v.c || v); delete B[k]; }
+    job = null;
+  }
+  function idleCheck() { const t = performance.now() - lastUse; if (t >= IDLE_MS - 20) { idleT = 0; zapAll(EYE_C); zapAll(MOUTH[0]); zapAll(MOUTH[1]); dropBase(); } else idleT = setTimeout(idleCheck, IDLE_MS - t); }
+  function touch() { lastUse = performance.now(); if (!idleT) idleT = setTimeout(idleCheck, IDLE_MS); }
+  function mem() {
+    let b = 0; const c = (v) => { const q = v && v.c ? v.c : v; if (q && q.getContext) b += q.width * q.height * 4; };
+    for (const k of Object.keys(B)) { const v = B[k]; if (Array.isArray(v)) v.forEach(c); else if (v && typeof v === 'object') c(v); }
+    for (const M of [EYE_C, MOUTH[0], MOUTH[1]]) for (const v of M.values()) c(v);
+    return { bytes: b, eyes: EYE_C.size, mouths: MOUTH[0].size + MOUTH[1].size, base: !!B.done };
+  }
 
   // ---- an eye in one state, baked (lids open o, pupil pup 0 pinprick .. 1 blown, looking lx, ly), kept a while
   const EYE_C = new Map();
@@ -248,7 +271,7 @@
       x.beginPath(); x.moveTo(ECX + E.inner * ERW * 0.8, ECY + ERW * E.round * oo * 0.42); x.quadraticCurveTo(ECX, ECY + ERW * E.round * oo * 0.78, ECX - E.inner * ERW * 0.75, ECY + ERW * E.round * oo * 0.3);
       x.strokeStyle = 'rgba(255,246,236,0.45)'; x.lineWidth = 1.2; x.stroke(); // the wet line along the lower lid
     }
-    EYE_C.set(key, c); if (EYE_C.size > 140) EYE_C.delete(EYE_C.keys().next().value);
+    EYE_C.set(key, c); if (EYE_C.size > 140) { const k0 = EYE_C.keys().next().value; zap(EYE_C.get(k0)); EYE_C.delete(k0); }
     return c;
   }
 
@@ -268,7 +291,7 @@
     let m = M.get(key);
     if (m) { M.delete(key); M.set(key, m); return m; }
     m = buildMouth(geo(spq / 16, oq / 8), tier);
-    M.set(key, m); if (M.size > MLIM[tier]) M.delete(M.keys().next().value);
+    M.set(key, m); if (M.size > MLIM[tier]) { const k0 = M.keys().next().value; zap(M.get(k0).c); M.delete(k0); }
     return m;
   }
   function buildMouth(G, tier) {
@@ -732,6 +755,7 @@
   // ================================================================ the hook
   const probe = { n: 0, d: 0, s: 0, mx: 0, cur: 0 }; // (window.SM_PROBE: timings, for the test harness)
   ENT.smiler = {
+    mem, // (for the test harness)
     place(g, v, BR) {
       const want = v && V[v] ? [v] : VARS.filter((x) => x !== lastV).sort(() => Math.random() - 0.5);
       for (const k of want) {
@@ -744,10 +768,12 @@
       if (!e.own || !V[e.v]) return;
       const t0 = window.SM_PROBE ? performance.now() : 0;
       if (window.SM_PROBE && e.age > 1) { probe.n++; probe.d += probe.cur; probe.mx = Math.max(probe.mx, probe.cur); probe.cur = 0; if (probe.n >= 30) { console.warn(`PROBE smiler ${e.v} age ${e.age} draw avg ${(probe.d / probe.n).toFixed(3)} max ${probe.mx.toFixed(2)} step avg ${(probe.s / probe.n).toFixed(3)} max ${probe.smx.toFixed(2)} mouths ${MOUTH[0].size}/${MOUTH[1].size} eyes ${EYE_C.size}`); probe.n = probe.d = probe.s = probe.mx = probe.smx = 0; } }
+      touch();
+      if (!B.done && !warmBase(5)) { e.age--; e.vis = 0; return; } // (its paint first, a few ms a frame: nothing shows until it is made)
       BR.tick(e, 0.025); // its own clock: now and then it stops, then catches up all at once
       warm(e);
       V[e.v].step(e, g, st, BR);
-      if (e.age >= e.life) { MOUTH[0].clear(); MOUTH[1].clear(); EYE_C.clear(); } // let them go until next time
+      if (e.age >= e.life) { zapAll(MOUTH[0]); zapAll(MOUTH[1]); zapAll(EYE_C); } // let them go until next time
       if (window.SM_PROBE) { const dt = performance.now() - t0; probe.s += dt; probe.smx = Math.max(probe.smx || 0, dt); }
     },
     draw(e, g, j, c, BR) {

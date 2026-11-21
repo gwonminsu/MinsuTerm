@@ -271,6 +271,33 @@
     return O;
   }
   const SETS = {};
+  // Kept: the painting for the page that is up; the other page's goes when it has not been used for a while, and a while
+  // after the last visit everything goes (and the scratch pictures the wings are put together in). Letting go empties the
+  // canvases (the memory comes back at once); the next visit paints again, a few ms a frame, before it shows.
+  const IDLE_MS = 40000, zap = (c) => { if (c && c.getContext) { c.width = 0; c.height = 0; } };
+  function eachCanvas(O, fn) {
+    if (!O) return;
+    for (const n of ['fore', 'hind', 'body']) { const q = O[n]; if (q) for (const ch of Object.keys(q)) for (const c of q[ch]) fn(c); }
+    if (O.shadow) for (const c of O.shadow) fn(c);
+    if (O.masks) for (const k of Object.keys(O.masks)) fn(O.masks[k]);
+    fn(O.dot); fn(O.dotInk);
+  }
+  const used = { D: 0, L: 0 };
+  let lastUse = 0, idleT = 0;
+  function dropSet(k) { const st = SETS[k]; if (!st) return; eachCanvas(st.O, zap); delete SETS[k]; }
+  function dropScratch() { for (const c of [WSC, RSC]) zap(c); WSC = WSX = RSC = RSX = null; for (let i = 0; i < CB.length; i++) { if (CB[i]) zap(CB[i].c); CB[i] = null; } }
+  function idleCheck() {
+    const t = performance.now(), idle = t - lastUse;
+    for (const k of ['D', 'L']) if (SETS[k] && t - used[k] >= IDLE_MS - 20) dropSet(k);
+    if (idle >= IDLE_MS - 20) { idleT = 0; dropScratch(); for (const k of ['D', 'L']) dropSet(k); } else idleT = setTimeout(idleCheck, IDLE_MS - idle);
+  }
+  function touch(L) { lastUse = used[L ? 'L' : 'D'] = performance.now(); if (!idleT) idleT = setTimeout(idleCheck, IDLE_MS); }
+  function mem() {
+    let b = 0; const c = (v) => { if (v && v.getContext) b += v.width * v.height * 4; };
+    for (const k of Object.keys(SETS)) eachCanvas(SETS[k].O, c);
+    c(WSC); c(RSC); for (const q of CB) if (q) c(q.c);
+    return { bytes: b, sets: Object.keys(SETS).join('') };
+  }
   /** Run the painting for this mode for up to ms; true once it is done. */
   function pump(L, ms) {
     const k = L ? 'L' : 'D', s = SETS[k] || (SETS[k] = { it: paint(L), O: null });
@@ -343,11 +370,13 @@
     }
   }
   /** The pupils of the eyespots, drawn live: they widen and narrow, and they move. */
+  const QP = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, sc: 1 };
   function pupils(g, w, xf, m, o, sd) {
     const ctx = g.ctx;
-    if (xf[0].sc * WW * 0.03 < 0.7) return;
+    if ((xf.V ? xf.sc : xf[0].sc) * WW * 0.03 < 0.7) return;
     for (const [ex, ey, rx, ry] of w.eyes) {
-      const q = xf[Math.min(xf.n - 1, Math.floor(ex * xf.n))]; // the slice the eye is on
+      const q = xf.V ? cellXf(xf, Math.min(xf.n - 1, Math.floor(ex * xf.n)), Math.max(0, Math.min(xf.m - 1, Math.floor(((ey * WW + HR) / WH) * xf.m))), ex * WW, ey * WW + HR, QP) // the cell the eye is on
+        : xf[Math.min(xf.n - 1, Math.floor(ex * xf.n))]; // the slice the eye is on
       ctx.save(); ctx.transform(q.a, q.b, q.c, q.d, q.e, q.f);
       const r = rx * WW * 0.6, ky = ry / rx, pw = r * (0.14 + 0.42 * m.dil), ph = ky * r * (0.5 + 0.25 * m.dil), cx = ex * WW + m.gz[0] * sd * (r - pw) * 0.75, cy = ey * WW + HR + m.gz[1] * (ky * r - ph) * 0.6;
       ctx.globalAlpha = o.op; ctx.fillStyle = 'rgb(6,5,3)'; ctx.beginPath(); ctx.ellipse(cx, cy, pw, ph, 0, 0, TAU); ctx.fill();
@@ -418,10 +447,157 @@
     ctx.lineCap = 'round'; ctx.strokeStyle = col; ctx.globalAlpha = o.op * 0.9; ctx.lineWidth = lw; ctx.stroke(p);
   }
   const XF = [0, 1, 2, 3].map(() => [0, 1, 2, 3, 4, 5, 6, 7].map(() => ({}))), XG = [0, 1, 2, 3].map(() => [{}]);
-  function ghost(g, set, q, o) {
+  function ghost(g, set, q, o, mul) {
     const ctx = g.ctx, lv = lvOf(set.smear, q.sc * 0.5), k = set.smear.k[lv];
-    ctx.save(); ctx.transform(q.a, q.b, q.c, q.d, q.e, q.f); ctx.globalAlpha = o.op * (g.L ? 0.13 : 0.22);
+    ctx.save(); ctx.transform(q.a, q.b, q.c, q.d, q.e, q.f); ctx.globalAlpha = o.op * (g.L ? 0.13 : 0.22) * (mul || 1);
     ctx.drawImage(set.smear[lv], 0, 0, WW * k, WH * k, 0, 0, WW, WH); ctx.restore();
+  }
+  /*
+   * A wing as a sheet, not a plane: a grid of N slices along the span by M bands across it, each cell two triangles
+   * mapped from the painting. The bands bow out of the wing's plane (its camber, and the trailing edge lagging behind
+   * the beat), so a wing seen edge-on is still a curved, foreshortened membrane and not a blade. The cells are put
+   * together additively in a scratch picture of just that wing (the edges two cells share add up to exactly one, so no
+   * seam shows between them, however close it comes), and that is laid into the scene in one piece.
+   */
+  const CAM = 0.17; // the bow across a wing, in spans
+  const MESH = [0, 1, 2, 3].map(() => ({ V: new Float64Array(2 * 9 * 4), n: 0, m: 0, sc: 0, edge: 0 })), MESHG = { V: new Float64Array(8), n: 0, m: 0, sc: 0, edge: 0 };
+  /** The grid of one wing (part 0 fore, 1 hind; sd its side) on the screen; false if a corner is behind us. */
+  function wingMesh(g, m, part, sd, out, N, M, th0, th1, tp0, tp1) {
+    const sp = m.sp, ps = m.ps[part], cs = Math.cos(ps), sn = Math.sin(ps), B = [-m.F[0], -m.F[1], -m.F[2]], R = m.R, Nn = m.N;
+    const dirs = (th) => {
+      const ct = Math.cos(th), st = Math.sin(th), D = [R[0] * sd * ct + Nn[0] * st, R[1] * sd * ct + Nn[1] * st, R[2] * sd * ct + Nn[2] * st];
+      return [[D[0] * cs + B[0] * sn, D[1] * cs + B[1] * sn, D[2] * cs + B[2] * sn], [B[0] * cs - D[0] * sn, B[1] * cs - D[1] * sn, B[2] * cs - D[2] * sn],
+        [-R[0] * sd * st + Nn[0] * ct, -R[1] * sd * st + Nn[1] * ct, -R[2] * sd * st + Nn[2] * ct]];
+    };
+    const segTh = (k) => (N > 2 ? lerp(th0, th1, k / (N - 1)) : N === 2 ? (k ? th1 : th0) : th0), segTp = (k) => (N > 2 ? lerp(tp0, tp1, k / (N - 1)) : N === 2 ? (k ? tp1 : tp0) : tp0);
+    let O = ad(ad(m.p, m.F, part ? -0.03 * sp : 0.07 * sp), m.R, sd * 0.055 * sp);
+    const V = out.V; out.n = N; out.m = M;
+    let edge = 0;
+    for (let i = 0; i <= N; i++) {
+      const ka = Math.max(0, i - 1), kb = Math.min(N - 1, i), th = (segTh(ka) + segTh(kb)) / 2, dth = th - (segTp(ka) + segTp(kb)) / 2;
+      const [, Dc, Dn] = dirs(th), f = i / N, lag = Math.max(-0.26, Math.min(0.26, dth * 0.75)), root = 0.45 + 0.55 * f;
+      for (let j = 0; j <= M; j++) {
+        const tc = j / M, t = (tc * WH - HR) / WW, bow = sp * (CAM * 4 * tc * (1 - tc) - lag * tc * tc) * root;
+        const P = [O[0] + Dc[0] * t * sp + Dn[0] * bow, O[1] + Dc[1] * t * sp + Dn[1] * bow, O[2] + Dc[2] * t * sp + Dn[2] * bow];
+        if (!g.pr(P[0], P[2], P[1])) return false;
+        const q = (i * (M + 1) + j) * 2; V[q] = g.sx; V[q + 1] = g.sy;
+      }
+      if (i === (N >> 1)) { // how nearly edge-on we see it (0 face on, 1 edge on)
+        const cv = nrm([g.camX - O[0], 1.55 - O[1], g.camZ - O[2]]); edge = 1 - Math.abs(dt3(cv, Dn));
+      }
+      if (i < N) O = ad(O, dirs(segTh(i))[0], sp / N);
+    }
+    // the scale it is seen at (px on the screen per px of the painting), for the level of detail
+    let sc = 0;
+    for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) {
+      const a = (i * (M + 1) + j) * 2, b = ((i + 1) * (M + 1) + j) * 2, c = a + 2;
+      sc = Math.max(sc, Math.hypot(V[b] - V[a], V[b + 1] - V[a + 1]) / (WW / N), Math.hypot(V[c] - V[a], V[c + 1] - V[a + 1]) / (WH / M));
+    }
+    out.sc = sc; out.edge = edge;
+    return true;
+  }
+  /** The transform from painting px to the screen of the triangle of cell (i, j) holding painting point (u, v). */
+  function cellXf(mesh, i, j, u, v, q) {
+    const N = mesh.n, M = mesh.m, V = mesh.V, du = WW / N, dv = WH / M, u0 = i * du, v0 = j * dv;
+    const A = (i * (M + 1) + j) * 2, Bq = ((i + 1) * (M + 1) + j) * 2, Cq = A + 2, Dq = Bq + 2;
+    if ((u - u0) / du + (v - v0) / dv <= 1) { // A B C
+      q.a = (V[Bq] - V[A]) / du; q.b = (V[Bq + 1] - V[A + 1]) / du; q.c = (V[Cq] - V[A]) / dv; q.d = (V[Cq + 1] - V[A + 1]) / dv;
+      q.e = V[A] - q.a * u0 - q.c * v0; q.f = V[A + 1] - q.b * u0 - q.d * v0;
+    } else { // B D C
+      q.a = (V[Dq] - V[Cq]) / du; q.b = (V[Dq + 1] - V[Cq + 1]) / du; q.c = (V[Dq] - V[Bq]) / dv; q.d = (V[Dq + 1] - V[Bq + 1]) / dv;
+      q.e = V[Dq] - q.a * (u0 + du) - q.c * (v0 + dv); q.f = V[Dq + 1] - q.b * (u0 + du) - q.d * (v0 + dv);
+    }
+    q.sc = mesh.sc; return q;
+  }
+  const QAT = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, sc: 1 };
+  /** Where painting point (u, v) of a wing lands on the screen (into p). */
+  function meshPt(mesh, u, v, p) {
+    const i = Math.max(0, Math.min(mesh.n - 1, Math.floor((u / WW) * mesh.n))), j = Math.max(0, Math.min(mesh.m - 1, Math.floor((v / WH) * mesh.m)));
+    const q = cellXf(mesh, i, j, u, v, QAT); p[0] = q.a * u + q.c * v + q.e; p[1] = q.b * u + q.d * v + q.f; return p;
+  }
+  let WSC = null, WSX = null, RSC = null, RSX = null;
+  const CB = [null, null]; // per part: the painting as it is lit this frame (dark, the light on it, the light through it), at one level
+  /** The painting of one part for this frame, lit: dark + lit × its light (+ the light through it), at the level for scale sc. */
+  function combined(g, set, part, o, sc) {
+    const lv = lvOf(set.lit, sc), k = set.lit.k[lv], src = set.lit[lv], w = src.width, h = src.height;
+    let cb = CB[part]; if (!cb) { const [c, x] = can(w, h); cb = CB[part] = { c, x }; }
+    if (cb.c.width !== w || cb.c.height !== h) { cb.c.width = w; cb.c.height = h; }
+    const x = cb.x; x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'copy'; x.drawImage(set.dark[lv], 0, 0);
+    x.globalCompositeOperation = 'source-over'; if (o.lit > 0.02) { x.globalAlpha = Math.min(1, o.lit); x.drawImage(src, 0, 0); }
+    if (o.bl > 0.02) { x.globalCompositeOperation = g.L ? 'source-over' : 'lighter'; x.globalAlpha = Math.min(1, o.bl * (g.L ? 0.14 : 0.75)); x.drawImage(set.glow[lv], 0, 0); }
+    x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+    cb.k = k; return cb;
+  }
+  /** One wing from its grid: the cells into the scratch, then the scratch worn into the scene and laid in (a rim of light first). */
+  function meshDraw(g, cb, mesh, o, rimCol) {
+    const V = mesh.V, N = mesh.n, M = mesh.m, nv = (N + 1) * (M + 1);
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (let q = 0; q < nv * 2; q += 2) { if (V[q] < x0) x0 = V[q]; if (V[q] > x1) x1 = V[q]; if (V[q + 1] < y0) y0 = V[q + 1]; if (V[q + 1] > y1) y1 = V[q + 1]; }
+    const ctx = g.ctx, T = ctx.getTransform(), d = Math.hypot(T.a, T.b) || 1, cw = ctx.canvas.width, ch = ctx.canvas.height;
+    x0 = Math.max(x0 - 2, -T.e / d); y0 = Math.max(y0 - 2, -T.f / d); x1 = Math.min(x1 + 2, (cw - T.e) / d); y1 = Math.min(y1 + 2, (ch - T.f) / d); // (only what is on the canvas)
+    const W = Math.ceil((x1 - x0) * d), H = Math.ceil((y1 - y0) * d);
+    if (W < 1 || H < 1) return;
+    if (!WSC) { [WSC, WSX] = can(W, H); }
+    if (WSC.width < W || WSC.height < H) { WSC.width = Math.max(WSC.width, W); WSC.height = Math.max(WSC.height, H); }
+    const x = WSX, du = WW / N, dv = WH / M, k = cb.k, q = QAT;
+    x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.clearRect(0, 0, W, H);
+    x.globalCompositeOperation = 'lighter'; x.imageSmoothingQuality = 'medium';
+    for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) {
+      const A = (i * (M + 1) + j) * 2, Bq = ((i + 1) * (M + 1) + j) * 2, Cq = A + 2, Dq = Bq + 2, u0 = i * du, v0 = j * dv;
+      const su0 = Math.max(0, u0 - 2), sv0 = Math.max(0, v0 - 2), su1 = Math.min(WW, u0 + du + 2), sv1 = Math.min(WH, v0 + dv + 2);
+      for (let tri = 0; tri < 2; tri++) {
+        x.save(); x.setTransform(d, 0, 0, d, -x0 * d, -y0 * d);
+        x.beginPath();
+        if (tri) { x.moveTo(V[Bq], V[Bq + 1]); x.lineTo(V[Dq], V[Dq + 1]); x.lineTo(V[Cq], V[Cq + 1]); }
+        else { x.moveTo(V[A], V[A + 1]); x.lineTo(V[Bq], V[Bq + 1]); x.lineTo(V[Cq], V[Cq + 1]); }
+        x.closePath(); x.clip();
+        cellXf(mesh, i, j, tri ? u0 + du : u0, tri ? v0 + dv : v0, q);
+        x.transform(q.a, q.b, q.c, q.d, q.e, q.f);
+        x.drawImage(cb.c, su0 * k, sv0 * k, (su1 - su0) * k, (sv1 - sv0) * k, su0, sv0, su1 - su0, sv1 - sv0);
+        x.restore();
+      }
+    }
+    ctx.save(); ctx.translate(x0, y0); ctx.scale(1 / d, 1 / d);
+    if (o.rim > 0.02 && rimCol) { // a rim of light along its top: its outline, pale, a little higher, under it
+      if (!RSC) { [RSC, RSX] = can(W, H); }
+      if (RSC.width < W || RSC.height < H) { RSC.width = Math.max(RSC.width, W); RSC.height = Math.max(RSC.height, H); }
+      RSX.setTransform(1, 0, 0, 1, 0, 0); RSX.globalAlpha = 1; RSX.globalCompositeOperation = 'copy'; RSX.drawImage(WSC, 0, 0, W, H, 0, 0, W, H);
+      RSX.globalCompositeOperation = 'source-in'; RSX.fillStyle = rimCol; RSX.fillRect(0, 0, W, H); RSX.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = Math.min(1, o.rim * o.op); ctx.drawImage(RSC, 0, 0, W, H, 0, -o.rp * d, W, H);
+    }
+    ctx.globalCompositeOperation = 'destination-out'; ctx.globalAlpha = o.op; ctx.drawImage(WSC, 0, 0, W, H, 0, 0, W, H);
+    ctx.globalCompositeOperation = 'source-over'; ctx.drawImage(WSC, 0, 0, W, H, 0, 0, W, H);
+    ctx.restore();
+  }
+  const COSTA = [[0.01, -0.03], [0.2, -0.1], [0.45, -0.158], [0.7, -0.198], [0.88, -0.232], [0.975, -0.222]];
+  /** The fore wing's leading edge: its thick vein, which keeps its width however the wing turns (a wing edge-on is still a wing). */
+  function costa(g, mesh, o, col, pale) {
+    const ctx = g.ctx, p = [0, 0], w = Math.max(1.2, Math.min(5, 0.024 * WW * mesh.sc)), pts = COSTA.map(([s, t]) => meshPt(mesh, s * WW, t * WW + HR, [0, 0]));
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length - 1; i++) ctx.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
+    ctx.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = col;
+    ctx.globalAlpha = o.op * (0.6 + 0.4 * mesh.edge); ctx.lineWidth = w * (0.75 + 0.6 * mesh.edge); ctx.stroke();
+    if (pale && o.lit > 0.15 && w > 1.2) { ctx.translate(0, -w * 0.35); ctx.strokeStyle = pale; ctx.globalAlpha = o.op * o.lit * (0.25 + 0.35 * mesh.edge); ctx.lineWidth = Math.max(0.6, w * 0.4); ctx.stroke(); ctx.translate(0, w * 0.35); }
+    ctx.globalAlpha = 1; void p;
+  }
+  const SWEEP = [[[0.03, 0.06], [0.975, -0.205], [0.74, 0.36]], [[0.03, 0.2], [0.79, 0.4], [0.5, 0.86]]]; // (root, the tip, the far corner of the trailing edge)
+  /** A beat too fast for the tape: the area the wing swept since the last frame, a soft fan from its root (what a wing turning edge-on leaves). */
+  function sweep(g, m, part, sd, mesh, o, rgb, k) {
+    if (k < 0.02 || !m.thp || !wingMesh(g, m, part, sd, MESHG, 1, 1, m.thp[part * 2], m.thp[part * 2 + 1], m.thp[part * 2], m.thp[part * 2 + 1])) return;
+    const P = SWEEP[part], pt = (ms, i) => meshPt(ms, P[i][0] * WW, P[i][1] * WW + HR, [0, 0]);
+    const r = pt(mesh, 0), a1 = pt(mesh, 1), b1 = pt(mesh, 2), a0 = pt(MESHG, 1), b0 = pt(MESHG, 2), ctx = g.ctx;
+    const mx = (a1[0] + b1[0] + a0[0] + b0[0]) / 4, my = (a1[1] + b1[1] + a0[1] + b0[1]) / 4, gr = ctx.createLinearGradient(r[0], r[1], mx, my);
+    gr.addColorStop(0, `rgba(${rgb},${0.5 * k})`); gr.addColorStop(0.6, `rgba(${rgb},${0.3 * k})`); gr.addColorStop(1, `rgba(${rgb},${0.06 * k})`);
+    ctx.globalAlpha = 1; ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(r[0], r[1]); ctx.lineTo(a1[0], a1[1]); ctx.lineTo(a0[0], a0[1]); ctx.lineTo(b0[0], b0[1]); ctx.lineTo(b1[0], b1[1]); ctx.closePath(); ctx.fill();
+  }
+  /** Fur where the wings grow from it: a soft dark tuft over each root, so they are of a piece with the body. */
+  function fur(g, mesh, o, rgb) {
+    const p = meshPt(mesh, 0.05 * WW, HR + 0.05 * WW, [0, 0]), r = 0.13 * WW * mesh.sc;
+    if (r < 2) return;
+    const ctx = g.ctx, gr = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r);
+    gr.addColorStop(0, `rgba(${rgb},${0.85 * o.op})`); gr.addColorStop(0.55, `rgba(${rgb},${0.45 * o.op})`); gr.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.globalAlpha = 1; ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, TAU); ctx.fill();
   }
   /** A whole moth m ({ p, F, R, N, sp (one wing's length, m), th [4] (wing lift: fore root, fore tip, hind root, hind tip),
    * ps [2] (wings swept back), tw [6], ant [2], gz, dil, shine, grip, fold, br }) with o ({ op, lit, bl (light through it), rim, rp }). */
@@ -432,16 +608,26 @@
     o.lit *= 0.78 + 0.22 * ny + (ny < 0 ? 0.3 * ny : 0); o.rim *= 0.65 + 0.35 * Math.max(0, ny); o.bl *= Math.max(0.15, -ny);
     const px = (m.sp * g.f) / C[2], single = px < (o.cheap ? 75 : 45);
     o.rp = Math.max(1, Math.min(2.5, px * 0.008)); if (single) o.rim = 0;
-    const col = g.L ? 'rgb(30,24,16)' : `rgb(${Math.round(34 + 64 * o.lit)},${Math.round(29 + 56 * o.lit)},${Math.round(21 + 42 * o.lit)})`;
+    const furRgb = g.L ? '30,24,16' : `${Math.round(34 + 64 * o.lit)},${Math.round(29 + 56 * o.lit)},${Math.round(21 + 42 * o.lit)}`, col = `rgb(${furRgb})`;
     if (!below) legs(g, m, o, col);
-    for (let k = 0; k < 4; k++) if (!wingXf(g, m, k >> 1, k & 1 ? 1 : -1, XF[k], single, C[2] < 1.6)) return false;
-    const gh = m.thp && !single && !m.grip && !o.cheap && Math.abs(m.th[0] - m.thp[0]) + Math.abs(m.th[2] - m.thp[2]) > 0.3 ? XG : null; // a smear where the wings just were: they beat too fast for the tape
+    const sheet = !o.cheap && px >= 16, tp = (i) => (m.thp ? m.thp[i] : m.th[i]); // (the many small ones of a swarm stay flat: they are too small to tell)
+    if (sheet) { const near = C[2] < 1.6, N = single ? 1 : near ? 8 : 2, M = near ? 2 : 3; for (let k = 0; k < 4; k++) { const pt = k >> 1; if (!wingMesh(g, m, pt, k & 1 ? 1 : -1, MESH[k], N, M, m.th[pt * 2], m.th[pt * 2 + 1], tp(pt * 2), tp(pt * 2 + 1))) return false; } }
+    else for (let k = 0; k < 4; k++) if (!wingXf(g, m, k >> 1, k & 1 ? 1 : -1, XF[k], single, C[2] < 1.6)) return false;
+    const edge = sheet ? Math.max(MESH[0].edge, MESH[1].edge) : 0, beat = m.thp ? Math.abs(m.th[0] - m.thp[0]) + Math.abs(m.th[2] - m.thp[2]) : 0;
+    const gh = m.thp && !single && !m.grip && !o.cheap && beat > 0.3 ? XG : null; // a smear where the wings just were: they beat too fast for the tape
     if (gh) { const th = m.th; m.th = m.thp; for (let k = 0; k < 4; k++) if (!wingXf(g, m, k >> 1, k & 1 ? 1 : -1, XG[k], true)) { m.th = th; return false; } m.th = th; }
+    const rimCol = g.L ? 'rgb(255,250,232)' : 'rgb(246,240,200)', pale = g.L ? 'rgb(250,244,226)' : 'rgb(236,228,196)', gm = 1 - 0.6 * edge; // (a smear of a wing edge-on would be a blade again: the swept fan stands for it)
+    const swk = sheet && !m.grip ? Math.min(1, o.op * Math.min(1, beat / 0.4) * (0.2 + 0.8 * edge) * (g.L ? 0.6 : 1)) : 0;
     for (const part of below ? [0, 1] : [1, 0]) {
       const w = part ? WING.hind : WING.fore, set = part ? O.hind : O.fore;
-      if (gh) for (const sdk of [0, 1]) ghost(g, set, gh[part * 2 + sdk][0], o);
-      for (const sdk of [0, 1]) { wingDraw(g, set, XF[part * 2 + sdk], o); pupils(g, w, XF[part * 2 + sdk], m, o, sdk ? 1 : -1); }
+      if (gh) for (const sdk of [0, 1]) ghost(g, set, gh[part * 2 + sdk][0], o, gm);
+      if (swk > 0.02) for (const sdk of [0, 1]) sweep(g, m, part, sdk ? 1 : -1, MESH[part * 2 + sdk], o, furRgb, swk);
+      if (sheet) {
+        const cb = combined(g, set, part, o, Math.max(MESH[part * 2].sc, MESH[part * 2 + 1].sc));
+        for (const sdk of [0, 1]) { const ms = MESH[part * 2 + sdk]; meshDraw(g, cb, ms, o, rimCol); pupils(g, w, ms, m, o, sdk ? 1 : -1); if (!part) costa(g, ms, o, col, pale); }
+      } else for (const sdk of [0, 1]) { wingDraw(g, set, XF[part * 2 + sdk], o); pupils(g, w, XF[part * 2 + sdk], m, o, sdk ? 1 : -1); }
     }
+    if (sheet) for (const sdk of [0, 1]) fur(g, MESH[sdk], o, furRgb);
     bodyDraw(g, O.body, m, o);
     antennae(g, m, o, col);
     if (below) legs(g, m, o, col);
@@ -944,6 +1130,7 @@
       return null;
     },
     step(e, g, st, BR) {
+      touch(g.L);
       if (!pump(g.L, 4)) { e.vis = 0; e.life = e.age + 30; return; } // still painting it
       if (e.look == null) e.look = st.look || 0;
       const T = window.BR_MOTH; T.e = e;
@@ -953,10 +1140,10 @@
       e.t++; dustStep(e);
       e.life = e.done ? 0 : e.age + 30;
     },
-    draw(e, g, j, c, BR) { const O = sprites(g.L); if (O && e.t > 0) { const t0 = performance.now(); DRAW[e.v](e, g, j, c, BR, O); TM.ms += performance.now() - t0; } },
+    draw(e, g, j, c, BR) { const O = sprites(g.L); if (O && e.t > 0) { const t0 = performance.now(); DRAW[e.v](e, g, j, c, BR, O); const dt = performance.now() - t0; TM.ms += dt; if (dt > (TM.max || 0)) TM.max = dt; } },
     wall(e, g, j, ed, BR) { const O = sprites(g.L); if (O && e.t > 0 && WALL[e.v]) { const t0 = performance.now(); WALL[e.v](e, g, j, ed, BR, O); TM.ms += performance.now() - t0; } },
     ceil(e, g, BR) { const O = sprites(g.L); TM.n++; if (O && e.t > 0 && CEIL[e.v]) { const t0 = performance.now(); CEIL[e.v](e, g, BR, O); TM.ms += performance.now() - t0; } },
   };
   const TM = { ms: 0, n: 0 }; // what drawing it costs (ms over n frames)
-  window.BR_MOTH = { pump, sprites, SETS, TM }; // (for the test hook)
+  window.BR_MOTH = { pump, sprites, SETS, TM, mem, drop: () => { dropScratch(); dropSet('D'); dropSet('L'); } }; // (for the test hook)
 })();

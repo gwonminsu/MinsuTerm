@@ -158,11 +158,10 @@
 /* Reaching out over the terminal (like 십자선 and 스포트라이트; #stage clips them): a point at the caret that the wide
    parts are laid round. Drawn once, then only turned, scaled or faded; faint, so the text reads through. No CSS mask
    or clip-path on anything that moves (that is redrawn every frame): the fading is drawn into the SVG. They leave when
-   the terminal loses focus, and stay out of the composer (nothing there would clip them). */
+   the terminal loses focus; in the composer its box clips them (.composer-curbox). */
 .ca-reach { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; transition: opacity .35s; }
 .ca-reach svg { display: block; overflow: visible; }
 .mt-cursor.blurred .ca-reach { opacity: 0; }
-.composer-field .ca-reach { display: none; }
 
 :root {
   --ca-lh-light: #fff1b8; --ca-lh-core: #ffffff; --ca-lh-glow-o: .75; --ca-lh-beam-o: .6; --ca-lh-edge: rgba(0, 0, 0, .3);

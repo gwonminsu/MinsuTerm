@@ -556,6 +556,31 @@ function sessionArg(cmd) {
   return m ? m[1].toLowerCase() : '';
 }
 
+/** `claude attach <id|name>` → { id, exe }: the short id (or name) it names, and the claude binary that ran it. */
+function attachArg(cmd) {
+  const m = /^\s*"?([^"]*?claude(?:\.exe)?)"?\s+attach\s+"?([A-Za-z0-9_.-]{4,64})"?\s*$/i.exec(String(cmd || ''));
+  return m ? { id: m[2].toLowerCase(), exe: m[1] } : null;
+}
+const attachIds = new Map(); // short id → full session id of a background Claude session
+const attachAsked = new Map(); // short id → when it was last asked (a failed answer is not asked again at once)
+function resolveAttach({ id, exe }, done) {
+  if (Date.now() - (attachAsked.get(id) || 0) < 15000) return;
+  attachAsked.set(id, Date.now());
+  const bin = exe && /[\\/]/.test(exe) && exists(exe) ? exe : 'claude';
+  execFile(bin, ['agents', '--json'], { windowsHide: true, timeout: 10000, maxBuffer: 4 * 1024 * 1024, shell: bin === 'claude' && IS_WIN }, (err, out) => {
+    if (err) return;
+    try {
+      const j = JSON.parse(String(out)), list = Array.isArray(j) ? j : j.sessions || j.agents || [];
+      for (const s of list) {
+        const sid = String(s.sessionId || '');
+        if (!UUID_RE.test(sid)) continue;
+        if (String(s.id || '').toLowerCase() === id || sid.startsWith(id) || String(s.name || '').toLowerCase() === id) { attachIds.set(id, sid); break; }
+      }
+      if (attachIds.has(id)) done();
+    } catch { /* not JSON: an older Claude */ }
+  });
+}
+
 function analyze(snap) {
   const children = new Map();
   const info = new Map();
@@ -577,15 +602,22 @@ function analyze(snap) {
     if (!root || !info.has(root)) continue;
     const stack = [...(children.get(root) || [])];
     const seen = new Set();
-    let sid = '';
+    let sid = '', short = null;
     while (stack.length && !found) {
       const id = stack.shift();
       if (seen.has(id)) continue;
       seen.add(id);
       const it = info.get(id);
       if (it) found = classify(it.name, it.cmd);
-      if (found) sid = sessionArg(it.cmd);
+      if (found) { sid = sessionArg(it.cmd); if (!sid && found === 'claude') short = attachArg(it.cmd); }
       if (!found) stack.push(...(children.get(id) || []));
+    }
+    // `claude attach <short id>`: the command line names the background session only by its short id — ask Claude
+    // for the full one (once; answered a moment later, when the tab is told again)
+    if (short) {
+      const full = attachIds.get(short.id);
+      if (full) sid = full;
+      else resolveAttach(short, () => { if (rec.agent === 'claude' && attachIds.get(short.id) && rec.sid !== attachIds.get(short.id)) { rec.sid = attachIds.get(short.id); send('pty:agent', tabId, 'claude', rec.sid); } });
     }
     if (found !== rec.agent || (found && sid && sid !== rec.sid)) {
       rec.agent = found;
@@ -743,6 +775,14 @@ function cached(file, stat, parse) {
 
 /* Claude */
 
+/**
+ * A user entry the user did not type: a background task or sub-agent reporting back (<task-notification>, recorded as
+ * a user message with an origin other than "human"). Its tags stripped, what is left ("</task-notification>") would
+ * pass for a prompt and become a title.
+ */
+const notTyped = (o) => !!(o.origin && o.origin.kind && o.origin.kind !== 'human')
+  || (typeof (o.message && o.message.content) === 'string' && /^\s*<task-notification>/.test(o.message.content));
+
 function parseClaude(file, stat) {
   const text = readHead(file, stat.size, 512 * 1024);
   let customTitle = '';
@@ -762,7 +802,7 @@ function parseClaude(file, stat) {
     else if (o.type === 'user' && !o.isMeta && !o.isSidechain) {
       messages++;
       if (o.gitBranch) branch = o.gitBranch;
-      if (!firstPrompt && o.message && typeof o.message.content === 'string') {
+      if (!firstPrompt && o.message && typeof o.message.content === 'string' && !notTyped(o)) {
         const t = cleanText(o.message.content);
         if (t && !t.startsWith('/') && !t.startsWith('Caveat:')) firstPrompt = t;
       }
@@ -941,6 +981,44 @@ function hasSession(agent, cwd, id) {
   return false;
 }
 
+/**
+ * The folder an agent typed with a change of folder on the same line runs in: `cd /d X && claude`, `cd X; codex`,
+ * `pushd X & claude`. The shell reports its folder with its next prompt, which comes only once the agent has exited:
+ * until then the tab still has the folder it was in, and the sidebar filed the agent, its tasks and its sessions there.
+ * `line` is what was typed (with the prompt in front of it). → that folder, or '' (no change of folder, or one this
+ * does not follow: a folder that is not there, a wildcard, `cd -`).
+ */
+const AGENT_CMD = /(?:&&|&|;)\s*(?:call\s+|&\s*)?"?(?:[^\s"&;|]*[\\/])?(?:claude|codex)(?:\.exe|\.cmd|\.ps1)?"?(?=\s|$)/i;
+const CD_CMD = /^(?:cd|chdir|pushd|sl|set-location)(?:\s+(\/d))?(?:\s+-(?:literal)?path)?\s+(.+?)\s*$/i;
+function cdTarget(cwd, line, shell) {
+  const s = String(line || '').slice(-4000);
+  const m = AGENT_CMD.exec(s); // the agent, started as a command of its own after others
+  if (!m || !isFolder(cwd)) return '';
+  const cmds = s.slice(0, m.index).split(/\s*(?:&&|&|;)\s*/);
+  // the first command comes after the prompt ("C:\x>cd /d D:\y", "PS C:\x> cd y", "~/x $ cd y")
+  const first = /(?:^|[\s>$#%\u276f\u203a])((?:cd|chdir|pushd|sl|set-location)\s.*)$/i.exec(cmds[0]);
+  cmds[0] = first ? first[1] : '';
+  let dir = cwd, moved = false;
+  for (const c of cmds) {
+    const cd = CD_CMD.exec(c.trim());
+    if (!cd) continue; // another command (set X=1): not a change of folder
+    let t = cd[2].replace(/^(["'])(.*)\1$/, '$2');
+    if (!t || t === '-' || /[*?<>|`]/.test(t)) return '';
+    t = t.replace(/%(\w+)%/g, (all, v) => process.env[v] ?? all)
+      .replace(/\$env:(\w+)/gi, (all, v) => process.env[v] ?? all)
+      .replace(/\$\{?(\w+)\}?/g, (all, v) => (v === 'HOME' ? HOME : process.env[v] ?? all));
+    if (t === '~' || /^~[\\/]/.test(t)) t = HOME + t.slice(1);
+    if (IS_WIN && /^\/[a-z](?:\/|$)/i.test(t)) t = `${t[1].toUpperCase()}:\\${t.slice(3)}`; // Git Bash: /c/Users → C:\Users
+    // cmd: "cd D:\x" without /d sets that drive's folder but stays on the current drive
+    if (IS_WIN && shell === 'cmd' && !cd[1] && /^[a-z]:/i.test(t) && t[0].toLowerCase() !== dir[0].toLowerCase()) continue;
+    const next = path.resolve(dir, t);
+    if (!isFolder(next)) return '';
+    dir = next;
+    moved = true;
+  }
+  return moved ? normPath(dir) : '';
+}
+
 /* ------------------------------------------------------------------ */
 /* IPC                                                                 */
 /* ------------------------------------------------------------------ */
@@ -991,6 +1069,7 @@ ipcMain.on('agent:probe', (_e, delays) => {
 ipcMain.handle('agent:sessions', (_e, cwd, limit) => listSessions(cwd, limit));
 ipcMain.handle('agent:recent', (_e, agent, cwd, sinceMs) => recentSessions(agent, cwd, sinceMs));
 ipcMain.handle('agent:has', (_e, agent, cwd, id) => hasSession(agent, cwd, id));
+ipcMain.handle('agent:cdTarget', (_e, cwd, line, shell) => cdTarget(cwd, line, shell));
 
 /** The most recent prompt the user sent in a session (used to title a finished task). */
 function lastPrompt(agent, cwd, id) {
@@ -1012,7 +1091,7 @@ function lastPrompt(agent, cwd, id) {
       if (!line || line[0] !== '{') continue;
       let o;
       try { o = JSON.parse(line); } catch { continue; }
-      if (agent === 'claude' && o.type === 'user' && !o.isMeta && !o.isSidechain && o.message && typeof o.message.content === 'string') {
+      if (agent === 'claude' && o.type === 'user' && !o.isMeta && !o.isSidechain && o.message && typeof o.message.content === 'string' && !notTyped(o)) {
         const t = cleanText(o.message.content);
         if (t && !t.startsWith('Caveat:') && !t.startsWith('/')) return { text: t.slice(0, 300), ts: Date.parse(o.timestamp || '') || 0 }; // with its time: the caller checks it belongs to the task
       }
@@ -1052,7 +1131,10 @@ function turnState(agent, cwd, id) {
         if (o.isSidechain) continue;
         if (o.type === 'system' && o.subtype === 'turn_duration') return 'done';
         if (o.type === 'assistant') return o.message && o.message.stop_reason === 'end_turn' ? 'done' : 'working';
-        if (o.type === 'user') return 'working'; // a prompt or tool result waiting for the model
+        if (o.type === 'user') { // a prompt or tool result waiting for the model — unless it is the note of an Esc
+          const m = o.message && o.message.content, txt = typeof m === 'string' ? m : Array.isArray(m) ? m.map((q) => (q && typeof q.text === 'string' ? q.text : '')).join(' ') : '';
+          return /^\s*\[Request interrupted by user/.test(txt) ? 'done' : 'working';
+        }
       } else if (o.type === 'event_msg' && o.payload) {
         if (o.payload.type === 'task_complete' || o.payload.type === 'turn_aborted') return 'done';
         if (o.payload.type === 'task_started') return 'working';
@@ -1065,7 +1147,8 @@ function turnState(agent, cwd, id) {
  * Sub-agents the agent launched, read from its transcript.
  *  Claude: an Agent / Task tool call (subagent_type + a short description). It ends with its tool result —
  *          unless it was launched in the background (isAsync), then with a <task-notification> naming it.
- *  Codex:  SubAgentActivity items (kind started / completed) with an agent_path like "/root/list_files".
+ *  Codex:  SubAgentActivity items (kind started / completed) with an agent_path like "/root/list_files"; and its
+ *          background terminals (codexShellLine).
  * → [{ id, kind, name, status: 'running' | 'done' | 'failed', start }]: those launched or finished since `since`,
  *   and every one still running (a background sub-agent outlives the turn that launched it).
  *
@@ -1076,13 +1159,14 @@ function turnState(agent, cwd, id) {
 const SUB_TAIL = 16 * 1024 * 1024; // how far back the first look at a transcript goes
 const SUB_LOST = 30 * 60 * 1000;   // a background sub-agent whose own transcript has been still this long is gone
 const SHELL_LOST = 6 * 3600 * 1000; // a background command running this long without an end is taken to be gone
+const SUB_NEVER = 10 * 60 * 1000; // a background sub-agent whose own transcript never appeared in this long runs elsewhere (or not at all)
 const subCache = new Map();        // session id → { file, pos, carry, dec, map, skip, live }
 
 function subagentLine(agent, c, line) {
   if (!line || line[0] !== '{') return;
   const map = c.map;
   if (agent !== 'claude') {
-    if (!line.includes('SubAgentActivity')) return;
+    if (!line.includes('SubAgentActivity')) { codexShellLine(c, line); return; }
     let o;
     try { o = JSON.parse(line); } catch { return; }
     if (o.type !== 'event_msg' || !o.payload || o.payload.type !== 'item_completed') return;
@@ -1144,7 +1228,7 @@ function subagentLine(agent, c, line) {
         const to = String(inp.to), was = [...map.values()].reverse().find((x) => x.agentId && (x.agentId === to || x.agentId.startsWith(to)));
         map.set(q.id, { id: q.id, kind: was ? was.kind : 'agent', name: was ? was.name : '', status: 'running', start, end: 0, msg, resume: to });
       } else if (inp.run_in_background === true) { // a shell command left running in the background
-        map.set(q.id, { id: q.id, kind: 'shell', name: String(inp.description || inp.command || '').replace(/\s+/g, ' ').slice(0, 60), status: 'running', start, end: 0, msg, bg: true, shell: true });
+        map.set(q.id, { id: q.id, kind: 'shell', name: String(inp.description || inp.command || '').replace(/\s+/g, ' ').slice(0, 60), status: 'running', start, end: 0, msg, bg: true, shell: true, cmd: String(inp.command || '') });
       }
     }
   } else if (o.type === 'user') {
@@ -1156,10 +1240,137 @@ function subagentLine(agent, c, line) {
         if (id && !q.is_error) { x.bg = true; x.agentId = String(id); } else map.delete(x.id);
         continue;
       }
-      if (x.shell) { if (q.is_error || !r.backgroundTaskId) { x.status = 'failed'; x.end = c.live ? Date.now() : 0; } continue; } // started: it goes on
+      if (x.shell) { if (q.is_error || !r.backgroundTaskId) { x.status = 'failed'; x.end = c.live ? Date.now() : 0; } else x.taskId = String(r.backgroundTaskId); continue; } // started: it goes on
       if (r.isAsync) { x.bg = true; x.agentId = String(r.agentId || ''); } // launched in the background: it goes on
       else { x.status = q.is_error ? 'failed' : 'done'; x.end = c.live ? Date.now() : 0; }
     }
+  }
+}
+
+/*
+ * Codex's background terminals. A command still running when exec_command stops waiting for it (10 s by default)
+ * goes on as a "background terminal": the call's output carries a session id (the model may poll it with write_stdin,
+ * or leave it running past the end of its turn). The transcript has no entry for the start — only that output — and
+ * writes the end as a CommandExecution item with the same process_id once the command exits, however much later.
+ * Recorded as kind 'shell' with id / task `cx-<process id>`.
+ */
+const CX_OUT = 256 * 1024; // how much of a background command's output read from the transcript is kept for its viewer
+
+/** The `cmd` of each exec_command call in a code-mode script: `exec_command({ cmd: "…" })` or `exec_command("…")`. */
+function codexScriptCmds(src) {
+  const out = [], re = /exec_command\s*\(\s*(?:\{[^()]*?\bcmd["']?\s*:\s*)?("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')/g;
+  let m;
+  while ((m = re.exec(String(src || '')))) {
+    const lit = m[1];
+    let s = lit.slice(1, -1);
+    try { s = JSON.parse(lit[0] === '"' ? lit : `"${s.replace(/\\'/g, "'").replace(/"/g, '\\"')}"`); } catch { /* keep it as written */ }
+    out.push(s);
+  }
+  return out;
+}
+/** The text items of a tool output (a string, or a list of { text }). */
+function codexTexts(v) {
+  if (typeof v === 'string') return [v];
+  if (Array.isArray(v)) return v.flatMap(codexTexts);
+  if (v && typeof v === 'object') return typeof v.text === 'string' ? [v.text] : codexTexts(v.content);
+  return [];
+}
+/**
+ * Commands a tool output reports still running: [{ pid, out }]. Code mode prints the exec_command / write_stdin result
+ * as JSON (`"session_id":N`, no exit_code); the plain exec_command tool says "Process running with session ID N".
+ */
+function codexRunning(texts) {
+  const found = [];
+  for (const t of texts) {
+    if (t[0] === '{' && t.includes('"session_id"')) {
+      try {
+        const r = JSON.parse(t);
+        if (r && /^\d+$/.test(String(r.session_id)) && r.exit_code == null) found.push({ pid: String(r.session_id), out: typeof r.output === 'string' ? r.output : '' });
+        continue;
+      } catch { /* not a result */ }
+    }
+    const m = /Process running with session ID (\d+)/.exec(t);
+    if (m) { const i = t.indexOf('\nOutput:\n'); found.push({ pid: m[1], out: i >= 0 ? t.slice(i + 9) : '' }); }
+  }
+  return found;
+}
+/** Output of a background command read from the transcript: kept for its viewer, and written there while no live feed does. */
+function codexShellOut(x, text, final) {
+  if (!text) return;
+  let add = text;
+  if (final) { // the whole output once it is over: what was seen of it already is its start
+    if (x.outCut || !text.startsWith(x.out)) return;
+    add = text.slice(x.out.length);
+  }
+  if (!add) return;
+  if (x.out.length + add.length <= CX_OUT) x.out += add; else x.outCut = true;
+  if (x.file && !x.live) { try { fs.appendFileSync(x.file, add); } catch { /* gone */ } }
+}
+function codexShellLine(c, line) {
+  const call = line.includes('"type":"custom_tool_call') || line.includes('"type":"function_call');
+  if (!call && !line.includes('"type":"CommandExecution"')) return;
+  const map = c.map;
+  if (!call) { // a command ended (any command: most end before exec_command stops waiting, and were never background ones)
+    const m = /"process_id":"(\d+)"/.exec(line);
+    if (!m) return;
+    const x = map.get(`cx-${m[1]}`);
+    if (!x || x.status !== 'running') { // its output (with the session id) may still come: then it must not start a row
+      const ended = c.cxEnded || (c.cxEnded = new Set());
+      ended.add(m[1]);
+      if (ended.size > 400) ended.delete(ended.values().next().value);
+      return;
+    }
+    let it = {};
+    try { const o = JSON.parse(line); it = (o.payload && o.payload.item) || {}; } catch { /* that it ended is enough */ }
+    x.status = it.status === 'completed' && !it.exit_code ? 'done' : 'failed'; // a stopped one: failed, exit code -1
+    x.end = c.live ? Date.now() : 0;
+    if (typeof it.aggregated_output === 'string') codexShellOut(x, it.aggregated_output, true);
+    return;
+  }
+  // only a call that runs or polls a command, and the output of one we know, are read (outputs with screenshots are megabytes)
+  const calls = c.cxCalls || (c.cxCalls = new Map()); // call id → { cmds, start }: calls whose output may name a running command
+  if (line.includes('_call_output"')) { const m = /"call_id":"([^"]+)"/.exec(line); if (!m || !calls.has(m[1])) return; }
+  else if (!line.includes('exec_command') && !line.includes('write_stdin') && !line.includes('"name":"wait"')) return;
+  let o;
+  try { o = JSON.parse(line); } catch { return; }
+  const p = o.payload || {};
+  if (o.type !== 'response_item' || !p.call_id) return;
+  if (p.type === 'custom_tool_call' || p.type === 'function_call') {
+    let cmds = null;
+    if (p.name === 'exec') { if (/exec_command|write_stdin/.test(String(p.input || ''))) cmds = codexScriptCmds(p.input); } // code mode: a script
+    else if (p.name === 'exec_command' || p.name === 'write_stdin' || p.name === 'wait') {
+      let a = {};
+      try { a = JSON.parse(p.arguments || '{}') || {}; } catch { /* ignore */ }
+      if (p.name === 'exec_command') cmds = [String(a.cmd || '')];
+      else if (p.name === 'write_stdin') cmds = [];
+      else cmds = (c.cxCells && c.cxCells.get(String(a.cell_id))) || null; // the rest of a script that went on running
+    }
+    if (!cmds) return;
+    calls.set(p.call_id, { cmds, start: Date.parse(o.timestamp || '') || 0 });
+    if (calls.size > 64) calls.delete(calls.keys().next().value);
+    return;
+  }
+  if (p.type !== 'custom_tool_call_output' && p.type !== 'function_call_output') return;
+  const k = calls.get(p.call_id);
+  if (!k) return;
+  calls.delete(p.call_id);
+  const texts = codexTexts(p.output).filter(Boolean);
+  for (const t of texts) { // a script that was still running when exec returned: what it prints later comes with `wait`
+    const cell = /^Script running with cell ID (\S+)/m.exec(t);
+    if (cell) { const cells = c.cxCells || (c.cxCells = new Map()); cells.set(cell[1], k.cmds); if (cells.size > 32) cells.delete(cells.keys().next().value); }
+  }
+  const found = codexRunning(texts), fresh = found.filter((f) => !map.has(`cx-${f.pid}`));
+  for (const f of found) {
+    const id = `cx-${f.pid}`;
+    let x = map.get(id);
+    if (!x) {
+      if (!k.cmds.length || (c.cxEnded && c.cxEnded.has(f.pid))) continue; // a poll of one never seen starting, or one already over
+      // which call it was: certain with one; with several, taken in order (the daemon's own list corrects it, codexNames)
+      const cmd = fresh.length === k.cmds.length ? k.cmds[fresh.indexOf(f)] : '';
+      x = { id, kind: 'shell', name: cmd.replace(/\s+/g, ' ').trim().slice(0, 60), status: 'running', start: k.start || Date.parse(o.timestamp || '') || 0, end: 0, bg: true, shell: true, cmd, taskId: id, out: '' };
+      map.set(id, x);
+    }
+    if (x.status === 'running') codexShellOut(x, f.out, false);
   }
 }
 
@@ -1167,7 +1378,7 @@ function subagents(agent, cwd, id, since = 0) {
   if (!UUID_RE.test(String(id || ''))) return [];
   let file = '';
   if (agent === 'claude') file = claudeFile(cwd, id);
-  else if (agent === 'codex') file = (codexFiles(30).find(({ file: f }) => path.basename(f).toLowerCase().includes(String(id).toLowerCase())) || {}).file || '';
+  else if (agent === 'codex') file = codexFile(id); // (remembered: a background command keeps this polled for hours)
   if (!file || !exists(file)) return [];
   let c = subCache.get(id);
   try {
@@ -1204,15 +1415,334 @@ function subagents(agent, cwd, id, since = 0) {
     if (x.status === 'running' && x.bg && x.agentId) { // still writing its own transcript?
       try {
         if (now - fs.statSync(path.join(path.dirname(file), id, 'subagents', `agent-${x.agentId}.jsonl`)).mtimeMs > SUB_LOST) { c.map.delete(x.id); continue; }
-      } catch { /* not there (yet) */ }
+      } catch { // not there (yet) — and never, for a copied session: its sub-agents ran under the session it was copied from
+        if (c.live && now - (x.start || now) > SUB_NEVER) { c.map.delete(x.id); continue; }
+      }
     }
-    if (x.status === 'running' && agent !== 'claude' && now - (c.mtime || now) > SUB_LOST) { c.map.delete(x.id); continue; } // Codex: no end was ever written
+    if (x.status === 'running' && agent !== 'claude' && !x.shell && now - (c.mtime || now) > SUB_LOST) { c.map.delete(x.id); continue; } // Codex: no end was ever written (a background command runs on with the transcript still)
     if (x.status === 'running' && x.shell && now - (x.start || now) > SHELL_LOST) { c.map.delete(x.id); continue; } // its end never came (the agent was closed)
     if (x.status !== 'running' && x.start < since && x.end < since) { if (now - Math.max(x.start, x.end) > 3600000) c.map.delete(x.id); continue; }
-    out.push({ id: x.id, look: x.agentId ? `ag:${x.agentId}` : x.id, kind: x.kind, name: x.name, status: x.status, start: x.start });
+    out.push({ id: x.id, look: x.agentId ? `ag:${x.agentId}` : x.id, kind: x.kind, name: x.name, status: x.status, start: x.start, ...(x.shell ? { task: x.taskId || '', cmd: x.cmd || '' } : {}) });
   }
-  return out.slice(-12);
+  if (agent === 'codex') codexNames(id, c);
+  // at most 12, but never one still running (a long list of finished ones must not push a live one off)
+  const live = out.filter((x) => x.status === 'running'), past = out.filter((x) => x.status !== 'running');
+  return [...past.slice(-Math.max(0, 12 - live.length)), ...live].sort((a, b) => a.start - b.start);
 }
+
+/**
+ * A background command's output file: Claude writes it to <temp>/claude/<project>/<session>/tasks/<task>.output while
+ * the command runs. Codex keeps it in memory only: MinsuTerm writes one (codexBgOutput).
+ */
+function bgOutputFile(sid, task) {
+  if (!UUID_RE.test(String(sid || '')) || !/^[A-Za-z0-9_-]{3,64}$/.test(String(task || ''))) return '';
+  if (/^cx-\d+$/.test(task)) return codexBgOutput(sid, task);
+  const root = path.join(os.tmpdir(), 'claude');
+  try {
+    for (const d of fs.readdirSync(root)) {
+      const f = path.join(root, d, sid, 'tasks', `${task}.output`);
+      if (exists(f)) return f;
+    }
+  } catch { /* ignore */ }
+  return '';
+}
+ipcMain.handle('agent:bgOutput', (_e, sid, task) => bgOutputFile(sid, task));
+// the PowerShell script that follows a background command's output, as a file (UTF-8 with a BOM, which Windows
+// PowerShell needs to read non-ASCII text right): the viewer tab then runs one short line instead of a page of base64
+ipcMain.handle('agent:bgScript', (_e, task, script) => {
+  if (!/^[A-Za-z0-9_-]{3,64}$/.test(String(task || '')) || typeof script !== 'string' || script.length > 20000) return '';
+  try {
+    const dir = path.join(os.tmpdir(), 'minsuterm');
+    fs.mkdirSync(dir, { recursive: true });
+    const f = path.join(dir, `bg-${task}.ps1`);
+    fs.writeFileSync(f, '﻿' + script, 'utf8');
+    return f;
+  } catch { return ''; }
+});
+
+/**
+ * Stop a background command an agent left running. Claude runs it as `bash -c "… eval '<command>' …"` (zsh / sh on
+ * macOS) under its own process: find that shell — under the tab's process tree, or under the Claude process
+ * that names the session on its command line (a background session the tab is attached to) — by the exact
+ * command, and end its whole tree. Nothing else is touched: no match, nothing stopped. Codex: codexBgStop.
+ */
+async function bgStop(tabId, sid, command, task) {
+  const cx = /^cx-(\d{1,12})$/.exec(String(task || ''));
+  if (cx) return codexBgStop(tabId, sid, cx[1], String(command || ''));
+  const cmd = String(command || '');
+  if (!cmd || cmd.length > 20000) return false;
+  const Q = String.fromCharCode(39); // a single quote, escaped the shell's way inside one: '\''
+  const needle = `eval ${Q}${cmd.split(Q).join(Q + '\\' + Q + Q)}${Q}`;
+  const rows = await processRows();
+  if (!rows.length) return false;
+  const kids = new Map(), byId = new Map();
+  for (const r of rows) { byId.set(r.pid, r); if (!kids.has(r.ppid)) kids.set(r.ppid, []); kids.get(r.ppid).push(r.pid); }
+  const roots = [];
+  const rec = ptys.get(tabId);
+  const tabRoot = rec && (rec.p.pid || rec.pid);
+  if (tabRoot) roots.push(tabRoot);
+  if (UUID_RE.test(String(sid || ''))) for (const r of rows) if (/claude/i.test(r.name) && r.cmd.includes(sid)) roots.push(r.pid);
+  const seen = new Set(), stack = [...roots];
+  let hit = 0;
+  while (stack.length && !hit) {
+    const id = stack.shift();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const r = byId.get(id);
+    if (r && id !== tabRoot && /(?:^|[\\/])(?:bash|zsh|sh)(?:\.exe)?$/i.test(r.name.replace(/\s.*$/, '')) && r.cmd.includes(needle)) { hit = id; break; }
+    stack.push(...(kids.get(id) || []));
+  }
+  if (!hit) return false;
+  await endTree(hit, kids);
+  return true;
+}
+/** End a process and everything under it (kids: pid → [child pids]). */
+async function endTree(hit, kids) {
+  if (IS_WIN) {
+    await new Promise((res) => execFile(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'taskkill.exe'), ['/PID', String(hit), '/T', '/F'], { windowsHide: true }, () => res()));
+  } else {
+    const all = [], st = [hit];
+    while (st.length) { const id = st.pop(); all.push(id); st.push(...(kids.get(id) || [])); }
+    for (const id of all.reverse()) { try { process.kill(id, 'SIGTERM'); } catch { /* gone */ } }
+  }
+}
+
+/*
+ * Codex's terminal UI runs its sessions in a local app-server daemon shared by every `codex` started from a terminal
+ * (~/.codex/packages/app-server-daemon), and its background terminals run there too — under the daemon's command
+ * runner, not under the tab. The daemon lists them per session (process id, item id, the exact command), ends one,
+ * and streams their output to a client that joins the session. `codex app-server proxy` pipes stdio to the daemon's
+ * control socket, which speaks JSON-RPC over WebSocket.
+ */
+const CX_SOCK = path.join(CODEX_HOME, 'app-server-control', 'app-server-control.sock');
+/** → a connection { request(method, params) → result | null, close(), onNote(method, params), onClose, closed } or null (no daemon). */
+function codexDaemon() {
+  const exe = path.join(CODEX_HOME, 'packages', 'app-server-daemon', 'current', 'bin', IS_WIN ? 'codex.exe' : 'codex');
+  if (!exists(exe)) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let p;
+    try { p = spawn(exe, ['app-server', 'proxy', '--sock', CX_SOCK], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] }); } catch { resolve(null); return; }
+    const crypto = require('crypto');
+    const waits = new Map();
+    let raw = Buffer.alloc(0), frag = [], open = false, ready = false, seq = 0;
+    const frame = (op, data) => { // client frames are masked
+      const mask = crypto.randomBytes(4), n = data.length;
+      const head = n < 126 ? Buffer.from([0x80 | op, 0x80 | n]) : n < 65536 ? Buffer.alloc(4) : Buffer.alloc(10);
+      if (n >= 126) { head[0] = 0x80 | op; head[1] = 0x80 | (n < 65536 ? 126 : 127); if (n < 65536) head.writeUInt16BE(n, 2); else head.writeBigUInt64BE(BigInt(n), 2); }
+      const body = Buffer.from(data);
+      for (let i = 0; i < n; i++) body[i] ^= mask[i & 3];
+      return Buffer.concat([head, mask, body]);
+    };
+    const send = (o) => { if (!d.closed) try { p.stdin.write(frame(1, Buffer.from(JSON.stringify(o), 'utf8'))); } catch { /* gone */ } };
+    const d = {
+      closed: false, onNote: null, onClose: null,
+      request(method, params, ms = 8000) {
+        if (d.closed) return Promise.resolve(null);
+        const id = ++seq;
+        return new Promise((res) => {
+          const t = setTimeout(() => { waits.delete(id); res(null); }, ms);
+          waits.set(id, (r) => { clearTimeout(t); waits.delete(id); res(r); });
+          send({ id, method, params });
+        });
+      },
+      close() { if (!d.closed) { d.closed = true; try { p.kill(); } catch { /* gone */ } } },
+    };
+    const gone = () => {
+      if (d.gone) return;
+      d.gone = true; d.closed = true;
+      for (const w of [...waits.values()]) w(null);
+      if (!ready) resolve(null);
+      if (d.onClose) d.onClose();
+    };
+    p.on('error', gone);
+    p.on('exit', gone);
+    p.stdin.on('error', () => {});
+    const timer = setTimeout(() => { if (!ready) d.close(); }, 6000);
+    const message = (text) => {
+      let o;
+      try { o = JSON.parse(text); } catch { return; }
+      if (o.id != null && !o.method) { const w = waits.get(o.id); if (w) w(o.error ? null : (o.result || {})); }
+      else if (o.method && o.id == null && d.onNote) d.onNote(o.method, o.params || {});
+      // a request from the daemon (an approval…) is left to Codex's own UI, which answers it
+    };
+    p.stdout.on('data', (chunk) => {
+      raw = Buffer.concat([raw, chunk]);
+      if (!open) {
+        const i = raw.indexOf('\r\n\r\n');
+        if (i < 0) return;
+        if (!/^HTTP\/1\.1 101/.test(raw.subarray(0, 12).toString())) { d.close(); return; }
+        raw = raw.subarray(i + 4); open = true;
+        d.request('initialize', { clientInfo: { name: 'minsuterm', title: 'MinsuTerm', version: app.getVersion() }, capabilities: { experimentalApi: true, requestAttestation: false } }).then((r) => {
+          clearTimeout(timer);
+          if (!r) { d.close(); resolve(null); return; }
+          send({ method: 'initialized' });
+          ready = true; resolve(d);
+        });
+      }
+      while (raw.length >= 2) {
+        const fin = raw[0] & 0x80, op = raw[0] & 15;
+        let len = raw[1] & 127, off = 2;
+        if (len === 126) { if (raw.length < 4) return; len = raw.readUInt16BE(2); off = 4; }
+        else if (len === 127) { if (raw.length < 10) return; len = Number(raw.readBigUInt64BE(2)); off = 10; }
+        if (raw[1] & 0x80) off += 4; // (a server does not mask; skip a key if one came)
+        if (raw.length < off + len) return;
+        const body = raw.subarray(off, off + len);
+        raw = raw.subarray(off + len);
+        if (op === 8) { d.close(); return; }
+        if (op === 9) { try { p.stdin.write(frame(10, body)); } catch { /* gone */ } continue; }
+        if (op === 1 || op === 2 || op === 0) {
+          frag.push(Buffer.from(body));
+          if (fin) { const all = Buffer.concat(frag); frag = []; message(all.toString('utf8')); }
+        }
+      }
+    });
+    p.stdin.write(`GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${crypto.randomBytes(16).toString('base64')}\r\nSec-WebSocket-Version: 13\r\n\r\n`);
+  });
+}
+
+/**
+ * The exact command (and item id) of each background command the transcript knows only from a tool output: from the
+ * daemon's list for the session, asked once a new one shows (a few times at most, a few seconds apart). A session
+ * the daemon does not run (Codex inside the tab) is asked again only a minute later.
+ */
+function codexNames(sid, c) {
+  const want = [...c.map.values()].filter((x) => x.shell && x.status === 'running' && !x.named && (x.asked || 0) < 5);
+  const now = Date.now();
+  if (!want.length || c.cxAsking || now - (c.cxAskedAt || 0) < (c.cxNoDaemon ? 60000 : 4000)) return;
+  c.cxAsking = true; c.cxAskedAt = now;
+  for (const x of want) x.asked = (x.asked || 0) + 1;
+  codexDaemon().then(async (d) => {
+    const r = d ? await d.request('thread/backgroundTerminals/list', { threadId: sid }) : null;
+    if (d) d.close();
+    c.cxNoDaemon = !r;
+    for (const t of (r && Array.isArray(r.data) ? r.data : [])) {
+      const x = c.map.get(`cx-${t.processId}`);
+      if (!x || !x.shell || typeof t.command !== 'string' || !t.command) continue;
+      x.cmd = t.command; x.name = t.command.replace(/\s+/g, ' ').trim().slice(0, 60); x.itemId = String(t.itemId || ''); x.named = true;
+    }
+  }).catch(() => {}).finally(() => { c.cxAsking = false; });
+}
+
+/**
+ * A Codex background command's output, for its viewer tab: what the transcript holds of it, then everything it prints
+ * from here on, fed from the daemon (codexFollow) — or, when the daemon does not run the session, what the transcript
+ * gets later (the agent's polls, the whole output once it ends).
+ */
+function codexBgOutput(sid, task) {
+  const c = subCache.get(sid), x = c && c.map.get(task);
+  if (!x || !x.shell) return '';
+  if (!x.file || !exists(x.file)) {
+    try {
+      const dir = path.join(os.tmpdir(), 'minsuterm');
+      fs.mkdirSync(dir, { recursive: true });
+      for (const n of fs.readdirSync(dir)) { // the ones of earlier days go
+        if (!/^cx-.+\.output$/.test(n)) continue;
+        const f = path.join(dir, n);
+        try { if (Date.now() - fs.statSync(f).mtimeMs > 86400000) fs.unlinkSync(f); } catch { /* in use */ }
+      }
+      const f = path.join(dir, `cx-${sid}-${task.slice(3)}.output`);
+      fs.writeFileSync(f, x.out || '');
+      x.file = f; x.live = false;
+    } catch { return ''; }
+  }
+  codexFollow(sid, x);
+  return x.file;
+}
+/**
+ * Feed a background command's output into its file as it prints: join the session in the daemon (it then streams every
+ * command's output deltas), keep this command's (by its item id), until it ends — or the session closes, or 64 MB.
+ */
+async function codexFollow(sid, x) {
+  if (x.follow || x.status !== 'running' || !x.file) return;
+  x.follow = true;
+  const d = await codexDaemon();
+  if (!d) { x.follow = false; return; }
+  const pid = x.id.slice(3), early = []; // deltas that came before this command's item was known
+  let item = x.itemId || '', wrote = 0, known = false;
+  const write = (s) => {
+    try { fs.appendFileSync(x.file, s); } catch { d.close(); return; }
+    wrote += s.length;
+    if (wrote > 64 * 1024 * 1024) d.close();
+  };
+  const watch = setInterval(() => { if (x.status !== 'running') d.close(); }, 3000); // the transcript says it ended
+  d.onClose = () => { clearInterval(watch); x.follow = false; }; // (x.live stays: the transcript's copy of the output must not follow what the feed wrote)
+  d.onNote = (m, q) => {
+    if (q.threadId !== sid) return;
+    if (m === 'item/commandExecution/outputDelta' && typeof q.delta === 'string') {
+      if (known) { if (q.itemId === item) write(q.delta); } else if (early.length < 5000) early.push(q);
+    } else if (m === 'item/commandExecution/terminalInteraction' && !item && String(q.processId) === pid) item = String(q.itemId || '');
+    else if (m === 'item/completed' && item && q.item && q.item.id === item) d.close();
+    else if (m === 'thread/closed') d.close();
+  };
+  if (!(await d.request('thread/resume', { threadId: sid, excludeTurns: true }))) { d.close(); return; } // not a session the daemon runs
+  for (let i = 0; i < 8 && !item && !d.closed; i++) { // which item is this command's: the daemon's list says
+    const r = await d.request('thread/backgroundTerminals/list', { threadId: sid });
+    const t = r && Array.isArray(r.data) && r.data.find((q) => String(q.processId) === pid);
+    if (t && t.itemId) item = String(t.itemId);
+    else await new Promise((res) => setTimeout(res, 1500));
+  }
+  if (!item || d.closed) { d.close(); return; }
+  x.live = true; // from here on the feed writes the file, not the transcript
+  for (const q of early.splice(0)) if (q.itemId === item) write(q.delta);
+  known = true;
+}
+
+/**
+ * Stop a Codex background command: the daemon running the session ends it by the session and Codex's process id —
+ * exactly that command. When the daemon does not run the session (Codex runs it inside the tab), its own shell for
+ * exactly that command under the tab is ended: PowerShell `-Command "try { [Console]::OutputEncoding=… } catch {}
+ * <command>"` on Windows, `<shell> -lc <command>` elsewhere — only if exactly one such process is found.
+ */
+async function codexBgStop(tabId, sid, pid, cmd) {
+  if (UUID_RE.test(String(sid || ''))) {
+    const d = await codexDaemon();
+    const r = d ? await d.request('thread/backgroundTerminals/terminate', { threadId: sid, processId: pid }) : null;
+    if (d) d.close();
+    if (r) return r.terminated === true; // the daemon runs this session: it ended it, or has no such command running
+  }
+  const one = (s) => String(s).replace(/\s+/g, ' ').trim();
+  const want = one(cmd);
+  if (!want || cmd.length > 20000) return false;
+  const rec = ptys.get(tabId), root = rec && (rec.p.pid || rec.pid);
+  const rows = root ? await processRows() : [];
+  if (!rows.length) return false;
+  const tails = IS_WIN ? [` -Command "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {} ${want}"`] : [` -lc ${want}`, ` -c ${want}`];
+  const shellRe = IS_WIN ? /^(?:powershell|pwsh)\.exe$/i : /(?:^|\/)(?:bash|zsh|sh)$/;
+  const kids = new Map(), byId = new Map();
+  for (const r of rows) { byId.set(r.pid, r); if (!kids.has(r.ppid)) kids.set(r.ppid, []); kids.get(r.ppid).push(r.pid); }
+  const hits = [], seen = new Set(), stack = [...(kids.get(root) || [])];
+  while (stack.length) {
+    const id = stack.pop();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const r = byId.get(id);
+    if (r && shellRe.test(r.name) && tails.some((t) => one(r.cmd).endsWith(one(t)))) hits.push(id);
+    stack.push(...(kids.get(id) || []));
+  }
+  if (hits.length !== 1) return false; // none — or the same command twice: which one is not known
+  await endTree(hits[0], kids);
+  return true;
+}
+/** Every process: [{ pid, ppid, name, cmd }] (Windows: one WMI query; elsewhere ps). */
+function processRows() {
+  return new Promise((res) => {
+    if (IS_WIN) {
+      const ps = 'Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,Name,CommandLine | ForEach-Object { "$($_.ProcessId)`t$($_.ParentProcessId)`t$($_.Name)`t$(([string]$_.CommandLine) -replace "[\\r\\n\\t]", " ")" }';
+      execFile(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+        ['-NoProfile', '-NonInteractive', '-Command', `[Console]::OutputEncoding = [Text.Encoding]::UTF8; ${ps}`],
+        { windowsHide: true, maxBuffer: 32 * 1024 * 1024 }, (err, out) => res(err ? [] : parseRows(out)));
+    } else {
+      execFile('/bin/ps', ['-axo', 'pid=,ppid=,ucomm=,args='], { maxBuffer: 16 * 1024 * 1024 }, (err, out) => {
+        if (err) return res([]);
+        res(String(out).split('\n').map((l) => l.match(/^\s*(\d+)\s+(\d+)\s+(\S+)\s*(.*)$/)).filter(Boolean).map((m) => ({ pid: +m[1], ppid: +m[2], name: m[3], cmd: m[4] })));
+      });
+    }
+  });
+}
+function parseRows(out) {
+  return String(out).split(/\r?\n/).map((l) => l.split('\t')).filter((a) => a.length >= 3 && +a[0]).map((a) => ({ pid: +a[0], ppid: +a[1], name: a[2] || '', cmd: a.slice(3).join('\t') }));
+}
+ipcMain.handle('agent:bgStop', (_e, tabId, sid, command, task) => bgStop(tabId, sid, command, task));
 ipcMain.handle('agent:subagents', (_e, agent, cwd, id, since) => subagents(agent, cwd, id, since));
 
 /** Was a Claude conversation compacted at or after `since`? (its earlier screen history is gone then) */
@@ -1500,6 +2030,66 @@ ipcMain.on('clip:write', (_e, text) => clipboard.writeText(String(text)));
 ipcMain.on('open:external', (_e, url) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); });
 ipcMain.on('open:folder', (_e, dir) => { if (isFolder(dir)) shell.openPath(dir); });
 ipcMain.on('open:userdata', () => shell.openPath(app.getPath('userData')));
+
+/*
+ * 성능 기록: what the app is busy with, recorded where it is slow (a long-running window, a long session) rather than
+ * guessed at in a fresh one. CPU profiles of the window (renderer) and of the main process over `ms`, the CPU each of
+ * MinsuTerm's processes used meanwhile, and the window's own snapshot of its state → <userData>/diagnostics/<time>/,
+ * plus summary.txt: the functions that took the most time, readable without any tool.
+ */
+let diagBusy = false;
+ipcMain.handle('diag:record', async (_e, ms, snapshot) => {
+  if (diagBusy || !win) return { ok: false, error: 'busy' };
+  diagBusy = true;
+  const dur = Math.max(5000, Math.min(120000, Number(ms) || 30000));
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const dir = path.join(app.getPath('userData'), 'diagnostics', stamp);
+  const dbg = win.webContents.debugger;
+  const inspector = require('inspector'), ses = new inspector.Session();
+  const post = (m, p = {}) => new Promise((res, rej) => ses.post(m, p, (e, r) => (e ? rej(e) : res(r))));
+  let attached = false;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    try { dbg.attach('1.3'); attached = true; } catch { /* DevTools open: it holds the debugger */ }
+    if (attached) { await dbg.sendCommand('Profiler.enable'); await dbg.sendCommand('Profiler.setSamplingInterval', { interval: 500 }); await dbg.sendCommand('Profiler.start'); }
+    ses.connect(); await post('Profiler.enable'); await post('Profiler.setSamplingInterval', { interval: 500 }); await post('Profiler.start');
+    const m0 = app.getAppMetrics();
+    let lag = 0, last = Date.now(); const lagT = setInterval(() => { const n = Date.now(); lag = Math.max(lag, n - last - 50); last = n; }, 50);
+    await new Promise((r) => setTimeout(r, dur));
+    clearInterval(lagT);
+    const m1 = app.getAppMetrics();
+    const out = { renderer: null, main: null };
+    if (attached) { out.renderer = (await dbg.sendCommand('Profiler.stop')).profile; fs.writeFileSync(path.join(dir, 'renderer.cpuprofile'), JSON.stringify(out.renderer)); }
+    out.main = (await post('Profiler.stop')).profile; fs.writeFileSync(path.join(dir, 'main.cpuprofile'), JSON.stringify(out.main));
+    const procs = m1.map((p) => ({ pid: p.pid, type: p.type, name: p.name || '', cpuPercent: +(p.cpu && p.cpu.percentCPUUsage || 0).toFixed(1), memoryMB: Math.round(((p.memory && p.memory.workingSetSize) || 0) / 1024) }));
+    const info = { app: app.getVersion(), electron: process.versions.electron, platform: process.platform, durationMs: dur, mainLoopMaxLagMs: lag, processesAtStart: m0.length, processes: procs, window: snapshot || null };
+    fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify(info, null, 1));
+    fs.writeFileSync(path.join(dir, 'summary.txt'), [`MinsuTerm ${info.app} · ${dur / 1000}s`, '', 'processes (CPU % of one core, memory MB):', ...procs.map((p) => `  ${p.type.padEnd(10)} ${String(p.cpuPercent).padStart(6)}%  ${String(p.memoryMB).padStart(6)} MB  ${p.name}`), '',
+      ...(out.renderer ? ['window (renderer): most time by function', ...topSelf(out.renderer, 40), ''] : ['window (renderer): not recorded (DevTools open?)', '']),
+      'main process: most time by function', ...topSelf(out.main, 20), ''].join('\n'));
+    return { ok: true, dir };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message || err) };
+  } finally {
+    try { ses.disconnect(); } catch { /* ignore */ }
+    if (attached) { try { dbg.detach(); } catch { /* ignore */ } }
+    diagBusy = false;
+  }
+});
+/** The functions a CPU profile spent the most self time in: "  12.3%  name  file:line". */
+function topSelf(profile, n) {
+  if (!profile || !profile.nodes || !profile.samples) return ['  (no samples)'];
+  const byId = new Map(profile.nodes.map((x) => [x.id, x])), self = new Map();
+  const dt = profile.timeDeltas || [];
+  let total = 0;
+  profile.samples.forEach((id, i) => {
+    const node = byId.get(id); if (!node) return;
+    const t = Math.max(0, dt[i] || 0); total += t;
+    const f = node.callFrame || {}, key = `${f.functionName || '(anonymous)'}  ${String(f.url || '').split(/[\\/]/).pop()}:${(f.lineNumber || 0) + 1}`;
+    self.set(key, (self.get(key) || 0) + t);
+  });
+  return [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, t]) => `  ${((100 * t) / Math.max(1, total)).toFixed(1).padStart(5)}%  ${k}`);
+}
 ipcMain.on('win:devtools', () => { if (win) win.webContents.toggleDevTools(); });
 
 // A Notification nothing refers to is garbage-collected, and a later click on it then no longer focuses the tab:

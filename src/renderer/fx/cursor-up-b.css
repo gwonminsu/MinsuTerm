@@ -10,11 +10,10 @@
 .cub-sq { width: min(165cqw, 82cqh, 52px); aspect-ratio: 1; }
 .cub-tall { width: min(120cqw, 60cqh, 40px); aspect-ratio: 1 / 2; }
 .cub-box .cl { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; overflow: visible; }
-/* what reaches out over the terminal (행성's moon) leaves when the terminal loses focus, and stays out of the composer */
+/* what reaches out over the terminal (행성's moon) leaves when the terminal loses focus (the composer's box clips it) */
 .cub-reach { position: absolute; left: 50%; top: 50%; pointer-events: none; transition: opacity .35s; }
 .cub-reach svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .mt-cursor.blurred .cub-reach { opacity: 0; }
-.composer-field .cub-reach { display: none; }
 
 :root {
   --cub-gm-edge: rgba(255, 255, 255, .5); --cub-gm-seam: rgba(255, 255, 255, .2); --cub-gm-glow-p: 40%; --cub-gm-spark: #ffffff; --cub-gm-sparkline: rgba(255, 255, 255, 0);

@@ -493,9 +493,9 @@
 
   /* ---------- the whale on the stage ---------- */
 
-  /** Stamp a sprite: hide what is behind it (by its mask), then show it at its strength. */
-  function stamp(ctx, mask, p, a) {
-    ctx.globalCompositeOperation = 'destination-out'; ctx.globalAlpha = 1; ctx.drawImage(mask.cv, p.x, p.y, p.w, p.h);
+  /** Stamp a sprite: hide what is behind it (by its mask, as much as cut), then show it at its strength. */
+  function stamp(ctx, mask, p, a, cut = 1) {
+    ctx.globalCompositeOperation = 'destination-out'; ctx.globalAlpha = cut; ctx.drawImage(mask.cv, p.x, p.y, p.w, p.h);
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a; ctx.drawImage(p.cv, p.x, p.y, p.w, p.h);
   }
   const img = (ctx, p) => ctx.drawImage(p.cv, p.x, p.y, p.w, p.h);
@@ -509,9 +509,11 @@
    * The whale: the tail stock bends and the flukes pitch hardest and latest, the head nods against the stroke and the
    * body heaves a little; the flippers sweep slowly and twist (squashed a little more or less). Every part hides
    * what is behind it; the body's two pieces first hide, then show, so their seam adds up exactly.
+   * k < 1: the whale is fading in or out (under the clouds); it then hides what is behind only as a cross-fade would.
    */
-  function drawWhale(ctx, wh, set, alpha) {
+  function drawWhale(ctx, wh, set, alpha0, k = 1) {
     const ph = wh.ph, th2 = 0.09 * Math.sin(ph - 0.6), th3 = 0.26 * Math.sin(ph - 1.7);
+    const alpha = alpha0 * k, cut = k >= 1 ? 1 : (k * (1 - alpha0)) / (1 - alpha);
     ctx.save();
     ctx.translate(wh.x, wh.y + Math.sin(ph + 0.4) * wh.Lc * 0.006);
     ctx.rotate(wh.ang);
@@ -519,9 +521,9 @@
     ctx.rotate(-0.012 * Math.sin(ph - 0.2));
     ctx.save(); // the far flipper, behind the body: only what hangs below the belly shows
     ctx.translate(FLIP_F[0], FLIP_F[1]); ctx.rotate(0.62 + 0.16 * Math.sin(wh.fph + 0.5)); ctx.scale(0.86, 0.78 + 0.2 * Math.sin(wh.fph + 1.3));
-    stamp(ctx, set.flipF, set.flipF, alpha);
+    stamp(ctx, set.flipF, set.flipF, alpha, cut);
     ctx.restore();
-    ctx.globalCompositeOperation = 'destination-out'; ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'destination-out'; ctx.globalAlpha = cut;
     img(ctx, set.front);
     ctx.save();
     turn(ctx, J2, th2);
@@ -529,12 +531,12 @@
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = alpha;
     img(ctx, set.tail);
     ctx.translate(J3[0], J3[1]); ctx.transform(Math.cos(th3), Math.sin(th3), 0, 1 + 0.1 * Math.sin(ph - 1.2), 0, 0);
-    stamp(ctx, set.fluke, set.fluke, alpha);
+    stamp(ctx, set.fluke, set.fluke, alpha, cut);
     ctx.restore();
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = alpha;
     img(ctx, set.front);
     ctx.translate(FLIP_N[0], FLIP_N[1]); ctx.rotate(0.8 + 0.16 * Math.sin(wh.fph)); ctx.scale(0.92, 0.85 + 0.2 * Math.sin(wh.fph + 0.9)); // the near flipper, in front
-    stamp(ctx, set.flipNm, set.flipN, alpha);
+    stamp(ctx, set.flipNm, set.flipN, alpha, cut);
     ctx.restore();
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   }
@@ -557,6 +559,13 @@
     ];
   }
   const BANK_A = [[0.34, 0.37, 0.4, 0.42], [0.5, 0.55, 0.6, 0.64]];
+  /**
+   * A breach: it appears and goes away lying low under the clouds, fading in over B_IN frames and out over B_OUT
+   * (a trough between the billows may let its back show through), and rises and dives on a path that is level at
+   * both ends, so it turns smoothly into the climb and out of the dive.
+   */
+  const B_IN = 45, B_OUT = 60;
+  const shown = (wh) => (wh.breach ? Math.min(sm(0, wh.b0, wh.age), 1 - sm(wh.b0 + wh.bD, wh.b0 + wh.bD + B_OUT, wh.age)) : 1);
 
   function spawn(st, V, S, B, dpr, L, slot, o) {
     const { W, u, pv } = V, sl = SLOTS[slot], q = Math.min(2, dpr), a = sl.a[L ? 1 : 0];
@@ -566,10 +575,10 @@
       ph: RND() * TAU, dph: TAU / (30 * rr(6, 8)), fph: RND() * TAU, dfph: TAU / (30 * rr(11, 15)),
       v: (pv ? W * 0.0009 : Lc * (0.00105 + (0.0006 * (3 - slot)) / 3)) * rr(0.9, 1.1), breach: !!o.breach,
       bobA: rr(0.05, 0.07), bobW: TAU / (30 * rr(32, 46)), bobP: o.bobP ?? RND() * TAU, blowIn: 30 * rr(5, 14), above: true, wakeIn: 20, spout: -1, headUp: false, calf: null };
-    if (o.breach) { wh.x = dir > 0 ? W * rr(0.16, 0.36) : W * rr(0.64, 0.84); wh.b0 = 30; wh.bD = 30 * rr(24, 30); wh.bH = Lc * 0.3; wh.v *= 0.85; }
+    if (o.breach) { wh.x = dir > 0 ? W * rr(0.16, 0.36) : W * rr(0.64, 0.84); wh.b0 = B_IN; wh.bD = 30 * rr(24, 30); wh.bH = Lc * 0.3; wh.v *= 0.85; }
     else if (o.x != null) wh.x = o.x * W;
     else wh.x = dir > 0 ? -0.02 * Lc : W + 0.02 * Lc;
-    if (o.calf) {
+    if (o.calf && !o.breach) { // (not on a breach: it rides above its mother's back, so it would sit in plain view while she lies low)
       const cL = Lc * 0.38, cpx = Math.max(16, Math.round(cL * q)), cf = sl.fog * 0.95;
       wh.calf = { Lc: cL, Lpx: cpx, fog: cf, set: need(st, cpx, cf, a, L), dir, ang: 0, x: 0, y: 0, ph: RND() * TAU, dph: wh.dph * 1.55, fph: RND() * TAU, dfph: wh.dfph * 1.3, w: RND() * TAU };
     }
@@ -590,10 +599,10 @@
     const { H } = V, crest = wh.slot < 3 ? B[wh.slot + 1].crest : 1e9, L = wh.Lc;
     wh.age++; wh.ph += wh.dph; wh.fph += wh.dfph;
     let y, dy;
-    if (wh.breach) { // rising right out of the clouds, arching over, diving back in
+    if (wh.breach) { // rising right out of the clouds, arching over, diving back in (level at both ends: no sudden turn)
       const p = Math.max(0, Math.min(1, (wh.age - wh.b0) / wh.bD)), base = crest + 0.2 * L;
-      y = base - wh.bH * Math.sin(Math.PI * p);
-      dy = p > 0 && p < 1 ? (-wh.bH * Math.PI * Math.cos(Math.PI * p)) / wh.bD : 0;
+      y = base - wh.bH * Math.sin(Math.PI * p) ** 2;
+      dy = (-wh.bH * Math.PI * Math.sin(TAU * p)) / wh.bD;
       wh.ang = (wh.dir > 0 ? 1 : -1) * Math.atan((0.65 * dy) / wh.v);
     } else {
       const base = lineY(wh, S, B, H, V.pv), amp = wh.slot === 3 || V.pv ? 0.03 : wh.bobA, w = wh.age * wh.bobW + wh.bobP;
@@ -727,7 +736,7 @@
 
     // the whales move; puffs drift, grow and fade
     for (const wh of st.whales) if (wh.set.ready && (!wh.calf || wh.calf.set.ready)) stepWhale(st, wh, S, B, V);
-    st.whales = st.whales.filter((wh) => (wh.breach ? wh.age < wh.b0 + wh.bD + 120 : wh.dir > 0 ? wh.x - wh.Lc * 1.2 < W : wh.x + wh.Lc * 1.2 > 0));
+    st.whales = st.whales.filter((wh) => (wh.breach ? wh.age < wh.b0 + wh.bD + B_OUT : wh.dir > 0 ? wh.x - wh.Lc * 1.2 < W : wh.x + wh.Lc * 1.2 > 0));
     for (const p of st.puffs) { p.age++; p.x += p.vx - 0.02 * k7; p.y += p.vy; p.vx *= p.drag; p.vy *= p.drag; }
     st.puffs = st.puffs.filter((p) => p.age < p.life);
 
@@ -762,8 +771,10 @@
     const layer = (s) => {
       for (const wh of st.whales) {
         if (wh.slot !== s || !wh.set.ready || (wh.calf && !wh.calf.set.ready)) continue;
-        drawWhale(ctx, wh, wh.set, SLOTS[s].a[li]);
-        if (wh.calf) drawWhale(ctx, wh.calf, wh.calf.set, SLOTS[s].a[li]);
+        const k = shown(wh);
+        if (k < 0.004) continue;
+        drawWhale(ctx, wh, wh.set, SLOTS[s].a[li], k);
+        if (wh.calf) drawWhale(ctx, wh.calf, wh.calf.set, SLOTS[s].a[li], k);
       }
       for (const p of st.puffs) {
         if (p.slot !== s) continue;

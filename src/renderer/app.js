@@ -3430,6 +3430,7 @@ async function ambThunder() {
 }
 
 let BG = null;
+const LIGHT_LEVEL_FLOOR = { backrooms: 0.9 }; // see updateBgAnim: scenes that must stay dark on a light page
 function updateBgAnim() {
   const kind = S.settings.bgAnim || 'none';
   const stageEl = $('#stage');
@@ -3442,7 +3443,10 @@ function updateBgAnim() {
     onDprChange(() => BG.size(stageEl.clientWidth, stageEl.clientHeight));
     BG.size(stageEl.clientWidth, stageEl.clientHeight);
   }
-  BG.canvas.style.opacity = String(Math.max(0.15, Math.min(1, Number(S.settings.bgAnimLevel) || 0.6)));
+  // a scene whose horror lives in its dark: on a light page the background's strength (a faint 60% by default) washed
+  // its dark rooms into grey — there the strength has a floor, so the dark stays dark
+  const level = Math.max(0.15, Math.min(1, Number(S.settings.bgAnimLevel) || 0.6));
+  BG.canvas.style.opacity = String(isLight() && LIGHT_LEVEL_FLOOR[kind] ? Math.max(level, LIGHT_LEVEL_FLOOR[kind]) : level);
   if (BG.kind !== kind) BG.set(kind);
 }
 
@@ -5163,37 +5167,246 @@ async function updateBgImage() {
   bgImgEl.style.setProperty('--blur', `${Math.max(0, Math.min(30, Number(S.settings.bgImageBlur) || 0))}px`);
 }
 
-/* ---------- dropdown pickers with live previews ---------- */
+/* ---------- dropdown pickers with previews ---------- */
+
+/*
+ * Previews hold still until they are pointed at. A list of forty live previews (and the one on every picker button,
+ * even on a hidden settings tab) kept a slow laptop busy and made the settings window lag. Now each preview shows a
+ * still frame that tells it apart, and moves only while the pointer is on its row or button, or the keyboard is on
+ * it; with "reduce motion" it never moves. CSS animations inside a resting preview are held by .pv-rest (ui.css)
+ * and parked on the moment PV_REST_MS after their start; what a preview drives itself (a canvas, a timer) it hands
+ * over as el.pvShow() (on screen: draw the still), el.pvPlay() and el.pvRest().
+ */
+const PV_REST_MS = 1200;
+const pvReduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+let pvSeen = null;
+/** Park the CSS animations of a resting preview on its still frame; drop what a script animated in it. */
+function pvPark(el) {
+  if (el.classList.contains('pv-live')) return;
+  for (const a of el.getAnimations({ subtree: true })) {
+    if (a instanceof CSSAnimation) { if (Math.abs((a.currentTime || 0) - PV_REST_MS) > 1) a.currentTime = PV_REST_MS; }
+    else if (!(a instanceof CSSTransition)) a.cancel();
+  }
+}
+/** A preview came on screen (a list opened, a tab or section shown): its still. Hidden, it had no animations to park. */
+function pvWake(el) {
+  if (el.classList.contains('pv-live')) return;
+  el.pvShow?.();
+  pvPark(el);
+}
+/*
+ * A still is drawn for the look and the settings of its moment. When they change with the window open (typing effect
+ * strength, theme, accent, light / dark from the app or the OS), the stills on screen are drawn again once the
+ * change settles; the others catch up when they come on screen (pvWake). Nothing runs while nothing changes.
+ */
+const pvInView = new Set();
+let pvRefreshT = 0;
+function pvRefreshSoon() {
+  if (!pvInView.size) return;
+  clearTimeout(pvRefreshT);
+  pvRefreshT = setTimeout(() => {
+    pvRefreshT = 0;
+    for (const el of pvInView) if (el.isConnected) pvWake(el); else pvInView.delete(el);
+  }, 250);
+}
+/** A preview was just built in el: hold it still (or let it move if it is pointed at right now). */
+function pvReady(el) {
+  const live = el.classList.contains('pv-live');
+  el.classList.toggle('pv-rest', !live);
+  if (live) el.pvPlay?.(); else pvPark(el);
+  if (!pvSeen) {
+    pvSeen = new IntersectionObserver((ents) => {
+      for (const e of ents) {
+        if (!e.isIntersecting) { pvInView.delete(e.target); continue; }
+        pvInView.add(e.target);
+        pvWake(e.target);
+      }
+    });
+    // theme, accent and light / dark all end up on the root element (applyAppearance)
+    new MutationObserver(pvRefreshSoon).observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'data-theme'] });
+  }
+  pvSeen.unobserve(el); // observed afresh it is reported at once: a preview rebuilt in a box already on screen gets its still
+  pvSeen.observe(el);
+}
+function pvForget(el) {
+  pvSeen?.unobserve(el);
+  pvInView.delete(el);
+}
+function pvLive(el, on) {
+  on = !!on && !pvReduced.matches;
+  if (el.classList.contains('pv-live') === on) return;
+  el.classList.toggle('pv-live', on);
+  el.classList.toggle('pv-rest', !on);
+  if (on) el.pvPlay?.();
+  else { el.pvRest?.(); pvPark(el); }
+}
+/** The preview el moves while target (its row or button) is pointed at, or has the keyboard's focus. */
+function pvHover(target, el) {
+  const upd = () => pvLive(el, target.pvPointed || target.matches(':focus-visible, :has(:focus-visible)'));
+  target.addEventListener('pointerenter', () => { target.pvPointed = true; upd(); });
+  target.addEventListener('pointerleave', () => { target.pvPointed = false; upd(); });
+  target.addEventListener('focusin', upd);
+  target.addEventListener('focusout', () => queueMicrotask(upd));
+}
+
+/*
+ * Stills of canvas previews, kept for the session: a list opened again shows them at once. Rendering one runs the
+ * scene or effect for a moment in one go, so they are made a few per frame, in the order they come on screen.
+ */
+const pvStills = new Map();
+const pvJobs = [];
+let pvPump = 0;
+function pvDrain() {
+  pvPump = 0;
+  const t0 = performance.now();
+  while (pvJobs.length && performance.now() - t0 < 12) { try { pvJobs.shift()(); } catch (e) { console.error(e); } }
+  if (pvJobs.length) pvPump = requestAnimationFrame(pvDrain);
+}
+const pvLook = () => `${isLight() ? 'L' : 'D'}|${S.settings.theme}|${S.settings.themeLight}|${S.settings.accent}|${window.devicePixelRatio || 1}`;
+function pvPaint(canvas, img) {
+  if (canvas.width !== img.width || canvas.height !== img.height) { canvas.width = img.width; canvas.height = img.height; }
+  canvas.className = img.pvClass;
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.filter = 'none';
+  ctx.clearRect(0, 0, img.width, img.height);
+  ctx.drawImage(img, 0, 0);
+  ctx.restore();
+}
+/**
+ * Show the still of the canvas preview in el: from the cache, or rendered by render() into the canvas (false: nothing
+ * to show yet, not kept; 'more': not done, go on in a later frame). key names what is drawn; size and look (theme,
+ * accent, light / dark) are added here.
+ */
+function pvStill(el, canvas, key, render) {
+  const k = `${key}|${el.clientWidth}x${el.clientHeight}|${pvLook()}`;
+  if (canvas.pvShown === k || canvas.pvQueued === k) return;
+  const hit = pvStills.get(k);
+  if (hit) { pvPaint(canvas, hit); canvas.pvShown = k; return; }
+  canvas.pvQueued = k;
+  const job = () => {
+    canvas.pvQueued = '';
+    if (!canvas.isConnected || el.classList.contains('pv-live')) return;
+    const again = pvStills.get(k);
+    if (again) { pvPaint(canvas, again); canvas.pvShown = k; return; }
+    const r = render();
+    if (r === false) return;
+    if (r === 'more') { canvas.pvQueued = k; pvJobs.push(job); return; }
+    const c = document.createElement('canvas');
+    c.width = canvas.width; c.height = canvas.height;
+    c.getContext('2d').drawImage(canvas, 0, 0);
+    c.pvClass = canvas.className;
+    if (pvStills.size > 300) pvStills.delete(pvStills.keys().next().value);
+    pvStills.set(k, c);
+    canvas.pvShown = k;
+  };
+  pvJobs.push(job);
+  if (!pvPump) pvPump = requestAnimationFrame(pvDrain);
+}
+let pvInkCv = null;
+/** How much is drawn on a canvas (its summed alpha, sampled): picks the frame of an effect that shows the most of it. */
+function pvInk(canvas) {
+  const w = canvas.width, h = canvas.height;
+  if (!pvInkCv) pvInkCv = document.createElement('canvas');
+  if (pvInkCv.width !== w || pvInkCv.height !== h) { pvInkCv.width = w; pvInkCv.height = h; }
+  const c = pvInkCv.getContext('2d', { willReadFrequently: true }); // read here, so the preview's own canvas stays on the GPU
+  c.clearRect(0, 0, w, h);
+  c.drawImage(canvas, 0, 0);
+  const d = c.getImageData(0, 0, w, h).data;
+  let s = 0;
+  for (let i = 3; i < d.length; i += 12) s += d[i];
+  return s;
+}
+/**
+ * Run an effect engine through a number of frames at once, for a still: what start() schedules with setTimeout lands
+ * on its frame (16.7 ms apart, like the live loop) and nothing is left running. The canvas keeps the frame, from
+ * pick = [first, step] on, that shows the most (a spark or a bolt is gone again in a few frames).
+ */
+function pvRunFx(fx, frames, start, pick) {
+  const realTimeout = window.setTimeout;
+  const { burst, kick } = fx;
+  const due = [];
+  let now = 0, best = -1, snap = null;
+  fx.burst = (k, x, y, o) => addBurst(fx, k, x, y, o);
+  fx.kick = () => {};
+  window.setTimeout = (f, ms) => { due.push([now + (Number(ms) || 0), f]); return 0; };
+  try {
+    start();
+    for (let i = 0; i <= frames; i++) {
+      now = i * 16.7;
+      due.sort((a, b) => a[0] - b[0]);
+      while (due.length && due[0][0] <= now) due.shift()[1]();
+      try { drawFx(fx); } catch (e) { console.error(e); fx.parts = []; }
+      if (pick && i >= pick[0] && (i - pick[0]) % pick[1] === 0) {
+        const ink = pvInk(fx.canvas);
+        if (ink > best) {
+          best = ink;
+          snap = snap || document.createElement('canvas');
+          snap.width = fx.canvas.width; snap.height = fx.canvas.height;
+          snap.getContext('2d').drawImage(fx.canvas, 0, 0);
+          snap.pvClass = fx.canvas.className;
+          snap.at = i;
+        }
+      }
+    }
+    if (snap && snap.at !== frames) pvPaint(fx.canvas, snap);
+  } finally {
+    window.setTimeout = realTimeout;
+    fx.burst = burst; fx.kick = kick;
+  }
+}
+/** An effect engine for a canvas preview, made when first needed (then the box has its real size). */
+function pvFxEngine(el, canvas) {
+  const eng = { fx: null, W: 0, H: 0 };
+  eng.get = () => {
+    if (!eng.fx) { eng.W = el.clientWidth || 120; eng.H = el.clientHeight || 36; eng.fx = createFx(canvas); eng.fx.size(eng.W, eng.H); }
+    return eng.fx;
+  };
+  // stopped for good: bursts still due from its timers (a celebration's later ones) must not wake it over the still
+  eng.drop = () => { if (!eng.fx) return; eng.fx.stop(); eng.fx.burst = eng.fx.kick = () => {}; eng.fx = null; };
+  return eng;
+}
 
 function previewFx(kind, el) {
   if (kind === 'none') { el.innerHTML = '<span class="pv-none">—</span>'; return () => {}; }
   const canvas = h('canvas', 'pv-canvas');
   el.appendChild(canvas);
-  const W = el.clientWidth || 120;
-  const H = el.clientHeight || 36;
-  const fx = createFx(canvas);
-  fx.size(W, H);
-  let x = 12;
-  const timer = setInterval(() => {
-    x += 9;
-    const enter = x > W - 18;
-    fx.burst(kind, enter ? W / 2 : x, H / 2 + 2, { enter, submit: enter, k: S.settings.typingFxIntensity, cw: 7, ch: 13 });
-    if (enter) x = 12;
-  }, 170);
-  return () => { clearInterval(timer); fx.stop(); };
+  const eng = pvFxEngine(el, canvas);
+  const opt = (enter) => ({ enter, submit: enter, k: S.settings.typingFxIntensity, cw: 7, ch: 13 });
+  let timer = 0;
+  // the still: a few keys typed along the line, around the last one
+  const still = () => {
+    const fx = eng.get();
+    fx.stop();
+    pvRunFx(fx, 42, () => [0.3, 0.43, 0.56, 0.69].forEach((f, i) => setTimeout(() => fx.burst(kind, eng.W * f, eng.H / 2 + 2, opt(false)), i * 170)), [22, 2]);
+  };
+  el.pvShow = () => pvStill(el, canvas, `fx|${kind}|${S.settings.typingFxIntensity}`, still);
+  el.pvPlay = () => {
+    const fx = eng.get();
+    let x = 12;
+    clearInterval(timer);
+    timer = setInterval(() => {
+      x += 9;
+      const enter = x > eng.W - 18;
+      fx.burst(kind, enter ? eng.W / 2 : x, eng.H / 2 + 2, opt(enter));
+      if (enter) x = 12;
+    }, 170);
+  };
+  el.pvRest = () => { clearInterval(timer); timer = 0; eng.drop(); canvas.pvShown = ''; el.pvShow(); };
+  return () => { clearInterval(timer); eng.drop(); };
 }
 
 function previewCelebrate(kind, el) {
   const canvas = h('canvas', 'pv-canvas');
   el.appendChild(canvas);
-  const W = el.clientWidth || 120;
-  const H = el.clientHeight || 36;
-  const fx = createFx(canvas);
-  fx.size(W, H);
-  const go = () => runCelebration(fx, kind, W / 2, H * 0.6, W, 0.62);
-  go();
-  const timer = setInterval(go, 1100);
-  return () => { clearInterval(timer); fx.stop(); };
+  const eng = pvFxEngine(el, canvas);
+  const go = () => runCelebration(eng.get(), kind, eng.W / 2, eng.H * 0.6, eng.W, 0.62);
+  let timer = 0;
+  el.pvShow = () => pvStill(el, canvas, `celebrate|${kind}`, () => { eng.get().stop(); pvRunFx(eng.get(), 60, go, [6, 3]); });
+  el.pvPlay = () => { clearInterval(timer); go(); timer = setInterval(go, 1100); };
+  el.pvRest = () => { clearInterval(timer); timer = 0; eng.drop(); canvas.pvShown = ''; el.pvShow(); };
+  return () => { clearInterval(timer); eng.drop(); };
 }
 
 const WG_KINDS = [
@@ -5553,7 +5766,19 @@ function relayGeometry(layer) {
 window.addEventListener('resize', () => document.querySelectorAll('.wg-run[data-style="relay"]').forEach(relayGeometry));
 function previewGlow(kind, el) {
   el.innerHTML = `<span class="pv-pane" data-wg="${kind}"><i></i><i></i><i></i></span>`;
-  syncRunners(el.querySelector('.pv-pane'), kind, true);
+  const pane = el.querySelector('.pv-pane');
+  syncRunners(pane, kind, true);
+  const layer = pane.querySelector(':scope > .wg-run');
+  if (layer && layer.santaTimer) { // 산타 배달 throws its presents from a timer: it runs only while the preview moves
+    const hold = () => {
+      clearInterval(layer.santaTimer);
+      layer.santaTimer = 0;
+      for (const g of layer.querySelectorAll('.wr-gift')) { g.getAnimations().forEach((a) => a.cancel()); g.remove(); } // cancelled: no landing, no bounce
+    };
+    hold();
+    el.pvPlay = () => startSantaRound(layer);
+    el.pvRest = hold;
+  }
   return () => {};
 }
 
@@ -5595,18 +5820,52 @@ function previewCursor(kind, el) {
   return () => {};
 }
 
+const PV_BG_WARM = 45; // a background's still: how it looks after 1.5 s (its frames are counted at 30 fps)
+/* backgrounds known by something that 1.5 s may not show yet: bring it on, then run so many frames more */
+const PV_BG_STILL = {
+  thunder: (bg) => { bg.storm.next = bg.t + 1; return 15; }, // a bolt, the clouds lit
+  shooting: (bg) => { bg.meteors.push({ x: bg.w * 0.92, y: bg.h * 0.08, life: 1 }); return 7; },
+  constellation: () => 150, // a figure being drawn
+};
 function previewBg(kind, el) {
   if (kind === 'none') { el.innerHTML = '<span class="pv-none">—</span>'; return () => {}; }
   const canvas = h('canvas', 'pv-canvas bg-pv');
   el.appendChild(canvas);
-  const bg = createBg(canvas);
-  bg.size(el.clientWidth || 120, el.clientHeight || 36);
-  bg.set(kind);
-  return () => bg.stop();
+  let bg = null;
+  const make = () => {
+    if (bg) return;
+    bg = createBg(canvas);
+    bg.size(el.clientWidth || 120, el.clientHeight || 36);
+    bg.set(kind);
+    bg.stop(); // set() starts the loop: only a preview that is pointed at runs it
+    bg.warmLeft = PV_BG_WARM;
+    bg.tweaked = !PV_BG_STILL[kind];
+  };
+  // run the scene toward its still, ~8 ms at a time: some build their scenery over many frames (a few ms each)
+  const still = () => {
+    make();
+    const t0 = performance.now();
+    while (bg.warmLeft > 0) {
+      bg.t += 1;
+      drawBg(bg);
+      if (--bg.warmLeft === 0 && !bg.tweaked) { bg.tweaked = true; bg.warmLeft = PV_BG_STILL[kind](bg); }
+      if (performance.now() - t0 > 8) break;
+    }
+    if (bg.warmLeft > 0) return 'more';
+    if (kind === 'campfire' && !(CAMPFIRE_VIDEO && CAMPFIRE_VIDEO.readyState >= 2)) { // the footage is still loading
+      bg.warmLeft = 1;
+      CAMPFIRE_VIDEO?.addEventListener('loadeddata', () => { canvas.pvShown = ''; if (!el.classList.contains('pv-live')) el.pvShow(); }, { once: true });
+      return false;
+    }
+  };
+  el.pvShow = () => pvStill(el, canvas, `bg|${kind}`, still);
+  el.pvPlay = () => { make(); if (!bg.raf) bg.raf = requestAnimationFrame(bg.frame); };
+  el.pvRest = () => { bg?.stop(); canvas.pvShown = ''; el.pvShow(); };
+  return () => bg?.stop();
 }
 
 /**
- * Dropdown with an animated example in every row.
+ * Dropdown with an animated example in every row (still until pointed at: see pvLive).
  * opts: { key, items: [[value, label, desc]], preview(kind, el) → cleanup, onPick(value) }
  */
 function setupPicker(root, opts) {
@@ -5615,6 +5874,12 @@ function setupPicker(root, opts) {
   let pop = null;
   let cleanups = [];
   let btnClean = () => {};
+  const mount = (v, pv) => {
+    pv.pvShow = pv.pvPlay = pv.pvRest = null; // a box keeps its element when it shows another style
+    const clean = opts.preview(v, pv);
+    pvReady(pv);
+    return () => { clean(); pvForget(pv); };
+  };
 
   const drawButton = () => {
     btnClean();
@@ -5622,8 +5887,9 @@ function setupPicker(root, opts) {
     btn.querySelector('.pk-name').textContent = name;
     const pv = btn.querySelector('.pk-pv');
     pv.innerHTML = '';
-    btnClean = opts.preview(v, pv);
+    btnClean = mount(v, pv);
   };
+  pvHover(btn, btn.querySelector('.pk-pv'));
   const close = () => {
     if (!pop) return false;
     cleanups.forEach((f) => f());
@@ -5657,7 +5923,9 @@ function setupPicker(root, opts) {
     pop.style.top = below ? `${r.bottom + 4}px` : '';
     pop.style.bottom = below ? '' : `${innerHeight - r.top + 4}px`;
     pop.querySelectorAll('.pk-item').forEach((it) => {
-      cleanups.push(opts.preview(it.dataset.v, it.querySelector('.pk-item-pv')));
+      const pv = it.querySelector('.pk-item-pv');
+      cleanups.push(mount(it.dataset.v, pv));
+      pvHover(it, pv);
       it.addEventListener('click', () => {
         saveSettings({ [opts.key]: it.dataset.v });
         opts.onPick?.(it.dataset.v);
@@ -5672,7 +5940,13 @@ function setupPicker(root, opts) {
     window.addEventListener('wheel', holdScroll, { capture: true, passive: false });
     cleanups.push(() => window.removeEventListener('wheel', holdScroll, { capture: true }));
   });
-  root.closest('.modal').addEventListener('pointerdown', (e) => { if (pop && !root.contains(e.target)) close(); });
+  const modal = root.closest('.modal');
+  modal.addEventListener('pointerdown', (e) => { if (pop && !root.contains(e.target)) close(); });
+  if (!modal.pvHooked) { // a setting with no look of its own (the typing effect's strength) still changes the stills
+    modal.pvHooked = true;
+    modal.addEventListener('input', pvRefreshSoon);
+    modal.addEventListener('change', pvRefreshSoon);
+  }
   const prevCleanup = S.overlay.cleanup;
   S.overlay.cleanup = () => { prevCleanup?.(); close(); btnClean(); };
   drawButton();
@@ -5932,12 +6206,16 @@ function createTab(opts = {}) {
     // typing again after a finished turn / a question → back to "입력 대기" (until Enter starts work)
     if (tab.agent && (tab.status === 'done' || tab.status === 'attention')) setStatus(tab, 'ready');
     if (tab.unseen) { tab.unseen = false; updateTabEl(tab); }
-    // Esc stops the agent, or turns down what it asked (the line above has already taken 'attention' back to 'ready')
-    if (tab.agent && d === '\x1b' && (tab.status === 'working' || tab.awaitChoice || tab.statusBeforeInput === 'attention')) { tab.interrupted = true; tab.interruptedAt = Date.now(); }
+    // Esc (or Ctrl+C, which Claude and Codex take the same way) stops the agent, or turns down what it asked (the line
+    // above has already taken 'attention' back to 'ready'): the task ends as 중단, not 완료
+    if (tab.agent && (d === '\x1b' || d === '\x03') && (tab.status === 'working' || tab.awaitChoice || tab.statusBeforeInput === 'attention')) { tab.interrupted = true; tab.interruptedAt = Date.now(); }
     if (d.includes('\r') && !d.startsWith('\x1b[200~')) {
       if (tab.agent) onAgentEnter(tab);
       if (tab.agent) { tab.armed = true; tab.armedAt = Date.now(); } // a prompt / answer was submitted → next output burst is real work
-      else if (/\b(claude|codex)\b/i.test(currentLine(tab))) window.mt.agent.probe([500, 1500, 3000]);
+      else if (/\b(claude|codex)\b/i.test(typedLine(tab))) {
+        window.mt.agent.probe([500, 1500, 3000]);
+        tab.typedCmd = { line: typedLine(tab), at: Date.now() }; // `cd X && claude`: where it runs (followTypedCd)
+      }
     }
   });
   term.onTitleChange((t) => {
@@ -6037,18 +6315,101 @@ function buildTabEl(tab) {
     <span class="tab-icon"><span class="ico-slot"></span><span class="dot"></span></span>
     <span class="tab-title"></span>
     <button class="tab-close" title="닫기 (Ctrl+Shift+W)">${icon('x')}</button>`;
+  // (a split shows as one item, this tab's element standing for it: the menu, rename and close act on the split)
   el.addEventListener('pointerdown', (e) => onTabPointerDown(e, tab));
-  el.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); closeTab(tab.id); } });
+  el.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); closeTabItem(tab); } });
   el.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
-  el.addEventListener('dblclick', (e) => { if (!e.target.closest('.tab-close')) startRename(tab); });
-  el.addEventListener('contextmenu', (e) => { e.preventDefault(); activate(tab.id); openTabMenu(tab, e.clientX, e.clientY); });
-  el.querySelector('.tab-close').addEventListener('click', (e) => { e.stopPropagation(); closeTab(tab.id); });
+  el.addEventListener('dblclick', (e) => { if (!e.target.closest('.tab-close')) startRename(itemFocus(tab)); });
+  el.addEventListener('contextmenu', (e) => { e.preventDefault(); const f = itemFocus(tab); activate(f.id); openTabMenu(f, e.clientX, e.clientY); });
+  el.querySelector('.tab-close').addEventListener('click', (e) => { e.stopPropagation(); closeTabItem(tab); });
   return el;
+}
+
+/* --- the tab bar shows a split as ONE item ------------------------- */
+// The split's first tab (in tab order) stands for it; the others' elements are hidden. Clicking it brings back the
+// pane last used, its X closes the whole split, dragging moves the split as a block.
+const groupMembers = (g) => S.tabs.filter((t) => g.ids.includes(t.id));
+const groupLead = (g) => groupMembers(g)[0] || null;
+const groupFocus = (g) => (g.ids.includes(g.last) && tabById(g.last)) || groupLead(g);
+/** The tab a tab-bar item brings to the front: the tab itself, or its split's last used pane. */
+const itemFocus = (tab) => { const g = groupOf(tab); return g ? groupFocus(g) || tab : tab; };
+/** The tab bar's items in order, each once: { lead, tabs, g }. */
+function barItems() {
+  const out = [], seen = new Set();
+  for (const t of S.tabs) {
+    const g = groupOf(t);
+    if (g && seen.has(g)) continue;
+    if (g) seen.add(g);
+    out.push({ lead: t, tabs: g ? groupMembers(g) : [t], g });
+  }
+  return out;
+}
+/** Keep a split's tabs next to each other, in the split's order, where its first one is. */
+function packGroup(g) {
+  const ms = g.ids.map(tabById).filter(Boolean);
+  if (ms.length < 2) return;
+  const at = ms.map((t) => S.tabs.indexOf(t));
+  const first = Math.min(...at);
+  if (at.every((v, i) => v === first + i)) return;
+  for (const t of ms) S.tabs.splice(S.tabs.indexOf(t), 1);
+  S.tabs.splice(first, 0, ...ms);
+  for (const x of S.tabs) tabsEl.appendChild(x.el);
+}
+/** Move a tab-bar item (a tab, or a split as a block) before or after another one. */
+function moveItem(fromTab, toTab, after) {
+  const block = (t) => { const g = groupOf(t); return g ? groupMembers(g) : [t]; };
+  const moving = block(fromTab), anchor = block(toTab);
+  if (moving.includes(toTab)) return;
+  for (const t of moving) S.tabs.splice(S.tabs.indexOf(t), 1);
+  const at = after ? S.tabs.indexOf(anchor[anchor.length - 1]) + 1 : S.tabs.indexOf(anchor[0]);
+  S.tabs.splice(at, 0, ...moving);
+  for (const x of S.tabs) tabsEl.appendChild(x.el);
+  renderSessions();
+  saveLayout();
+}
+/** Close a tab-bar item: a tab, or every pane of a split (asked first). */
+async function closeTabItem(tab) {
+  const g = groupOf(tab);
+  if (!g) return closeTab(tab.id);
+  const ms = groupMembers(g);
+  const ok = await confirmDialog(`분할된 창 ${ms.length}개를 모두 닫을까요?`, ms.map((t) => `· ${tabLabel(t)}`).join('\n'), '모두 닫기');
+  if (!ok) return;
+  for (const t of ms) await closeTab(t.id);
+}
+/** Paint a split's tab-bar item: its panes' names, the split's shape, the most pressing state among them. */
+function paintGroupTab(el, g) {
+  const ms = groupMembers(g), f = groupFocus(g) || ms[0];
+  const RANK = { attention: 5, working: 4, done: 3, ready: 2, shell: 1 };
+  const top = ms.reduce((a, t) => ((RANK[t.status] || 0) > (RANK[a.status] || 0) ? t : a), ms[0]);
+  el.classList.add('group-tab');
+  el.classList.toggle('active', ms.some((t) => t.id === S.activeId));
+  el.classList.toggle('unseen', ms.some((t) => t.unseen));
+  el.classList.toggle('agent-claude', top.agent === 'claude');
+  el.classList.toggle('agent-codex', top.agent === 'codex');
+  for (const s of Object.keys(STATUS_TEXT)) el.classList.toggle(`st-${s}`, top.status === s);
+  const slot = el.querySelector('.ico-slot');
+  const iname = g.dir === 'row' ? 'splitRight' : g.dir === 'col' ? 'splitDown' : 'grid';
+  if (slot && slot.dataset.name !== iname) { slot.innerHTML = icon(iname); slot.dataset.name = iname; }
+  const title = el.querySelector('.tab-title');
+  if (title) {
+    title.classList.add('no-i18n');
+    title.innerHTML = ms.map((t) => `<span class="gt-pane${t === f ? ' focus' : ''}">${esc(tabLabel(t))}</span>`).join('<span class="gt-sep">│</span>');
+    el.style.setProperty('--panes', String(ms.length));
+  }
+  el.title = ms.map((t) => `${tabLabel(t)} · ${t.agent ? `${AGENTS[t.agent].name} · ` : ''}${STATUS_TEXT[t.status] || ''}`).join('\n');
 }
 
 function updateTabEl(tab) {
   const el = tab.el;
   if (!el) return;
+  const g = groupOf(tab), lead = g && groupLead(g);
+  el.classList.toggle('grp-hidden', !!g && lead !== tab);
+  if (g) {
+    if (lead && lead.el) paintGroupTab(lead.el, g); // this tab's item is its split's
+    updateTileHead(tab);
+    return;
+  }
+  el.classList.remove('group-tab');
   el.classList.toggle('active', tab.id === S.activeId);
   el.classList.toggle('unseen', !!tab.unseen);
   el.classList.toggle('agent-claude', tab.agent === 'claude');
@@ -6060,9 +6421,13 @@ function updateTabEl(tab) {
   const title = el.querySelector('.tab-title');
   if (title) { title.classList.add('no-i18n'); title.textContent = tabLabel(tab); } // a user-made name is never translated (set here: a rename re-creates the span)
   el.title = `${tabLabel(tab)}\n${tab.cwd}\n${tab.agent ? `${AGENTS[tab.agent].name} · ` : ''}${STATUS_TEXT[tab.status] || ''}`;
+  updateTileHead(tab);
+}
 
-  // grid tile header mirrors the tab
+/** A pane's header (in a split or a project grid) and its working glow mirror the tab. */
+function updateTileHead(tab) {
   const host = tab.host;
+  const iname = tabIconName(tab);
   if (host) {
     host.classList.toggle('agent-claude', tab.agent === 'claude');
     host.classList.toggle('agent-codex', tab.agent === 'codex');
@@ -6103,6 +6468,8 @@ function activate(id) {
   if (S.grid && !samePath(tab.cwd, S.grid)) S.grid = null;
   if (S.zoom && S.zoom !== id) S.zoom = null;
   S.activeId = id;
+  const g = groupOf(tab);
+  if (g) g.last = id; // the pane its tab-bar item brings back
   for (const t of S.tabs) updateTabEl(t);
   if (tab.unseen) { tab.unseen = false; updateTabEl(tab); }
   applyLayout();
@@ -6176,10 +6543,13 @@ function applyLayout() {
     const rem = tiles.length % cols;
     if (cols > 1 && rem) tiles[tiles.length - 1].host.style.gridColumn = `span ${cols - rem + 1}`;
   }
+  for (const g of S.groups) packGroup(g); // a split is one block in the tab order (and one item in the bar)
   for (const t of S.tabs) {
     const i = tiles.indexOf(t);
     t.el.classList.toggle('in-view', i >= 0 && t.id !== S.activeId);
     t.el.classList.toggle('in-split', !!groupOf(t));
+    // a tab that joined or left a split: its own item hides or comes back, the split's item is repainted
+    if (t.el.classList.contains('grp-hidden') !== !!(groupOf(t) && groupLead(groupOf(t)) !== t) || groupOf(t) || t.el.classList.contains('group-tab')) updateTabEl(t);
     const solo = t.host.querySelector('[data-a="solo"]');
     if (solo) solo.title = view.kind === 'split' ? '이 패널만 크게 (Ctrl+Shift+Z)' : '이 탭만 보기';
   }
@@ -6286,6 +6656,7 @@ async function closeTab(id, { confirmWorking = true } = {}) {
   tab.closed = true; // whatever is still on its way for this tab (its pty starting, a transcript check) stops here
   const idx = S.tabs.indexOf(tab);
   syncTask(tab, 'exited');
+  if (tab.agent) S.sessionCache.delete(normP(tab.cwd)); // its conversation is a past one now (a new one may not be listed yet)
   window.mt.pty.kill(tab.id);
   tab.alive = false;
   try { tab.term.dispose(); } catch { /* ignore */ }
@@ -6328,13 +6699,15 @@ function moveTab(from, to) {
 }
 
 function moveActive(delta) {
-  const i = S.tabs.findIndex((t) => t.id === S.activeId);
+  // by tab-bar item: a split moves as one, and a tab steps over a split, not into it
+  const items = barItems();
+  const i = items.findIndex((it) => it.tabs.some((t) => t.id === S.activeId));
   if (i < 0) return;
-  const to = Math.max(0, Math.min(S.tabs.length - 1, i + delta));
+  const to = Math.max(0, Math.min(items.length - 1, i + delta));
   if (to === i) return;
-  const el = S.tabs[i].el;
+  const el = items[i].lead.el;
   const before = el.getBoundingClientRect().left;
-  moveTab(i, to);
+  moveItem(items[i].lead, items[to].lead, to > i);
   flip(el, before);
   el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
@@ -6518,7 +6891,7 @@ function onTabPointerDown(e, tab) {
       if (Math.abs(dx) < 5 && Math.abs(ev.clientY - startY) < 5) return;
       dragging = true;
       try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-      els = [...tabsEl.children];
+      els = [...tabsEl.children].filter((x) => !x.classList.contains('grp-hidden')); // the bar's items (a split is one)
       rects = els.map((x) => x.getBoundingClientRect());
       from = els.indexOf(el);
       target = from;
@@ -6527,7 +6900,7 @@ function onTabPointerDown(e, tab) {
       document.body.classList.add('grabbing');
     }
     const barBottom = tabsEl.getBoundingClientRect().bottom;
-    if (ev.clientY > barBottom + 16) {
+    if (ev.clientY > barBottom + 16 && !groupOf(tab)) { // (a split's item only moves along the bar)
       if (!out) { out = true; els.forEach((x) => { x.style.transform = ''; }); el.classList.add('drag-out'); }
       splitDrop.update(tab, ev.clientX, ev.clientY);
       return;
@@ -6563,8 +6936,9 @@ function onTabPointerDown(e, tab) {
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onUp);
     if (!dragging) { // a plain click (on the tab already in front it took the focus off the terminal: hand it back)
-      if (tab.id !== S.activeId) activate(tab.id);
-      else if (!S.overlay) tab.term.focus();
+      const g = groupOf(tab), f = itemFocus(tab); // a split's item: its last used pane, unless one of its panes is in front
+      if (g ? !g.ids.includes(S.activeId) : tab.id !== S.activeId) activate(f.id);
+      else if (!S.overlay) activeTab()?.term.focus();
       return;
     }
     if (out) {
@@ -6578,15 +6952,16 @@ function onTabPointerDown(e, tab) {
       activeTab()?.term.focus(); // the dragged tab, unless its split was refused
       return;
     }
-    if (tab.id !== S.activeId) activate(tab.id);
+    const g = groupOf(tab);
+    if (g ? !g.ids.includes(S.activeId) : tab.id !== S.activeId) activate(itemFocus(tab).id);
     const visualLeft = el.getBoundingClientRect().left;
     tabsEl.classList.remove('tabs-dragging');
     document.body.classList.remove('grabbing');
     els.forEach((x) => { x.style.transform = ''; });
     el.classList.remove('dragging');
-    if (target !== from) moveTab(from, target);
+    if (target !== from) { const to = S.tabs.find((x) => x.el === els[target]); if (to) moveItem(tab, to, target > from); }
     flip(el, visualLeft);
-    tab.term.focus();
+    activeTab()?.term.focus();
   };
 
   window.addEventListener('pointermove', onMove);
@@ -7054,15 +7429,24 @@ function setAgent(tab, agent) {
   if (agent) {
     tab.agentSince = Date.now();
     tab.workStart = Date.now();
-    if (tab.launch && tab.launch.type === agent) {
-      tab.sessionId = tab.launch.sessionId || '';
-      tab.permissionMode = tab.launch.permissionMode || '';
+    const launch = tab.launch && tab.launch.type === agent ? tab.launch : null;
+    if (launch) {
+      tab.sessionId = launch.sessionId || '';
+      tab.permissionMode = launch.permissionMode || '';
     } else {
       tab.sessionId = '';
       tab.permissionMode = '';
     }
     tab.launch = null;
     tab.armed = false;
+    // where it runs and on which conversation, when that is not known yet
+    const typed = tab.typedCmd;
+    tab.typedCmd = null;
+    if (!launch && typed && Date.now() - typed.at < 60000) {
+      const cont = /\b(?:claude\S*\s(?:.*\s)?(?:--continue|-c)(?=\s|$)|codex\S*\s+resume\s+--last\b)/i.test(typed.line);
+      followTypedCd(tab, agent, typed.line).then(() => { if (cont && !tab.sessionId) guessContinued(tab, agent); });
+    }
+    if (launch && launch.mode === 'continue' && !tab.sessionId) guessContinued(tab, agent);
     setStatus(tab, 'ready');
     tab.el.classList.add('agent-pop');
     setTimeout(() => tab.el.classList.remove('agent-pop'), 500);
@@ -7237,9 +7621,27 @@ setInterval(() => {
   for (const tab of S.tabs) {
     if (tab.status !== 'working') continue;
     if (now - tab.lastOut < 1600) { checkTurn(tab, now); continue; }
-    finishWork(tab, tab.lastOut - tab.workStart);
+    quietEnd(tab, now);
   }
 }, 400);
+
+/*
+ * Output went quiet. A long session can be quiet in the middle of a turn (a long tool call, a slow model, an attached
+ * background session that only sends what changed): when the transcript is known and says the turn goes on, it is
+ * not over — that ended long tasks half way. Without a transcript, or when it says done, or when the agent stopped
+ * to ask, finish as before.
+ */
+async function quietEnd(tab, now) {
+  if (tab.agent && tab.sessionId && !screenSaysChoice(tab)) {
+    if (tab.quietBusy || now - (tab.quietAt || 0) < 1500) return;
+    tab.quietBusy = true;
+    tab.quietAt = now;
+    let state = 'unknown';
+    try { ({ state } = await window.mt.agent.turn(tab.agent, tab.cwd, tab.sessionId)); } catch { /* ignore */ } finally { tab.quietBusy = false; }
+    if (state === 'working' || tab.status !== 'working') return;
+  }
+  finishWork(tab, tab.lastOut - tab.workStart);
+}
 
 /** The agent's working timer is on screen and still ticking (a frozen, stale line doesn't count). */
 function stillWorking(tab) {
@@ -7280,7 +7682,11 @@ function finishWork(tab, duration, polled = false) {
     updateTabEl(tab);
     if (duration > 2500 && !stopped) notifyTab(tab, `완료 (${elapsedText(duration)})`);
   }
-  if (duration > 1200) trackSession(tab, tab.workStart - 1500);
+  // the session (found only now for an agent typed by hand) is read once more: background commands the turn left
+  // running show under the session from here on (the poller keeps them up to date while any runs). Also after a short
+  // turn when the session is not known yet: checkTurn looks only from 2.5 s on, and a session left unknown stays in
+  // 지난 대화 as if it were closed (resuming it there opened it twice).
+  if (duration > 1200 || !tab.sessionId) trackSession(tab, tab.workStart - 1500).then(() => (tab.sessionId ? pollSubagents(tab) : false)).then((c) => { if (c) renderProjects(); });
 }
 
 /**
@@ -7313,6 +7719,9 @@ function setStatus(tab, status) {
   if (tab.status === status) return;
   tab.status = status;
   if (tab.agent || status === 'exited' || status === 'shell') syncTask(tab, status);
+  // stopped to ask before its session was found (checkTurn looks only while it works): find it now, or 지난 대화
+  // lists the conversation as a closed one for as long as the question waits
+  if (status === 'attention' && tab.agent && !tab.sessionId) trackSession(tab, (tab.workStart || Date.now()) - 1500);
   updateTabEl(tab);
   renderSessions();
   if (tab.id === S.activeId) renderStatus();
@@ -7345,15 +7754,33 @@ async function trackSession(tab, since) {
     const agent = tab.agent;
     const ids = await window.mt.agent.recent(agent, tab.cwd, since);
     if (tab.agent !== agent || !ids.length) return;
+    // still on its own conversation (also when another tab has it open as well: `claude --resume` of one already open)
+    if (tab.sessionId && ids.includes(tab.sessionId)) return;
     const claimed = new Set(S.tabs.filter((t) => t !== tab && t.agent === agent && t.sessionId).map((t) => t.sessionId));
     const mine = ids.filter((x) => !claimed.has(x));
-    if (!mine.length || (tab.sessionId && mine.includes(tab.sessionId))) return;
+    if (!mine.length) return;
     tab.sessionId = mine[0];
     S.sessionCache.delete(normP(tab.cwd));
     saveLayout();
     if (tab.id === S.activeId) renderStatus();
     renderProjects();
   } catch { /* ignore */ }
+}
+
+/**
+ * `claude --continue` / `codex resume --last` go on with the folder's latest conversation, but which one that is used
+ * to show only after the first turn (trackSession): until then 지난 대화 offered it as a closed one, and resuming it
+ * there opened it a second time. Take the latest one at once; a wrong guess is put right by trackSession after a turn.
+ */
+async function guessContinued(tab, agent) {
+  let list = [];
+  try { list = await window.mt.agent.sessions(tab.cwd, 40); } catch { /* ignore */ }
+  const s = list.find((x) => x.agent === agent);
+  if (!s || tab.sessionId || tab.agent !== agent || tab.closed) return;
+  tab.sessionId = s.id;
+  saveLayout();
+  if (tab.id === S.activeId) renderStatus();
+  renderProjects();
 }
 
 /* ------------------------------------------------------------------ */
@@ -7485,7 +7912,8 @@ function sectionToggle(kind, key, label, count, openByDefault) {
   };
 }
 
-function sessionRowHtml(t) {
+/** A session's row; its sub-agents and background commands under it unless its task in 진행 중 shows them (`subs` false). */
+function sessionRowHtml(t, subs = true) {
   return `
     <div class="item child run st-${t.status}${t.id === S.activeId ? ' active' : ''}${t.unseen ? ' unseen' : ''} agent-${t.agent}" data-t="${t.id}" title="${esc(AGENTS[t.agent].name)} · ${esc(t.cwd)}">
       <span class="child-ico">${icon(t.agent)}<i class="dot"></i></span>
@@ -7494,7 +7922,7 @@ function sessionRowHtml(t) {
         ${t.awaitChoice ? `<span class="item-sub has-bubble">${choiceBubbleHtml()}</span>` : `<span class="item-sub">${esc(AGENTS[t.agent].name)} · ${statusHtml(t)}</span>`}
       </span>
       <span class="item-actions"><button class="icon-btn danger" data-a="end" title="세션 종료">${icon('stop')}</button></span>
-    </div>`;
+    </div>${!subs ? '' : (t.status === 'working' || hasRunningSubs(t) ? subagentRowsHtml(t) : '') + bgRowsHtml(t)}`;
 }
 
 /* ---------- 하수인: little worker characters for an agent's sub-agents ---------- */
@@ -7585,11 +8013,94 @@ function subagentRowsHtml(tab) {
   return rows;
 }
 
+// sub-agents hold their task in 진행 중; background commands don't (the agent's turn ends, they go on beside it)
 const hasRunningSubs = (tab) => !!(tab.subagents && tab.subagents.some((a) => a.status === 'running'));
+const runningBg = (tab) => (tab.bgTasks || []).filter((a) => a.status === 'running' && !(tab.bgStopped && tab.bgStopped.has(a.id)));
+const hasRunningBg = (tab) => runningBg(tab).length > 0;
+
+/**
+ * 백그라운드 작업: commands the agent left running in the background, listed under the agent's row wherever it is
+ * (its task in 진행 중, or the session in 입력 대기 once its turn is over) for as long as they run. Clicking one opens
+ * its output in a tab of its own; hovering shows a stop button.
+ */
+function bgRowsHtml(tab) {
+  return runningBg(tab).map((a) => `
+    <div class="item child subagent bgtask" data-bg="${tab.id}" data-bgid="${esc(a.id)}" title="${esc(a.name)}${a.cmd && a.cmd !== a.name ? '\n' + esc(a.cmd.slice(0, 300)) : ''}">
+      <span class="bg-ico">${icon('terminal')}</span>
+      <span class="sa-text"><b>백그라운드 작업</b>${a.name ? `<span class="sa-sum no-i18n">(${esc(a.name)})</span>` : ''}</span>
+      <span class="bg-time elapsed" data-since="${a.start}">${elapsed(a.start)}</span>
+      <span class="item-actions"><button class="icon-btn danger" data-a="bgstop" title="작업 종료">${icon('stop')}</button></span>
+    </div>`).join('');
+}
+/** Show a background command's output as it grows, in a tab of its own (one per command). */
+async function openBgTask(tab, a) {
+  const open = S.tabs.find((t) => t.bgView === a.id && t.alive);
+  if (open) return activate(open.id);
+  const file = a.task ? await window.mt.agent.bgOutput(tab.sessionId, a.task) : '';
+  if (!file) { toast('이 작업의 출력 파일을 찾지 못했습니다', { icon: 'info' }); return; }
+  const view = createTab({ cwd: tab.cwd, customTitle: `백그라운드 · ${a.name || a.task}` });
+  view.bgView = a.id;
+  const Q = String.fromCharCode(39); // a single quote (kept out of literals: the phrase extractor reads them as strings)
+  let cmd = `tail -n 300 -f ${Q}${file.split(Q).join(Q + '\\' + Q + Q)}${Q}`;
+  if (IS_WIN) { // a short line: the script is a file (or, failing that, the whole of it encoded on the line)
+    const ps1 = a.task ? await window.mt.agent.bgScript(a.task, bgFollowScript(file)) : '';
+    cmd = ps1 ? `powershell -NoProfile -ExecutionPolicy Bypass -File "${ps1}"` : `powershell -NoProfile -EncodedCommand ${psEncoded(bgFollowScript(file))}`;
+  }
+  const t0 = Date.now(), go = () => { // the shell starts a moment after its tab
+    if (view.closed) return;
+    if ((view.alive && view.status !== 'starting') || Date.now() - t0 > 6000) runInTab(view, cmd);
+    else setTimeout(go, 150);
+  };
+  go();
+}
+/*
+ * Windows: follow the output file in PowerShell. Its bytes are whatever the command printed: UTF-8 from most tools,
+ * the console's code page (CP949 on a Korean Windows) from Windows' own (ping, dir…) — read as UTF-8 they came out
+ * as ◆◆◆. So the first 64 KB decide: valid UTF-8 → UTF-8, else the system's ANSI code page; a decoder carries a
+ * character split between two reads over.
+ */
+function bgFollowScript(file) {
+  const Q = String.fromCharCode(39), p = Q + file.split(Q).join(Q + Q) + Q;
+  return [
+    '[Console]::OutputEncoding = [Text.Encoding]::UTF8',
+    `$p = ${p}`,
+    '$fs = [IO.File]::Open($p, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)',
+    '$len = $fs.Length; $pos = [Math]::Max(0, $len - 65536); $probe = New-Object byte[] ([Math]::Min(65536, $len))',
+    '$fs.Seek(0, 0) | Out-Null; $n0 = $fs.Read($probe, 0, $probe.Length)',
+    '$enc = [Text.Encoding]::Default',
+    'try { (New-Object Text.UTF8Encoding($false, $true)).GetString($probe, 0, $n0) | Out-Null; $enc = New-Object Text.UTF8Encoding($false, $false) } catch { }',
+    '$dec = $enc.GetDecoder(); $buf = New-Object byte[] 65536; $chars = New-Object char[] 131072',
+    'while ($true) {',
+    '  $fs.Seek($pos, 0) | Out-Null',
+    '  while (($n = $fs.Read($buf, 0, $buf.Length)) -gt 0) { $pos += $n; $c = $dec.GetChars($buf, 0, $n, $chars, 0); [Console]::Out.Write($chars, 0, $c) }',
+    '  Start-Sleep -Milliseconds 300',
+    '}',
+  ].join('\n');
+}
+/** A PowerShell script as -EncodedCommand takes it: base64 of its UTF-16LE text (no quoting to get wrong). */
+function psEncoded(script) {
+  let bin = '';
+  for (let i = 0; i < script.length; i++) { const c = script.charCodeAt(i); bin += String.fromCharCode(c & 255, c >> 8); }
+  return btoa(bin);
+}
+/** End a background command: its row goes at once; it comes back if the command could not be found. */
+async function stopBgTask(tab, a) {
+  tab.bgStopped = tab.bgStopped || new Set();
+  tab.bgStopped.add(a.id);
+  renderProjects();
+  let ok = false;
+  try { ok = await window.mt.agent.bgStop(tab.id, tab.sessionId, a.cmd || '', a.task || ''); } catch { /* ignore */ }
+  if (ok) { toast(`백그라운드 작업을 종료했습니다: ${a.name || a.task}`, { icon: 'stop' }); return; }
+  tab.bgStopped.delete(a.id);
+  renderProjects();
+  toast('이 작업을 찾지 못해 종료하지 못했습니다', { icon: 'info' });
+}
 /** Take a fresh sub-agent list; returns true if anything changed. */
 function applySubagents(tab, list) {
   const key = JSON.stringify(list.map((a) => [a.id, a.status, a.name]));
   if (key === tab.subKey) return false;
+  tab.bgTasks = list.filter((a) => a.kind === 'shell');
+  list = list.filter((a) => a.kind !== 'shell');
   // the finish animation is earned once: seen running, then seen done — never replayed
   tab.subRan = tab.subRan || new Set();
   tab.subCheer = tab.subCheer || new Set(); // waiting to play
@@ -7612,9 +8123,9 @@ async function pollSubagents(tab) {
 setInterval(async () => {
   let changed = false;
   for (const tab of S.tabs) {
-    const live = tab.agent && tab.sessionId && (tab.status === 'working' || tab.status === 'attention' || hasRunningSubs(tab));
+    const live = tab.agent && tab.sessionId && (tab.status === 'working' || tab.status === 'attention' || hasRunningSubs(tab) || hasRunningBg(tab));
     if (!live) {
-      if (tab.subagents && tab.subagents.length) { tab.subagents = []; tab.subKey = ''; changed = true; }
+      if ((tab.subagents && tab.subagents.length) || (tab.bgTasks && tab.bgTasks.length)) { tab.subagents = []; tab.bgTasks = []; tab.subKey = ''; changed = true; }
       continue;
     }
     if (await pollSubagents(tab)) changed = true;
@@ -7625,11 +8136,12 @@ setInterval(async () => {
 function taskRowHtml(k) {
   const live = RUNNING_TASK.has(k.status);
   const tb = tabById(k.tabId);
-  // a finished turn can leave background sub-agents working: they stay under the tab's latest task
-  const showSubs = live || !!(tb && hasRunningSubs(tb) && S.tasks.findLast((x) => x.tabId === k.tabId) === k);
+  // sub-agents and background commands hang under the task while it runs; once the turn is over, under the
+  // session in 입력 대기 (sessionRowHtml), never under a task in 완료
+  const showSubs = live && !!tb;
   const time = live
     ? (k.status === 'working' ? ` · <span class="elapsed" data-since="${k.start}">${elapsed(k.start)}</span>` : '')
-    : `${k.end && k.start ? ' · ' + elapsedText(k.end - k.start) : ''} · ${relTime(k.end || k.start)}`;
+    : `${k.start && k.end > k.start ? ' · ' + elapsedText(k.end - k.start) : ''} · ${relTime(k.end || k.start)}`; // (one cut off by a restart has no known end: no "1초")
   return `
     <div class="item child task st-${k.status === 'pending' ? 'working' : k.status} agent-${k.agent}" data-task="${k.id}" title="${esc(k.text)}">
       <span class="child-ico">${icon(AGENTS[k.agent]?.icon || 'terminal')}${live ? '<i class="dot"></i>' : ''}</span>
@@ -7640,7 +8152,7 @@ function taskRowHtml(k) {
           : `<span class="tk ${k.status}">${TASK_TEXT[k.status]}</span>${time}`}</span>
       </span>
       <span class="item-actions"><button class="icon-btn go-prompt" data-a="goto" title="이 작업의 프롬프트로 이동"${JUMP_OK.get(k.id) ? '' : ' hidden'}>${icon('arrowUp')}</button>${k.status === 'attention' ? `<button class="icon-btn" data-a="unflag" title="확인 필요 해제">${icon('check')}</button>` : ''}${live ? '' : `<button class="icon-btn danger" data-a="forget" title="목록에서 지우기">${icon('x')}</button>`}</span>
-    </div>${showSubs ? subagentRowsHtml(tb) : ''}`;
+    </div>${showSubs ? subagentRowsHtml(tb) + bgRowsHtml(tb) : ''}`;
 }
 
 function renderProjects() {
@@ -7655,6 +8167,9 @@ function renderProjects() {
     temp.push({ id: 'tmp:' + normP(t.cwd), name: basename(t.cwd), path: t.cwd, temp: true });
   }
   const groups = [...temp, ...sortedProjects()];
+  // the box the user opened is gone (its agent exited, its project was removed): follow the tab in front again,
+  // rather than keep every box closed ('' — closed by the user — stays as it is)
+  if (S.openFolder && !groups.some((g) => g.id === S.openFolder)) S.openFolder = null;
   // which project owns a folder is worked out once per render: every folder box asks it for every tab and task
   const owners = new Map();
   const ownerOf = (cwd) => { let o = owners.get(cwd); if (o === undefined) { o = ownerProject(cwd); owners.set(cwd, o); } return o; };
@@ -7696,7 +8211,8 @@ function historyHtml(p) {
           <button class="icon-btn danger" data-a="delete" title="휴지통으로">${icon('trash')}</button>
         </span>
       </div>`).join('');
-  const more = `<button class="past-more" data-more="${p.id}">${icon('search')}${list.length > 8 ? `모든 대화 보기 · ${list.length}개` : '대화 검색'}</button>`;
+  // (the sidebar reads the 40 newest: at that many there may be more, which the full list shows)
+  const more = `<button class="past-more" data-more="${p.id}">${icon('search')}${list.length > 8 ? `모든 대화 보기 · ${list.length}${cached.list.length >= 40 ? '+' : ''}개` : '대화 검색'}</button>`;
   return `<div class="past-list">${rows}</div>${more}`;
 }
 
@@ -7716,14 +8232,17 @@ function folderHtml(p, agents, ownerOf = ownerProject) {
   const openTabs = S.tabs.filter((t) => inFolder(t.cwd));
   const gridOn = S.grid && samePath(S.grid, p.path);
 
-  const cached = !p.temp && S.sessionCache.get(normP(p.path));
-  if (!p.temp && !cached && !S.loadingHistory.has(p.path)) {
-    S.loadingHistory.add(p.path);
-    sessionsFor(p.path).finally(() => { S.loadingHistory.delete(p.path); renderSessions(); });
-  }
   // which box is open: the user's choice, else the folder of the tab in front
   const active = activeTab();
   const open = S.openFolder != null ? S.openFolder === p.id : !!(active && inFolder(active.cwd));
+
+  // past conversations: read for the open box only (a closed one shows none of it, and each read walks the agents'
+  // session folders), and read again once it is old — its count shows even while 지난 대화 is folded
+  const cached = !p.temp && S.sessionCache.get(normP(p.path));
+  if (!p.temp && open && (!cached || Date.now() - cached.at > 15000) && !S.loadingHistory.has(p.path)) {
+    S.loadingHistory.add(p.path);
+    sessionsFor(p.path, true).finally(() => { S.loadingHistory.delete(p.path); renderSessions(); });
+  }
 
   // the lists inside a box are built for the open one only (a closed box shows just its head)
   const past = open && cached ? cached.list.filter((x) => !tabOfSession(x.id)) : null;
@@ -7763,7 +8282,7 @@ function folderHtml(p, agents, ownerOf = ownerProject) {
           <button class="past-head" data-sec="${esc(id)}" data-default="closed">
             <span class="ph-ico">${icon('history')}</span>
             <span class="ph-label">지난 대화</span>
-            ${past ? `<span class="ph-count">${past.length}</span>` : ''}
+            ${past ? `<span class="ph-count">${past.length}${cached.list.length >= 40 ? '+' : ''}</span>` : ''}
             <span class="ph-chev">${icon('chevronDown')}</span>
           </button>
           ${histOpen ? historyHtml(p) : ''}
@@ -7773,14 +8292,14 @@ function folderHtml(p, agents, ownerOf = ownerProject) {
     inner += wait.html;
     if (wait.open) {
       inner += `<div class="children">${waiting.length
-        ? waiting.map(sessionRowHtml).join('')
+        ? waiting.map((t) => sessionRowHtml(t, !runningTabs.has(t.id))).join('') // its task in 진행 중 shows them
         : `<div class="child-note slim">${sessions.length ? '모든 세션이 작업 중입니다' : '<span data-i18n-html="folderEmpty">이 폴더에서 <b>claude</b> / <b>codex</b> 를 실행하면 여기에 나타납니다</span>'}</div>`}</div>`;
     }
     const run = sectionToggle('run', p.id, '진행 중', runCount, true);
     inner += run.html;
     if (run.open) {
       inner += `<div class="children">${runCount
-        ? running.map(taskRowHtml).join('') + workingNoTask.map(sessionRowHtml).join('')
+        ? running.map(taskRowHtml).join('') + workingNoTask.map((t) => sessionRowHtml(t)).join('')
         : '<div class="child-note slim">진행 중인 작업이 없습니다</div>'}</div>`;
     }
     const done = sectionToggle('done', p.id, '완료', finished.length, false);
@@ -7867,6 +8386,13 @@ function openProjectIconPicker(p) {
       const set = sec.dataset.default === 'open' ? S.secClosed : S.secOpen;
       if (set.has(id)) set.delete(id); else set.add(id);
       return renderProjects();
+    }
+    const bgRow = e.target.closest('[data-bgid]');
+    if (bgRow) {
+      const tb = tabById(bgRow.dataset.bg), a = tb && (tb.bgTasks || []).find((x) => x.id === bgRow.dataset.bgid);
+      if (!tb || !a) return;
+      if (e.target.closest('[data-a="bgstop"]')) return stopBgTask(tb, a);
+      return openBgTask(tb, a);
     }
     const card = e.target.closest('[data-t]');
     if (card) {
@@ -8101,6 +8627,10 @@ async function addProject(dir) {
     S.projects.push(p);
     saveProjects();
     toast(`프로젝트 '${p.name}'을(를) 추가했습니다`, { icon: 'folderPlus' });
+    // its agents had a temporary box ("프로젝트로 추가" on it): that box stays open, its sections as they were
+    if (S.openFolder && S.openFolder.startsWith('tmp:') && isInside(S.openFolder.slice(4), folder)) S.openFolder = p.id;
+    const tmp = 'tmp:' + normP(folder);
+    for (const set of [S.secOpen, S.secClosed]) for (const k of [...set]) if (k.endsWith(':' + tmp)) { set.delete(k); set.add(k.slice(0, -tmp.length) + p.id); }
   }
   renderProjects(); // history stays collapsed until the project row is clicked
   updateEmpty();
@@ -8111,6 +8641,7 @@ async function removeProject(p) {
   const ok = await confirmDialog('프로젝트 제거', `'${p.name}'을(를) 목록에서 제거할까요?\n폴더와 대화 기록은 삭제되지 않습니다.`, '제거');
   if (!ok) return;
   S.projects = S.projects.filter((x) => x.id !== p.id);
+  if (S.openFolder === p.id) S.openFolder = null; // its box is gone: follow the tab in front again (else none stays open)
   saveProjects();
   renderProjects();
   renderSessions();
@@ -8409,6 +8940,7 @@ function onAgentEnter(tab, sent) {
     if (old.status === 'pending') S.tasks = S.tasks.filter((k) => k !== old);
     else { old.status = old.status === 'attention' && !tab.interrupted ? 'done' : 'stopped'; old.end = Date.now(); saveTasks(); } // (Esc at its question: stopped)
   }
+  if (/^\/(?:exit|quit)$/i.test(text)) { tab.taskId = ''; renderSessions(); return; } // ends the agent: no work, no task
   const task = { id: uuid(), tabId: tab.id, agent: tab.agent, path: tab.cwd, text, status: 'pending', start: Date.now(), end: 0, sessionId: tab.sessionId || '', sent: Date.now() };
   S.tasks.push(task);
   if (S.tasks.length > MAX_TASKS) { const i = S.tasks.findIndex((k) => !RUNNING_TASK.has(k.status)); if (i >= 0) S.tasks.splice(i, 1); } // the oldest finished one goes
@@ -8435,6 +8967,11 @@ function syncTask(tab, status) {
   } else if (status === 'attention') {
     task.status = 'attention';
     task.asked = true; // it got as far as a question: real work, however short the rest turns out to be
+  } else if (status === 'shell' && /^\/?(?:exit|quit)$/i.test(String(task.text).trim())) {
+    // the command that ended the agent ("/exit"): no work of its own, not a task cut short (it showed as 중단)
+    S.tasks = S.tasks.filter((k) => k !== task);
+    tab.taskId = '';
+    saveTasks();
   } else if (status === 'done' || status === 'exited' || status === 'shell' || (status === 'ready' && task.status === 'working' && task.asked)) {
     task.status = (status === 'done' || status === 'ready') && !stoppedByEsc(tab) ? 'done' : 'stopped'; // the same rule finishWork celebrates by
     task.end = Date.now();
@@ -8612,10 +9149,16 @@ function unflagTask(task) {
   renderProjects();
 }
 
-function openTask(task) {
+async function openTask(task) {
   const tab = (task.tabId && tabById(task.tabId)) || tabOfSession(task.sessionId);
   if (tab) return activate(tab.id);
-  if (task.sessionId) return resumeSession(task.agent, task.path, task.sessionId);
+  if (task.sessionId) {
+    // its conversation may have gone to the trash since: resuming it would only fail, in a new tab
+    let ok = true;
+    try { ok = await window.mt.agent.has(task.agent, task.path, task.sessionId); } catch { /* try anyway */ }
+    if (ok) return resumeSession(task.agent, task.path, task.sessionId);
+    toast('대화 파일을 찾지 못했습니다', { icon: 'info' });
+  }
   newShell(null, task.path);
 }
 
@@ -8638,6 +9181,31 @@ function currentLine(tab) {
     const b = tab.term.buffer.active;
     return b.getLine(b.baseY + b.cursorY)?.translateToString(true) || '';
   } catch { return ''; }
+}
+
+/** The command line the cursor is on, with the rows it wrapped from (a long `cd /d … && claude` takes several). */
+function typedLine(tab) {
+  try {
+    const b = tab.term.buffer.active;
+    let y = b.baseY + b.cursorY;
+    let s = b.getLine(y)?.translateToString(true) || '';
+    for (let n = 0; n < 20 && y > 0 && b.getLine(y)?.isWrapped; n++) s = (b.getLine(--y)?.translateToString(false) || '') + s;
+    return s;
+  } catch { return ''; }
+}
+
+/**
+ * An agent typed after a change of folder on the same line (`cd /d X && claude`) runs in X, but the shell says so
+ * only with its next prompt, once the agent has exited: move the tab there now, or the sidebar would file the agent,
+ * its tasks and its sessions under the folder the tab was in before.
+ */
+async function followTypedCd(tab, agent, line) {
+  const sh = S.shells.find((s) => s.id === tab.shellId);
+  let dir = '';
+  try { dir = await window.mt.agent.cdTarget(tab.cwd, line, sh ? sh.type : ''); } catch { /* ignore */ }
+  if (!dir || tab.closed || tab.agent !== agent || samePath(dir, tab.cwd)) return;
+  setCwd(tab, dir);
+  if (tab.sessionId) S.sessionCache.delete(normP(dir)); // a session named on its command line: not a past one there
 }
 
 function openProjectMenu(p, x, y) {
@@ -8724,6 +9292,32 @@ function openPalette({ placeholder, items, emptyText }) {
   input.focus();
 }
 
+/**
+ * 성능 기록: CPU profiles of this window and of the main process for `ms`, saved with a snapshot of what the window
+ * holds (tabs and their scrollback, DOM size, effects, background, memory) — to find what a long-running window is
+ * busy with where it happens.
+ */
+async function recordPerformance(ms) {
+  const snap = () => {
+    const mem = performance.memory || {};
+    return {
+      at: new Date().toISOString(),
+      tabs: S.tabs.map((t) => { const b = t.term && t.term.buffer.active; return { agent: t.agent || '', status: t.status, cols: t.term ? t.term.cols : 0, rows: t.term ? t.term.rows : 0, lines: b ? b.length : 0, backlog: t.backlog || 0, subagents: (t.subagents || []).length, bg: (t.bgTasks || []).length, visible: !!(t.host && t.host.offsetParent) }; }),
+      groups: S.groups.length, grid: !!S.grid, domNodes: document.getElementsByTagName('*').length,
+      fxParticles: FX && FX.parts ? FX.parts.length : 0,
+      background: S.settings.bgAnim, bgLevel: S.settings.bgAnimLevel, cursor: S.settings.cursorStyle, typingFx: S.settings.typingFx, workGlow: S.settings.workGlow ? S.settings.workGlowStyle : '',
+      theme: S.settings.theme, dark: S.dark, dpr: window.devicePixelRatio, size: [innerWidth, innerHeight], hidden: document.hidden, focused: S.winFocused,
+      heapMB: mem.usedJSHeapSize ? Math.round(mem.usedJSHeapSize / 1048576) : null,
+    };
+  };
+  toast(`성능 기록 중… ${Math.round(ms / 1000)}초 동안 평소처럼 쓰세요`, { icon: 'bolt', ms: Math.min(ms, 6000) });
+  const before = snap();
+  let res;
+  try { res = await window.mt.diagRecord(ms, { before, after: null }); } catch (e) { res = { ok: false, error: String(e) }; }
+  if (res && res.ok) toast('성능 기록을 저장했습니다 · 클릭하면 폴더 열기', { icon: 'bolt', ms: 10000, onClick: () => window.mt.openFolder(res.dir) });
+  else toast(res && res.error === 'busy' ? '이미 기록 중입니다' : '성능 기록에 실패했습니다', { icon: 'info' });
+}
+
 function openCommandPalette() {
   const t = activeTab();
   const items = [
@@ -8759,6 +9353,7 @@ function openCommandPalette() {
     { group: '앱', icon: 'folderPlus', text: '프로젝트 추가', run: () => addProject() },
     { group: '앱', icon: 'settings', text: '설정', hint: 'Ctrl+,', run: openSettings },
     { group: '앱', icon: 'folderOpen', text: '설정 폴더 열기', run: () => window.mt.openUserData() },
+    { group: '앱', icon: 'bolt', text: '성능 기록 (30초)', sub: '느릴 때 실행: 무엇이 CPU를 쓰는지 파일로 저장', keywords: 'performance profile cpu diagnostics lag', run: () => recordPerformance(30000) },
     { group: '앱', icon: 'trash', text: '휴지통 (삭제한 대화 복원 · 영구 삭제)', keywords: 'trash restore delete', run: openTrash },
   );
   openPalette({ placeholder: '명령, 프로젝트 검색…', items });
@@ -8790,7 +9385,9 @@ function openHistory() {
 }
 
 async function openSessionPicker(cwd) {
-  const list = await sessionsFor(cwd, true);
+  // all of them ("모든 대화 보기"), not only the 40 newest the sidebar keeps: a busy folder has more
+  let list = [];
+  try { list = await window.mt.agent.sessions(cwd, 300); } catch { list = await sessionsFor(cwd, true); }
   const items = list.map((s) => {
     const open = tabOfSession(s.id);
     return {
@@ -8892,50 +9489,77 @@ function composerDeco(field, ta) {
   // where the caret is, measured with a mirror of the textarea's text
   const mirror = h('div', 'composer-mirror no-i18n'); // a copy of what is being typed: translating it would move the measured caret
   field.appendChild(mirror);
-  const caretXY = () => {
+  let advFont = '', adv = 0;
+  /*
+   * The cell before character i (the caret by default): x, y its top left corner in px from the field's top left
+   * corner (the textarea's border box, which the fx canvas covers), lh the line's height, ch one character's width.
+   * The mark is as tall as a line and sits at the top of its line box, so y is where the line starts, not where its
+   * glyphs do; offsets are read on screen (sub-pixel, and with the textarea's border, which offsetLeft / offsetTop
+   * leave out) and taken back out of the modal's opening zoom.
+   */
+  const caretXY = (i = ta.selectionEnd) => {
     const cs = getComputedStyle(ta);
     for (const p of ['font', 'fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'tabSize', 'wordBreak', 'overflowWrap']) mirror.style[p] = cs[p];
     mirror.style.width = `${ta.clientWidth + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth)}px`;
-    mirror.textContent = ta.value.slice(0, ta.selectionEnd);
-    const mark = document.createElement('span');
-    mark.textContent = '​';
-    mirror.appendChild(mark);
     const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.5;
-    return { x: ta.offsetLeft + mark.offsetLeft - ta.scrollLeft, y: ta.offsetTop + mark.offsetTop - ta.scrollTop, lh, ch: parseFloat(cs.fontSize) * 0.6 };
+    mirror.textContent = ta.value.slice(0, i);
+    const mark = document.createElement('span');
+    mark.style.cssText = `display:inline-block;vertical-align:top;width:0;height:${lh}px`;
+    mirror.appendChild(mark);
+    const font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    if (font !== advFont) { // a character's advance is the cell, as in the terminal (Cascadia Mono: 0.586em, not 0.6)
+      const c = document.createElement('canvas').getContext('2d');
+      c.font = font;
+      adv = c.measureText('M'.repeat(20)).width / 20 + (parseFloat(cs.letterSpacing) || 0);
+      advFont = font;
+    }
+    const mr = mirror.getBoundingClientRect(), kr = mark.getBoundingClientRect(), z = mr.width / mirror.offsetWidth || 1;
+    return { x: ta.offsetLeft + (kr.left - mr.left) / z - ta.scrollLeft, y: ta.offsetTop + (kr.top - mr.top) / z - ta.scrollTop, lh, ch: adv || parseFloat(cs.fontSize) * 0.6 };
   };
 
-  // cursor
+  /*
+   * The cursor: every kind drawn as in the terminal (the native caret has neither the 커서 style's width nor 깜빡임), in
+   * a box over the textarea inside its border. The box clips it: what a cursor spreads round the caret (레이더's
+   * screen, 십자선's lines, 등대's beam, 후광's pillar of light …) stays in the composer, as the terminal's stays in its
+   * pane, and --pl / --pr / --pt / --pb tell it how far the box reaches (paneReach).
+   */
   const kind = st.cursorStyle || 'bar';
   const native = NATIVE_CURSORS[kind];
   const th = currentTheme();
   const acc = (window.ACCENTS[st.accent] || window.ACCENTS.violet).c[0];
   const color = st.cursorColor === 'accent' ? acc : st.cursorColor === 'white' ? (isLight() ? '#1f2430' : '#ffffff') : th.cursor;
-  ta.style.caretColor = color;
-  let cur = null;
-  if (!native || kind === 'bar-thick' || native[0] !== 'bar') { // thin / normal bars stay the native caret
-    ta.style.caretColor = 'transparent';
-    cur = h('div', `mt-cursor kind-${kind}`);
-    cursorArt(cur, kind);
-    if (native) cur.style.setProperty('--cc', color); // block / underline follow 커서 색 like in the terminal
-    field.appendChild(cur);
-  }
-  let last = '';
+  ta.style.caretColor = 'transparent';
+  const box = h('div', 'composer-curbox');
+  const cur = h('div', `mt-cursor kind-${kind}`);
+  cursorArt(cur, kind);
+  if (native) cur.style.setProperty('--cc', color); // bars / block / underline follow 커서 색 like in the terminal
+  box.appendChild(cur);
+  field.appendChild(box);
+  for (const f of window.CURSOR_INIT || []) f(cur); // cursors that watch their own moves (혜성's tail, 운석's sparks: fx/cursor-up-c.js)
+  let last = '', boxGeo = '', reach = '';
   let moveTimer = null;
   const place = () => {
-    if (!cur) return;
     const p = caretXY();
-    const focused = document.activeElement === ta && ta.selectionStart === ta.selectionEnd;
-    const outside = p.y < ta.offsetTop - 2 || p.y + p.lh > ta.offsetTop + ta.offsetHeight + 2;
-    cur.hidden = !focused || outside;
+    const bx = ta.offsetLeft + ta.clientLeft, by = ta.offsetTop + ta.clientTop, W = ta.clientWidth, H = ta.clientHeight;
+    const geo = `${bx} ${by} ${W} ${H}`;
+    if (geo !== boxGeo) { boxGeo = geo; Object.assign(box.style, { left: `${bx}px`, top: `${by}px`, width: `${W}px`, height: `${H}px` }); }
+    const dpr = window.devicePixelRatio || 1;
+    const x = Math.round((p.x - bx) * dpr) / dpr, y = Math.round((p.y - by) * dpr) / dpr; // on whole device pixels: a 1 px bar stays sharp
+    // like the terminal's: dimmed and held still while the textarea or the window has no focus; out of sight (its
+    // animations held where they are, not restarted) during a selection, or while its line is scrolled away
+    const focused = document.activeElement === ta && document.hasFocus();
+    const off = ta.selectionStart !== ta.selectionEnd || y + p.lh <= 0 || y >= H;
     const blink = st.cursorBlink && !SELF_ANIMATED_CURSORS.includes(kind);
-    cur.className = `mt-cursor kind-${kind}${blink ? ' blink' : ''}${cur.classList.contains('moving') ? ' moving' : ''}`;
+    cur.className = `mt-cursor kind-${kind}${off ? ' off' : ''}${focused ? '' : ' blurred'}${blink ? ' blink' : ''}${cur.classList.contains('moving') ? ' moving' : ''}`;
     cur.style.width = `${p.ch}px`;
     cur.style.height = `${p.lh}px`;
-    const pos = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px)`;
+    const r = [x, W - x, y, H - y].map((v) => `${+v.toFixed(1)}px`);
+    if (r.join(' ') !== reach) { reach = r.join(' '); ['--pl', '--pr', '--pt', '--pb'].forEach((k, j) => cur.style.setProperty(k, r[j])); }
+    const pos = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
     if (pos !== last) {
       last = pos;
       cur.style.transform = pos;
-      for (const f of window.CURSOR_MOVE || []) f(cur, p.x, p.y);
+      for (const f of window.CURSOR_MOVE || []) f(cur, x, y);
       cur.classList.add('moving');
       clearTimeout(moveTimer);
       moveTimer = setTimeout(() => cur.classList.remove('moving'), 260);
@@ -8945,11 +9569,13 @@ function composerDeco(field, ta) {
   const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; place(); }); };
   for (const ev of ['input', 'click', 'keyup', 'select', 'scroll', 'focus', 'blur', 'compositionupdate']) ta.addEventListener(ev, schedule);
   document.addEventListener('selectionchange', schedule);
+  window.addEventListener('focus', schedule); // the window's focus: dimmed like the terminal's cursor
+  window.addEventListener('blur', schedule);
   const ro = new ResizeObserver(schedule);
   ro.observe(ta);
   setTimeout(schedule, 30);
 
-  // typing effect at the caret
+  // typing effect at the caret (the canvas covers the field: the same px as caretXY's)
   let fx = null;
   const fxKind = st.typingFx;
   if (fxKind && fxKind !== 'none') {
@@ -8960,14 +9586,29 @@ function composerDeco(field, ta) {
     new ResizeObserver(size).observe(canvas);
     size();
   }
-  const PAD = 0; // the fx canvas covers the field exactly (see .composer-fx)
+  /*
+   * Enter starts a new line; its flourish plays where it was pressed, at the end of the row (read before the newline
+   * goes in), as the terminal's plays on the line it sends. A wrapped line's row starts at its first character on the
+   * caret's row. The row's text goes along only when it is all half-width: those cells are the composer's own, but a
+   * Korean syllable is narrower here than the terminal's two cells, and copies of it would drift off the line.
+   */
+  const enterAt = () => {
+    const p = caretXY(), v = ta.value, end = ta.selectionEnd;
+    let a = v.lastIndexOf('\n', end - 1) + 1, b = end;
+    while (a < b) { const m = (a + b) >> 1; if (caretXY(m + 1).y < p.y - 1) a = m + 1; else b = m; } // the first character after which the caret would be on this row
+    const left = ta.offsetLeft + ta.clientLeft + parseFloat(getComputedStyle(ta).paddingLeft) - ta.scrollLeft;
+    const row = v.slice(a, end);
+    return { x: p.x + p.ch / 2, y: p.y + p.lh / 2, cw: p.ch, ch: p.lh, pre: { left: p.x, top: p.y }, line: { text: /^[\x20-\x7e]*$/.test(row) ? row : '', left, top: p.y, cols: Math.max(0, (p.x - left) / p.ch) } };
+  };
   const burst = (enter, text) => {
     if (!fx) return;
+    const at = enter ? enterAt() : null;
     requestAnimationFrame(() => {
-      const p = caretXY();
+      if (at) { fx.burst(fxKind, at.x, at.y, { enter, k: st.typingFxIntensity, cw: at.cw, ch: at.ch, text, pre: at.pre, line: at.line }); return; }
+      const p = caretXY(); // the key has gone in: the caret is just after what was typed
       // Korean (IME) keys arrive as "Process": use the character now just before the caret
       const shown = text ?? (ta.value[ta.selectionEnd - 1] || '');
-      fx.burst(fxKind, p.x + PAD + (enter ? 0 : p.ch / 2), p.y + PAD + p.lh / 2, { enter, k: st.typingFxIntensity, cw: p.ch, ch: p.lh, text: shown });
+      fx.burst(fxKind, p.x + p.ch / 2, p.y + p.lh / 2, { enter, k: st.typingFxIntensity, cw: p.ch, ch: p.lh, text: shown });
     });
   };
 
@@ -8988,6 +9629,9 @@ function composerDeco(field, ta) {
       fx?.stop();
       ro.disconnect();
       document.removeEventListener('selectionchange', schedule);
+      window.removeEventListener('focus', schedule);
+      window.removeEventListener('blur', schedule);
+      clearTimeout(moveTimer);
     },
   };
 }
@@ -9243,7 +9887,7 @@ function setupDoneTextSettings(body) {
 }
 
 function previewDoneText(kind, el) {
-  const make = () => {
+  const make = (still) => {
     el.innerHTML = '';
     const w = h('span', `done-text dt-${kind} dt-center dt-pv`);
     w.style.cssText = `--dt-size:13px;--dt-font:${doneTextFont(S.settings.doneTextFont)};--dt-time:2s`;
@@ -9258,11 +9902,14 @@ function previewDoneText(kind, el) {
     inner.dataset.text = '완료!';
     w.appendChild(inner);
     el.appendChild(w);
+    if (still) return; // the phrase as it stands once it is in (pvPark): not scrambled, not shattered
     if (kind === 'decode') decodeIn(inner, glyphs);
     if (kind === 'shatter') setTimeout(() => w.classList.add('out'), 1100);
   };
-  make();
-  const timer = setInterval(make, 2200); // replay the entrance
+  make(true);
+  let timer = 0;
+  el.pvPlay = () => { clearInterval(timer); make(); timer = setInterval(make, 2200); }; // replay the entrance
+  el.pvRest = () => { clearInterval(timer); timer = 0; make(true); };
   return () => clearInterval(timer);
 }
 
@@ -9652,8 +10299,9 @@ window.addEventListener('keydown', (e) => {
   else if (c && code === 'Tab') cycle(e.shiftKey ? -1 : 1);
   else if (c && !e.shiftKey && /^Digit[1-9]$/.test(code)) {
     const n = Number(code.slice(5));
-    const target = n === 9 ? S.tabs[S.tabs.length - 1] : S.tabs[n - 1];
-    if (target) activate(target.id);
+    const items = barItems(); // the n-th item in the tab bar (a split counts once)
+    const it = n === 9 ? items[items.length - 1] : items[n - 1];
+    if (it) activate(itemFocus(it.lead).id);
   }
   else if (c && !e.shiftKey && (code === 'Equal' || code === 'NumpadAdd')) setFontSize(S.settings.fontSize + 1);
   else if (c && !e.shiftKey && (code === 'Minus' || code === 'NumpadSubtract')) setFontSize(S.settings.fontSize - 1);
@@ -9708,9 +10356,12 @@ function sendNewline(t) {
 }
 
 function cycle(delta) {
-  if (!S.tabs.length) return;
-  const i = S.tabs.findIndex((t) => t.id === S.activeId);
-  activate(S.tabs[(i + delta + S.tabs.length) % S.tabs.length].id);
+  // Ctrl+Tab goes from tab-bar item to item (a split is one; moving between its panes is Ctrl+Alt+arrows)
+  const items = barItems();
+  if (!items.length) return;
+  const i = items.findIndex((it) => it.tabs.some((t) => t.id === S.activeId));
+  const it = items[(i + delta + items.length) % items.length];
+  activate(itemFocus(it.lead).id);
 }
 
 /* ------------------------------------------------------------------ */

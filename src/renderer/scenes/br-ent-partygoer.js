@@ -633,7 +633,9 @@
 
   // ---- the visits ----
   const PUMP = 3.5; // ms of shading a frame while sprites are still missing
-  /** Queue the rest behind what is urgent, so the next visit finds everything ready. */
+  /** Queue more behind what is urgent (only what this visit may come to: the rest is shaded when a visit wants it, and
+   * everything is let go a while after the visit, see dropAll). */
+  const DEFL = [0, 1, 2, 3, 4].flatMap((c) => ['bal:' + c + ':1', 'bal:' + c + ':2']), LATER = { party: DEFL, room: DEFL };
   const later = (names) => { for (const n of names) if (!SP[n] && Q.name !== n && !Q.list.includes(n)) Q.list.push(n); };
   const doorAt = (g, BR, a, b) => { if (g.loose) { a *= 0.8; b *= 1.5; } const o = []; for (let j = g.j0 + 1; j < g.j0 + 8; j++) { const d = (j + 1) * BR.C - g.camZ; if (d >= a && d <= b && g.cr(j, 0) === 2) o.push(j); } return o.length ? o[(Math.random() * o.length) | 0] : null; };
   const hallAt = (g, BR, a, b) => { if (g.loose) { a *= 0.8; b *= 1.5; } const o = []; for (let j = g.j0 + 1; j < g.j0 + 8; j++) { const d = (j + 0.5) * BR.C - g.camZ; if (d >= a && d <= b) o.push(j); } return o.length ? o[(Math.random() * o.length) | 0] : null; };
@@ -890,6 +892,32 @@
   const flameSpr = () => SHD.flame || (SHD.flame = (() => { const c = mk(64, 64), x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,236,170,1)'); gr.addColorStop(0.18, 'rgba(255,170,70,0.75)'); gr.addColorStop(0.5, 'rgba(230,110,40,0.18)'); gr.addColorStop(1, 'rgba(200,80,30,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return c; })());
 
   // ---- the hooks ----
+  // ---- memory: everything it has shaded (the sprites and their halvings, both pages), its textures and its working
+  // buffers are let go a while after the last visit (canvases emptied, so the memory comes back at once); the next visit
+  // shades again, a few ms a frame.
+  const IDLE_MS = 40000;
+  const zap = (c) => { if (c && c.getContext) { c.width = 0; c.height = 0; } };
+  let lastUse = 0, idleT = 0;
+  function eachCanvas(fn) {
+    for (const n of Object.keys(SP)) { const sp = SP[n]; if (!sp || sp === true || !sp.lv) continue; for (const md of ['D', 'L']) for (const q of sp.lv[md] || []) if (q) { fn(q.lit); fn(q.dark); } }
+    for (const k of Object.keys(SHD)) fn(SHD[k]);
+  }
+  function dropAll() {
+    Q.cur = null; Q.name = ''; Q.list = []; // (whatever was still queued: shaded again when wanted)
+    eachCanvas(zap);
+    for (const k of Object.keys(SP)) delete SP[k];
+    for (const k of Object.keys(SHD)) delete SHD[k];
+    for (const k of Object.keys(POOL)) delete POOL[k];
+    for (const k of Object.keys(TX)) delete TX[k]; TX.ok = false;
+  }
+  function idleCheck() { const t = performance.now() - lastUse; if (t >= IDLE_MS - 20) { idleT = 0; dropAll(); } else idleT = setTimeout(idleCheck, IDLE_MS - t); }
+  function touch() { lastUse = performance.now(); if (!idleT) idleT = setTimeout(idleCheck, IDLE_MS); }
+  function mem() {
+    let b = 0; eachCanvas((c) => { if (c && c.getContext) b += c.width * c.height * 4; });
+    for (const k of Object.keys(POOL)) b += POOL[k].byteLength;
+    for (const k of Object.keys(TX)) if (TX[k] && TX[k].byteLength) b += TX[k].byteLength;
+    return { bytes: b, sprites: Object.keys(SP).length, queued: Q.list.length };
+  }
   const ENT = (window.BR_ENT = window.BR_ENT || {}), VN = Object.keys(V);
   let lastV = '';
   ENT.partygoer = {
@@ -898,16 +926,17 @@
       const order = v && V[v] ? [v] : VN.filter((n) => n !== lastV).sort(() => Math.random() - 0.5);
       for (const n of order) {
         const e = n === 'party' ? BR.EV.partygoer.place(g) : V[n].place(g, BR);
-        if (e) { e.v = n; lastV = n; want(NEED[n]); later(ALL()); return e; }
+        if (e) { e.v = n; lastV = n; want(NEED[n]); later(LATER[n] || []); return e; }
       }
       return null;
     },
-    step(e, g, st, BR) { pump(PUMP); if (TX.ok) V[e.v || 'party'].step(e, g, st, BR); },
+    step(e, g, st, BR) { touch(); pump(PUMP); if (TX.ok) V[e.v || 'party'].step(e, g, st, BR); },
     draw(e, g, j, c, BR) { if (TX.ok) V[e.v || 'party'].draw(e, g, j, c, BR); },
+    mem, // (for the test harness)
   };
   /** The lone balloon: the same latex, its string hanging and swinging. */
   ENT.balloon = {
-    step(e, g, st, BR) { pump(PUMP); if (e.age === 1) { want(BALS); later(ALL()); } if (TX.ok) stepStrings(e, [e.b], e.age); },
+    step(e, g, st, BR) { touch(); pump(PUMP); if (e.age === 1) { want(BALS); later(DEFL); } if (TX.ok) stepStrings(e, [e.b], e.age); },
     draw(e, g, j, c, BR) { if (c === 0 && TX.ok && j === BR.ROW(e.b.z)) drawBal(g, BR, e.b, e.str && e.str[0], ss(0, 20, e.age) * (1 - ss(285, 300, e.age))); },
   };
 })();

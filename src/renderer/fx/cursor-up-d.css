@@ -10,10 +10,9 @@
 .mt-cursor.kind-flame, .mt-cursor.kind-drip, .mt-cursor.kind-plasma, .mt-cursor.kind-hologram, .mt-cursor.kind-glitch, .mt-cursor.kind-ghost { container-type: size; }
 .cud-box { position: absolute; left: 50%; top: 50%; width: min(120cqw, 60cqh, 40px); aspect-ratio: 1 / 2; translate: -50% -50%; pointer-events: none; }
 .cud-box .cl { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; overflow: visible; }
-/* parts past the cell: faint, gone when the terminal loses focus, left out of the composer box */
+/* parts past the cell: faint, gone when the terminal loses focus (the composer's box clips them) */
 .cud-reach { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity .35s; }
 .mt-cursor.blurred .cud-reach { opacity: 0; }
-.composer-field .cud-reach { display: none; }
 
 :root {
   --cud-fl-o1: #ff4a12; --cud-fl-o2: #ff7c1c; --cud-fl-o3: #ffb648; --cud-fl-m1: #ffcf3a; --cud-fl-m2: #ffa51c;
@@ -111,7 +110,6 @@
 .cud-dr .dr-fleck { opacity: 0; animation: cudDrFleck 4.6s cubic-bezier(.2, .7, .4, 1) infinite; }
 .cud-dr .dr-fling { opacity: 0; }
 .kind-drip.moving .cud-dr .dr-fling { animation: cudDrFling .55s ease-out; }
-.composer-field .cud-dr .dr-fall { display: none; } /* nothing below to land on */
 @keyframes cudDrGlow { from { transform: scale(.97); opacity: .75; } to { transform: scale(1.03); opacity: 1; } }
 @keyframes cudDrCrust { from { opacity: .7; } to { opacity: 1; } }
 @keyframes cudDrPulse { 0% { transform: translateY(0) scale(.7); opacity: 0; } 15% { opacity: .9; } 78% { opacity: .8; } 100% { transform: translateY(61%) scale(1); opacity: 0; } }

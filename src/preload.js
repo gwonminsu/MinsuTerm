@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('mt', {
     sessions: (cwd, limit) => ipcRenderer.invoke('agent:sessions', cwd, limit),
     recent: (agent, cwd, sinceMs) => ipcRenderer.invoke('agent:recent', agent, cwd, sinceMs),
     has: (agent, cwd, id) => ipcRenderer.invoke('agent:has', agent, cwd, id),
+    cdTarget: (cwd, line, shell) => ipcRenderer.invoke('agent:cdTarget', cwd, line, shell), // `cd X && claude`: X
     remove: (agent, cwd, id, title) => ipcRenderer.invoke('agent:delete', agent, cwd, id, title),
     trashList: () => ipcRenderer.invoke('trash:list'),
     trashRestore: (id) => ipcRenderer.invoke('trash:restore', id),
@@ -40,6 +41,9 @@ contextBridge.exposeInMainWorld('mt', {
     turn: (agent, cwd, id) => ipcRenderer.invoke('agent:turn', agent, cwd, id),
     subagents: (agent, cwd, id, since) => ipcRenderer.invoke('agent:subagents', agent, cwd, id, since),
     compactedSince: (agent, cwd, id, since) => ipcRenderer.invoke('agent:compactedSince', agent, cwd, id, since),
+    bgOutput: (sid, task) => ipcRenderer.invoke('agent:bgOutput', sid, task),
+    bgScript: (task, script) => ipcRenderer.invoke('agent:bgScript', task, script),
+    bgStop: (tabId, sid, command, task) => ipcRenderer.invoke('agent:bgStop', tabId, sid, command, task),
   },
 
   store: {
@@ -68,6 +72,7 @@ contextBridge.exposeInMainWorld('mt', {
   openExternal: (u) => ipcRenderer.send('open:external', u),
   openFolder: (d) => ipcRenderer.send('open:folder', d),
   openUserData: () => ipcRenderer.send('open:userdata'),
+  diagRecord: (ms, snapshot) => ipcRenderer.invoke('diag:record', ms, snapshot),
   devtools: () => ipcRenderer.send('win:devtools'),
   notify: (n) => ipcRenderer.send('notify', n),
   attention: () => ipcRenderer.send('attention'),

@@ -738,12 +738,26 @@
   }
 
   // ---- sprites, made a little at a time and kept -----------------------------------------------------------------
-  const CACHE = new Map(), PEND = new Map();
-  let JOBS = [], warned = false;
+  // Kept: the sprites lately used, up to CAP bytes (the least lately used let go first); a while after the last visit
+  // ended, all of them and the canvases the figures were put together in. Letting go empties a canvas, so the memory
+  // comes back at once; the next visit makes what it needs again, a few ms a frame, before it shows.
+  const CACHE = new Map(), PEND = new Map(), CAP = 28e6, IDLE_MS = 40000;
+  let JOBS = [], warned = false, bytes = 0;
+  const zap = (c) => { if (c && c.getContext) { c.width = 0; c.height = 0; } };
+  const size = (c) => (c && c.getContext ? c.width * c.height * 4 : 0);
+  let lastUse = 0, idleT = 0, OWNS = [];
+  function dropAll() {
+    for (const c of CACHE.values()) zap(c); CACHE.clear(); bytes = 0; JOBS = []; PEND.clear();
+    for (const o of OWNS) { zap(o.fc); o.fc = null; o.fck = null; } OWNS = [];
+    for (const c of [FC, HC, TC]) zap(c); FC = FX = HC = HX = TC = TX = null;
+  }
+  function idleCheck() { const t = now() - lastUse; if (t >= IDLE_MS - 20) { idleT = 0; dropAll(); } else idleT = setTimeout(idleCheck, IDLE_MS - t); }
+  function touch() { lastUse = now(); if (!idleT) idleT = setTimeout(idleCheck, IDLE_MS); }
+  function mem() { let b = 0; for (const c of CACHE.values()) b += size(c); for (const o of OWNS) b += size(o.fc); b += size(FC) + size(HC) + size(TC); return { bytes: b, sprites: CACHE.size, figs: OWNS.length }; }
   /** The sprite under key, or null while it is still being made (it is queued, the lower pri the sooner). */
   function need(key, pri, make) {
     const c = CACHE.get(key);
-    if (c) return c;
+    if (c) { CACHE.delete(key); CACHE.set(key, c); return c; } // (the newest last)
     const j = PEND.get(key);
     if (!j) { const n = { key, pri, make, gen: null }; PEND.set(key, n); JOBS.push(n); } else if (pri < j.pri) j.pri = pri;
     return null;
@@ -757,7 +771,10 @@
       try {
         if (!j.gen) j.gen = j.make();
         const r = j.gen.next();
-        if (r.done) { JOBS.shift(); PEND.delete(j.key); CACHE.set(j.key, r.value); if (CACHE.size > 260) CACHE.delete(CACHE.keys().next().value); }
+        if (r.done) {
+          JOBS.shift(); PEND.delete(j.key); CACHE.set(j.key, r.value); bytes += size(r.value);
+          while (CACHE.size > 1 && (bytes > CAP || CACHE.size > 260)) { const k0 = CACHE.keys().next().value, c0 = CACHE.get(k0); bytes -= size(c0); zap(c0); CACHE.delete(k0); }
+        }
       } catch (err) { JOBS.shift(); PEND.delete(j.key); if (!warned) { warned = true; console.warn('faceling: a sprite failed', err); } }
     }
   }
@@ -831,7 +848,8 @@
     const pad = Math.ceil(B * 0.32), top = Math.ceil(B * 0.42), W = bd.width + 2 * pad, H = bd.height + top, shr = I.shear || 0;
     const hd = I.hd, q = (v, k) => Math.round((v || 0) * k);
     const key = `${bd.uid}|${hd ? hd.list.map((h) => h[0].uid + ':' + q(h[1], 20)).join(',') + (hd.mir ? 'm' : '') : ''}|${q(shr, 400)}|${q(lit, 40)}|${q(I.hlit, 40)}|${q(I.roll, 200)}|${I.bump ? q(I.bump[0], 2000) + ',' + q(I.bump[1], 2000) + ',' + q(I.bump[2], 20) : ''}|${g.L ? 1 : 0}`;
-    const own = I.own || I, FCo = own.fc || (own.fc = mk(W, H)), FXo = FCo.getContext('2d');
+    const own = I.own || I, FCo = own.fc || (own.fc = mk(W, H), OWNS.push(own), own.fc), FXo = FCo.getContext('2d');
+    if (OWNS.length > 24) { const o = OWNS.shift(); if (o !== own) { zap(o.fc); o.fc = null; o.fck = null; } }
     if (own.fck !== key || FCo.width < W || FCo.height < H) { own.fck = key; compose(g, I, bd, FCo, FXo, W, H, pad, top, shr, lit, B); }
     const k = (s / B) * (I.sc || 1), FC = FCo;
     ctx.save(); ctx.translate(sx, sy); ctx.scale((I.dir || 1) * k, k); ctx.translate(-(pad + bd.ox), -(top + bd.oy));
@@ -1191,6 +1209,7 @@
     },
     step(e, g, st, BR) {
       if (!e.own || !V[e.v]) return;
+      touch();
       const mode = g.L ? 'L' : 'D';
       if (e.F.mode !== mode) e.F = { B: e.F.B, mode };
       BR.tick(e, 0.012);
@@ -1211,6 +1230,6 @@
   };
 
   // (for working on the look outside the app)
-  facelingOv._dev = { manFig, kidFig, standPose, walkPose, renderFig, renderHead, HQ, MAN, KID, OUT, CACHE, jobs: () => JOBS };
+  facelingOv._dev = { manFig, kidFig, standPose, walkPose, renderFig, renderHead, HQ, MAN, KID, OUT, CACHE, jobs: () => JOBS, mem, dropAll };
   (window.BR_ENT = window.BR_ENT || {}).faceling = facelingOv;
 })();

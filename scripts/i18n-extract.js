@@ -73,7 +73,14 @@ function lineFallback(src) {
       const v = m[1] ?? m[2];
       if (HANGUL.test(v)) addText(v.replace(/\$\{[^}]*\}/g, '\u0001'));
     }
-    for (const m of code.matchAll(/(?:^|[>`}])([^<>`{}'"]*[가-힣][^<>`{}'"]*)(?=[<`$]|$)/g)) addText(m[1]);
+    for (const m of code.matchAll(/(?:^|[>`}])([^<>`{}'"]*[가-힣][^<>`{}'"]*)(?=[<`$]|$)/g)) {
+      // not text: a run from the start of a line that is plainly code (a regex with Hangul in it, a declaration), or a
+      // piece of a nested template cut at its braces (its parentheses don't pair up: "…(코드" / ") · Enter…") — the
+      // lexer above already has the whole phrase
+      if (m.index === 0 && /^\s*(?:const|let|var|if|else|return|function|for|while|switch|case)\b/.test(m[1])) continue;
+      if ((m[1].match(/\(/g) || []).length !== (m[1].match(/\)/g) || []).length) continue;
+      addText(m[1]);
+    }
   }
 }
 for (const f of FILES) {

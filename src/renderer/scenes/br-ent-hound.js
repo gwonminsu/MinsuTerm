@@ -153,10 +153,10 @@
   };
   const GR = 0.34; // the tape's colour, as the rooms have it
   /** Light a prepped field from psi (0: from +x, π/2: from above, π: from -x; always a little from the front) into a canvas. */
-  function lightUp(P, psi, md) {
+  function lightUp(P, psi, md, lz) {
     const { W, H, A, N, C, O, S } = P, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const cx = cv.getContext('2d'), im = cx.createImageData(W, H), d = im.data;
-    const cp = Math.cos(psi), sp = Math.sin(psi), Lx = cp * 0.87, Ly = sp * 0.87, Lz = 0.49; // y up, like the normals
+    const Lz = lz || 0.49, lh = Math.sqrt(1 - Lz * Lz), cp = Math.cos(psi), sp = Math.sin(psi), Lx = cp * lh, Ly = sp * lh; // y up, like the normals (lz: more from in front)
     let hx = Lx, hy = Ly, hz = Lz + 1; const hl = Math.hypot(hx, hy, hz); hx /= hl; hy /= hl; hz /= hl;
     for (let i = 0, n = W * H; i < n; i++) {
       const a = A[i]; if (a <= 0) continue;
@@ -227,19 +227,80 @@
     ridge(f, 0, 0.02, 0, -0.17, 0.01, 0.008, BONE); // the breastbone
     bump(f, 0, -0.25, 0.1, 0.06, 0, -0.02);
   }
-  /** The back of it, crouched: hips at (0, 0), shoulders at (±0.2, 0.5). */
-  function torsoBack(f) { // one long wasted back, hips to shoulders, all of a piece
-    ell(f, 0, 0.035, 0.15, 0.085, 0, SKIN, 0.9, 0.08);
-    cap(f, 0, 0.05, 0, 0.36, 0.125, 0.165, SKIN, 0.95, 0.09);
-    ell(f, 0, 0.37, 0.17, 0.14, 0, SKIN, 0.95, 0.09);
-    for (const s of [-1, 1]) {
-      ell(f, s * 0.19, 0.47, 0.08, 0.068, 0, SKIN, 1, 0.08);
-      ell(f, s * 0.095, 0.4, 0.062, 0.1, s * 0.3, SKIN, 1.05, 0.05); bump(f, s * 0.1, 0.43, 0.04, 0.07, s * 0.3, 0.006); // shoulder blades
-      for (let i = 0, y = 0.4; i < 4; i++, y -= 0.045 + 0.02 * vn(i, s + 50)) ridge(f, s * 0.05, y, s * (0.13 + 0.03 * vn(i, s + 52)), y - 0.05 - 0.02 * vn(i, s + 54), 0.011, 0.003 + 0.003 * vn(i, s + 56));
-      ridge(f, s * 0.03, 0.075, s * 0.14, 0.09, 0.016, 0.005);
-      bump(f, s * 0.04, 0.22, 0.03, 0.12, 0, -0.006); // wasted hollows down either side of the spine
+  /** A solid seen across: at height y its middle at xo(y), half width hw(y) (metres, 0 where it ends), standing hk × that toward us (flatter across the middle as fl → 1). */
+  function slab(f, y0, y1, hw, xo, hk, mat, kb, fl) {
+    const R = f.R, kbp = (kb || 0) * R, pw = 0.5 - 0.3 * (fl || 0);
+    for (let py = 0; py < f.H; py++) {
+      const y = f.oy - (py + 0.5) / R; if (y < y0 || y > y1) continue;
+      const w = hw(y), c = xo(y); if (w <= 0) continue;
+      const wp = w * R, cp = PX(f, c), xa = Math.max(0, Math.floor(cp - wp - 2)), xb = Math.min(f.W - 1, Math.ceil(cp + wp + 2));
+      for (let px = xa; px <= xb; px++) {
+        const dx = px + 0.5 - cp, ee = wp - Math.abs(dx), q = 1 - (dx * dx) / (wp * wp);
+        if (ee < -2) continue;
+        comb(f, py * f.W + px, ee > 0 ? wp * Math.pow(q, pw) * hk : 0, ee, mat, kbp);
+      }
     }
-    for (let y = 0.03, i = 0; y < 0.55; y += 0.034 + 0.02 * vn(i++, 61)) ell(f, Math.sin(y * 6) * 0.006, y, 0.011 + 0.007 * vn(i, 63), 0.011, 0, SKIN, 1.2, 0.012);
+  }
+  /**
+   * The back of it, crouched over something, seen from behind and a little above: hips at (0, 0), shoulders at (±0.19, 0.44).
+   * A person's back starved down to the frame, all one skin: the shoulders sloping from the neck and running on up into
+   * the arms, the pelvis narrow, the buttocks gone slack and flat with the sacrum between them, the waist sucked in; the
+   * lower ribs standing out on the flanks (unevenly: some deeper, one bent); the shoulder blades winged out of it, their
+   * inner edges and points lifting the skin; down the middle the row of the spine's knuckles, biggest where the back
+   * bends. sl (-1..1): the blades slid, one up as the other goes down (it rocks from one arm to the other).
+   */
+  function torsoBack(f, sl) {
+    sl = sl || 0;
+    const nz = (y, s) => 0.006 * (vn(y * 23 + s * 5, 3.3) - 0.5); // (never quite even, side to side)
+    const hw = (y) => { // the half width up the trunk: the hips, the waist, the cage, out to the shoulders, in again up the slope to the neck
+      const w = 0.118 + 0.012 * ss(0.03, -0.05, y) - 0.024 * ss(0.03, 0.12, y) * (1 - ss(0.16, 0.3, y)) + 0.052 * ss(0.14, 0.34, y) + 0.022 * ss(0.3, 0.42, y);
+      return w * Math.sqrt(cl((y + 0.075) / 0.07)) - 0.15 * ss(0.42, 0.495, y) * Math.pow(cl((y - 0.42) / 0.075), 0.6) - 0.04 * ss(0.47, 0.5, y);
+    };
+    slab(f, -0.08, 0.5, (y) => hw(y) + nz(y, 1), (y) => nz(y, 2) * 0.5, 0.5, SKIN, 0.04, 0.35);
+    for (const s of [-1, 1]) {
+      const lift = -s * sl * 0.016;
+      cap(f, s * 0.15, 0.415 + lift, s * 0.215, 0.53 + lift, 0.048, 0.034, SKIN, 0.85, 0.05); // the shoulder, running on up into the arm
+      bump(f, s * 0.2, 0.468 + lift, 0.03, 0.02, s * 0.9, 0.004, BONE); // the bone of the shoulder under the skin
+    }
+    // the pelvis: the buttocks flat and slack, a cleft between them; the crests of the hip bones across the top
+    for (const s of [-1, 1]) {
+      bump(f, s * 0.058, -0.015, 0.06, 0.05, s * 0.3, 0.007);
+      bump(f, s * 0.06, -0.062, 0.055, 0.012, s * 0.15, -0.005); // the fold under it, sagging
+      ridge(f, s * 0.035, 0.08, s * 0.11, 0.062, 0.011, 0.004);
+      bump(f, s * 0.03, 0.05, 0.014, 0.012, 0, -0.0022); // the dimples over the sacrum
+    }
+    bump(f, 0, 0.02, 0.038, 0.045, 0, -0.002); bump(f, 0, -0.045, 0.007, 0.036, 0, -0.006); // the sacrum, flat; the cleft
+    // the waist: two wasted cords up either side of a groove
+    for (const s of [-1, 1]) {
+      ridge(f, s * 0.026, 0.06, s * 0.03, 0.26, 0.012, 0.0055);
+    }
+    // the lower ribs, out on the flanks under the blades: arcs from beside the spine out and down round the side, the hollows between them
+    for (const s of [-1, 1]) {
+      for (let i = 0, y = 0.33; i < 6; i++, y -= 0.03 + 0.014 * vn(i * 3.7, s * 5 + 81)) {
+        const o = vn(i * 2.3, s * 7 + 83), w = hw(y - 0.04), x0 = s * (0.05 + 0.012 * o), x1 = s * (w + 0.008), dr = 0.075 + 0.025 * vn(i, s + 85);
+        const bend = i === 2 && s > 0 ? 0.014 : 0, xm = x0 + (x1 - x0) * 0.55, ym = y - dr * 0.22 + bend, y1 = y - dr;
+        const h = (0.004 + 0.0035 * o) * (1 - 0.35 * ss(3, 5, i)), wr = 0.0085 + 0.002 * vn(i, s + 87), fade = ss(0.33, 0.25, y);
+        ridge(f, x0, y, xm, ym, wr, h * (0.25 + 0.75 * fade)); ridge(f, xm, ym, x1, y1, wr, h);
+        ridge(f, xm + s * 0.004, ym - 0.017, x1, y1 - 0.015, wr * 1.4, -h * 0.45); // the hollow under it
+      }
+    }
+    // the shoulder blades, winged: a plate lying on the ribs, its inner edge and its point standing up off them, a hollow under the point
+    for (const s of [-1, 1]) {
+      const dy = -s * sl * 0.028, ro = s * (0.1 + 0.12 * s * sl), cx = s * 0.105, cy = 0.36 + dy, ix = s * 0.064 - s * 0.012 * s * sl;
+      bump(f, cx, cy, 0.064, 0.09, ro, 0.017);
+      ridge(f, s * 0.05, cy + 0.07, ix, cy - 0.074, 0.009, 0.014); // the inner edge, lifting the skin
+      ridge(f, s * 0.055, cy + 0.06, s * 0.18, 0.445 + dy * 0.5, 0.008, 0.005); // the ridge across it toward the shoulder
+      bump(f, ix + s * 0.003, cy - 0.084, 0.017, 0.014, 0, 0.008); // its point
+      ridge(f, ix + s * 0.006, cy - 0.096, s * 0.15, cy - 0.06, 0.008, -0.006); // the shade under its lower edge
+      bump(f, s * 0.034, cy + 0.01, 0.01, 0.07, 0, -0.006); // the gutter between the blade and the spine
+    }
+    // the spine: a row of knuckles, each its own size, biggest where the back bends over (a ridge there), sunk in a groove low down
+    ridge(f, 0, 0.17, 0, 0.49, 0.013, 0.008);
+    for (let y = 0.48, i = 0; y > 0.06; i++) {
+      const big = 1.1 - 0.5 * ss(0.3, 0.12, y) + 0.3 * vn(i * 1.7, 61), x = 0.0025 * Math.sin(y * 9 + 1) + 0.002 * (vn(i, 63) - 0.5);
+      bump(f, x, y, 0.0085 * big, 0.011 * big, 0, 0.0032 * big * ss(0.1, 0.22, y), BONE);
+      y -= 0.022 + 0.006 * vn(i * 2.1, 65) + 0.004 * (big - 1);
+    }
   }
   /** The head hanging, from the side: the neck joint at (0, 0), the face turned down to the floor under its hair. */
   function headSide(f) {
@@ -311,14 +372,19 @@
     const W = Math.ceil(wm * R) + 6, H = Math.ceil(lm * R) + 6, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const cx = cv.getContext('2d'), im = cx.createImageData(W, H), d = im.data, half = wm / 2;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const u = (x + 0.5 - W / 2) / R, v = (y + 0.5 - 3) / R, vv = v - (u / half) * (u / half) * (kind === 0 ? 0.05 : 0.075);
+      let u = (x + 0.5 - W / 2) / R, v = (y + 0.5 - 3) / R, vv = v - (u / half) * (u / half) * (kind === 0 ? 0.05 : 0.075);
       if (vv < -0.005 || Math.abs(u) > half) continue;
       const t = vv / lm, us = u + (fbm(u * 7 + sd, vv * 2.5, 2) - 0.5) * 0.07 * (0.15 + t) + Math.sin(vv * 13 + u * 9) * 0.004;
-      const clump = vn(us * 26 + sd, 1.7), len = lm * (0.45 + 0.55 * vn(us * 34 + sd, 4.2)) * (0.7 + 0.3 * clump);
+      const clump = vn(us * 26 + sd, 1.7), len = lm * (0.45 + 0.55 * vn(us * 34 + sd, 4.2)) * (0.7 + 0.3 * clump) * (kind === 3 ? 1.25 : 1);
       let a = (1 - ss(len * 0.55, len, vv)) * (0.45 + 0.55 * clump) * (0.5 + 0.5 * vn(us * 320, vv * 3)) * (1 - ss(half * 0.72, half, Math.abs(u))) * ss(-0.005, 0.012, vv);
       if (kind === 1) { const gw = 0.022 + 0.055 * cl(vv / 0.2), gg = ss(gw * 0.5, gw, Math.abs(us + 0.005)); a *= Math.max(gg, Math.pow(vn(us * 70 + 3, vv * 0.8), 7) * 2.2); }
+      if (kind === 3) { // a hank: wet, stuck together in a few clumps that taper to points, each its own length; thick
+        const cu = us * 30 + 2.2 * fbm(us * 7 + sd, vv * 2.2 + sd, 2) + 0.8 * Math.sin(vv * 9 + us * 40), id = Math.floor(cu), fr = Math.abs(cu - id - 0.5);
+        const lc = lm * (0.35 + 0.65 * vn(id * 1.31 + sd, 9.1)), wc = (0.4 + 0.3 * vn(id * 2.7, sd)) * (1 - Math.pow(cl(vv / lc), 1.4));
+        a = Math.min(1, a * 2.2) * ss(wc, wc * 0.4, fr) * (vv < lc ? 1 : 0);
+      }
       if (a <= 0.01) continue;
-      const st = Math.pow(vn(us * 150 + sd, vv * 1.3), 5) * (0.35 + Math.exp(-(((vv - 0.04) / 0.05) ** 2))), dk = 0.55 + 0.45 * ss(0, 0.07, vv);
+      const st = Math.pow(vn(us * 150 + sd, vv * 1.3), 5) * (0.35 + Math.exp(-(((vv - 0.04) / 0.05) ** 2))) * (kind === 3 ? 0.35 : 1), dk = 0.55 + 0.45 * ss(0, 0.07, vv);
       let r = (0.055 * dk + st * 0.5) * md.alb, g = (0.05 * dk + st * 0.53) * md.alb, b = (0.045 * dk + st * 0.52) * md.alb;
       const l = 0.3 * r + 0.59 * g + 0.11 * b; r += (l * 1.02 - r) * GR; g += (l * 1.05 - g) * GR; b += (l * 0.8 - b) * GR;
       const i = (y * W + x) * 4; d[i] = Math.min(255, r * md.ex * 255); d[i + 1] = Math.min(255, g * md.ex * 255); d[i + 2] = Math.min(255, b * md.ex * 255); d[i + 3] = Math.min(255, a * 1.5 * 255);
@@ -330,18 +396,46 @@
   /*
    * The sheets: every part baked for one size (R px per metre) and one mode, a little at a time (a queue of jobs run
    * from step, a few ms a frame). A visit asks for the sizes it will need when it starts; the draw takes the best one ready.
+   * What is kept: the last few sheets used per mode (a visit wants three sizes), the newest last; the rest are let go (their
+   * canvases emptied, so the memory is given back at once, not when the collector gets round to it). And a while after the
+   * last visit ended everything goes (sheets, the scratch canvases, what visits kept of their last pose): the next visit
+   * bakes again, a few ms a frame, before it shows.
    */
-  const SHEETS = new Map();
+  const SHEETS = new Map(), KEEP = 4, IDLE_MS = 40000;
+  const zap = (c) => { if (c && c.getContext) { c.width = 0; c.height = 0; } };
+  /** Empty every canvas a sheet holds. */
+  function freeSheet(S) {
+    S.q.length = 0; S.ready = false;
+    for (const k of Object.keys(S)) { const v = S[k]; if (!v || typeof v !== 'object') continue; if (v.getContext) zap(v); else if (v.c) zap(v.c); else if (Array.isArray(v)) for (const sp of v) if (sp && sp.c) zap(sp.c); }
+  }
+  let CCS = []; // the canvases visits keep their last pose in
+  let lastUse = 0, idleT = 0;
+  function dropAll() {
+    for (const S of SHEETS.values()) freeSheet(S);
+    SHEETS.clear(); for (const cc of CCS) { zap(cc.c); cc.key = null; } CCS = [];
+    zap(SCR); SCR = SX = null; zap(TC); TC = TX = null;
+  }
+  function idleCheck() { const t = performance.now() - lastUse; if (t >= IDLE_MS - 20) { idleT = 0; dropAll(); } else idleT = setTimeout(idleCheck, IDLE_MS - t); }
+  function touch() { lastUse = performance.now(); if (!idleT) idleT = setTimeout(idleCheck, IDLE_MS); }
+  /** Bytes held (for the test harness). */
+  function mem() {
+    let b = 0; const c = (v) => { if (v && v.getContext) b += v.width * v.height * 4; };
+    for (const S of SHEETS.values()) for (const k of Object.keys(S)) { const v = S[k]; if (!v || typeof v !== 'object') continue; if (v.getContext) c(v); else if (v.c) c(v.c); else if (Array.isArray(v)) for (const sp of v) if (sp && sp.c) c(sp.c); }
+    c(SCR); c(TC); for (const cc of CCS) c(cc.c);
+    return { bytes: b, sheets: SHEETS.size, kept: CCS.length };
+  }
   let WARM = null; // each new part drawn once, small, as it is baked (so its first real use does not stall a frame)
   const warm = (c) => { if (!WARM) { WARM = document.createElement('canvas'); WARM.width = WARM.height = 4; } WARM.getContext('2d').drawImage(c, 0, 0, 4, 4); return c; };
   const asSpr = (f, c) => ({ c: warm(c), ax: PX(f, 0), ay: PY(f, 0) });
   function sheet(L, R) {
     const key = (L ? 'L' : 'D') + R;
-    let S = SHEETS.get(key); if (S) return S;
-    if (SHEETS.size >= 5) SHEETS.delete(SHEETS.keys().next().value);
+    let S = SHEETS.get(key);
+    if (S) { if (SHEETS.size > 1) { SHEETS.delete(key); SHEETS.set(key, S); } return S; } // (the newest last)
+    let n = 0; for (const T of SHEETS.values()) if (T.L === L) n++;
+    for (const [k2, T] of SHEETS) { if (n < KEEP) break; if (T.L === L) { freeSheet(T); SHEETS.delete(k2); n--; } } // the least lately used go
     S = { L, R, q: [], ready: false }; SHEETS.set(key, S);
     const md = MODE[L ? 'L' : 'D'], up = Math.PI / 2;
-    const one = (name, mk, sd) => { let f, P; S.q.push(() => { f = mk(); }); S.q.push(() => { P = prep(f, sd); }); S.q.push(() => { S[name] = asSpr(f, lightUp(P, up, md)); f = P = null; }); };
+    const one = (name, mk, sd, lz) => { let f, P; S.q.push(() => { f = mk(); }); S.q.push(() => { P = prep(f, sd); }); S.q.push(() => { S[name] = asSpr(f, lightUp(P, up, md, lz)); f = P = null; }); };
     S.q.push(() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); S.blob = c; });
     for (const t of Object.keys(SEG)) {
       let f, P;
@@ -350,7 +444,7 @@
     }
     for (let b = 0; b < 3; b++) one('ts' + b, () => { const f = field(-0.22, -0.26, 0.88, 0.25, R); torsoSide(f, b / 2); return f; }, 3 + b);
     one('tf', () => { const f = field(-0.28, -0.32, 0.28, 0.2, R); torsoFront(f); return f; }, 21);
-    one('tb', () => { const f = field(-0.3, -0.1, 0.3, 0.58, R); torsoBack(f); return f; }, 23);
+    for (let b = 0; b < 3; b++) one('tb' + b, () => { const f = field(-0.29, -0.1, 0.29, 0.6, R); torsoBack(f, b - 1); return f; }, 23, 0.7);
     one('hs', () => { const f = field(-0.1, -0.2, 0.22, 0.1, R); headSide(f); return f; }, 31);
     for (let o = 0; o < 2; o++) { let f, P; S.q.push(() => { f = field(-0.11, -0.05, 0.11, 0.27, R); face(f, o); }); S.q.push(() => { P = prep(f, 33); }); S.q.push(() => { S['fc' + o] = asSpr(f, lightUp(P, up, Object.assign({}, md, { ex: md.ex * 0.8 }))); f = P = null; }); } // the face a shade darker: only its eyes catch the light
     one('hk', () => { const f = field(-0.11, -0.05, 0.11, 0.27, R); headBack(f); return f; }, 35);
@@ -360,6 +454,7 @@
     S.q.push(() => { S.hS = hairSpr(R, 0.26, 0.34, 0, md, 5); warm(S.hS.c); });
     S.q.push(() => { S.hF = hairSpr(R, 0.24, 0.38, 1, md, 9); warm(S.hF.c); });
     S.q.push(() => { S.hB = hairSpr(R, 0.24, 0.3, 2, md, 13); warm(S.hB.c); });
+    S.q.push(() => { S.hD = hairSpr(R, 0.14, 0.36, 3, md, 17); warm(S.hD.c); });
     return S;
   }
   function work(S, ms) { const t0 = performance.now(); while (S.q.length && performance.now() - t0 < ms) S.q.shift()(); S.ready = !S.q.length; return S.ready; }
@@ -419,7 +514,7 @@
   }
   /** Keep what was just put together (a body holding still is not put together again): cc { c, key, C }. */
   function keep(cc, C, key) {
-    if (!cc.c) cc.c = document.createElement('canvas');
+    if (!cc.c) { cc.c = document.createElement('canvas'); CCS.push(cc); if (CCS.length > 12) { const o = CCS.shift(); zap(o.c); o.key = null; } }
     if (cc.c.width < C.W || cc.c.height < C.H) { cc.c.width = Math.max(cc.c.width, C.W); cc.c.height = Math.max(cc.c.height, C.H); }
     const x = cc.c.getContext('2d'); x.globalCompositeOperation = 'copy'; x.drawImage(SCR, 0, 0, C.W, C.H, 0, 0, C.W, C.H); x.globalCompositeOperation = 'source-over';
     cc.key = key; cc.C = C;
@@ -509,23 +604,39 @@
     seg(C, 'nk', p.sw * 0.3, p.sy + 0.06, p.sw * 0.5, p.sy - 0.1);
     faceAt(C, p.sw * 0.5, p.sy - 0.02, p.tilt || 0, p.jaw, p.lag || 0, 1, false);
   }
-  /** Crouched with its back to us. p: rock (rad), bob, rise (the head up over its shoulders 0..1), turn (0 the back of its head … 1 its face), jaw, lag, tw (a twitch). */
+  /**
+   * Crouched with its back to us. p: rock (the shoulders swayed over, as a shear from the hips: they go, the hips stay),
+   * sl (-1..1: the shoulder blades slid, one up, one down), hunch (0..1: the shoulders drawn up), pull (-1..1: the arm on that
+   * side tearing at what it holds), bob (the head), rise (the head up over its shoulders 0..1), turn (0 the back of its head
+   * … 1 its face), jaw, lag, tw (a twitch).
+   */
   function backBody(C, p) {
-    const S = C.S, r = p.rock, R = (x, y) => { const [u, v] = rot2(x, y - 0.13, r); return [u, v + 0.13]; };
+    const S = C.S, r = p.rock, sl = p.sl || 0, sy = 1 + 0.06 * (p.hunch || 0), pl = p.pull || 0;
+    const R = (x, y) => [x + r * (y - 0.13), 0.13 + (y - 0.13) * sy];
     const head = (low) => {
-      const n = R(0, 0.58), up = low ? -0.12 + p.bob : 0.03 + 0.12 * p.rise, hx = n[0] + Math.sin(r) * 0.02, hy = n[1] + up, t = p.turn, sx = Math.max(0.12, Math.abs(1 - 2 * t));
+      const n = R(0, 0.58), up = low ? -0.13 + p.bob : 0.03 + 0.12 * p.rise, hx = n[0] + r * 0.06 + (low ? pl * 0.025 : 0), hy = n[1] + up, t = p.turn, sx = Math.max(0.12, Math.abs(1 - 2 * t));
       if (!low) seg(C, 'nk', n[0], n[1] - 0.06, hx, hy + 0.02);
-      if (t < 0.5) { put(C, S.hk, hx, hy, r * 0.6, 1, HK, sx); hang(C, S.hB, hx, hy + 0.21 * HK, -(p.lag || 0) * 0.5, Math.min(1, (hy + 0.2) / (0.3 * HK)), false, sx, HK); }
+      if (t < 0.5) { put(C, S.hk, hx, hy, r * 0.8 + (low ? pl * 0.12 : 0), 1, HK, sx); hang(C, S.hB, hx, hy + 0.21 * HK, -(p.lag || 0) * 0.5 + (low ? r * 0.5 : 0), Math.min(1, (hy + 0.2) / (0.3 * HK)), false, sx, HK); }
       else faceAt(C, hx, hy + 0.13 * HK, r * 0.6 + (p.tilt || 0), p.jaw, p.lag || 0, 1, false, sx);
+      return [hx, hy];
     };
     const J = []; // the joints: elbows up over its shoulders like horns, knees jutting out beside them
-    for (const s of [-1, 1]) J.push({ s, sh: R(s * 0.2, 0.6), el: R(s * 0.43, 1.18 + (p.tw && s > 0 ? 0.06 : 0)), hd: R(s * 0.17, 0.2), hp: R(s * 0.12, 0.14), kn: [s * 0.52, 0.84], ft: [s * 0.37, 0.05] });
-    if (p.rise < 0.5) head(true);
-    for (const q of J) { seg(C, 'fa', q.el[0], q.el[1], q.hd[0], q.hd[1]); seg(C, 'sh', q.hp[0], q.hp[1], q.kn[0], q.kn[1]); seg(C, 'fa', q.kn[0], q.kn[1], q.ft[0], q.ft[1]); put(C, S.kn, q.kn[0], q.kn[1]); put(C, S.hf, q.ft[0], q.ft[1], 0, 1, 0.9); }
+    for (const s of [-1, 1]) {
+      const pu = Math.max(0, s * pl);
+      J.push({ s, sh: R(s * 0.19, 0.57 - s * sl * 0.016), el: R(s * (0.43 - 0.03 * pu), 1.18 + 0.07 * pu + (p.tw && s > 0 ? 0.06 : 0)), hd: R(s * (0.16 - 0.04 * pu), 0.2 + 0.12 * pu), hp: R(s * 0.12, 0.14), kn: [s * 0.52, 0.84], ft: [s * 0.37, 0.05] });
+    }
+    const hp = p.rise < 0.5 ? head(true) : null;
+    for (const q of J) { seg(C, 'fa', q.el[0], q.el[1], q.hd[0], q.hd[1]); seg(C, 'sh', q.hp[0], q.hp[1], q.kn[0], q.kn[1]); seg(C, 'fa', q.kn[0], q.kn[1], q.ft[0], q.ft[1]); put(C, S.kn, q.kn[0], q.kn[1], 0.6 * q.s, 1, 0.75); put(C, S.hf, q.ft[0], q.ft[1], 0, 1, 0.9); }
     darken(C, 0.35);
-    put(C, S.tb, 0, 0.13, r, 1, 1.05);
-    occl(C, 0, 0.62, 0.16, 0.45);
-    for (const q of J) { seg(C, 'sh', q.sh[0], q.sh[1], q.el[0], q.el[1]); put(C, S.kn, q.el[0], q.el[1]); } // thin, bony, the elbows up like horns
+    for (const q of J) { seg(C, 'sh', q.sh[0], q.sh[1], q.el[0], q.el[1]); put(C, S.kn, q.el[0], q.el[1], 0.5 * q.s, 1, 0.7); } // thin, bony, the elbows up like horns (out from under the shoulders), the bone of each standing out
+    // the back, all one skin: sheared over from the hips as it rocks, the blades slid with it
+    const tb = S['tb' + (sl < -0.33 ? 0 : sl > 0.33 ? 2 : 1)], M = C.M * 1.05;
+    SX.setTransform(M, 0, -r * M * sy, M * sy, C.ox, C.oy - 0.13 * C.k); SX.drawImage(tb.c, -tb.ax, -tb.ay);
+    occl(C, R(0, 0.6)[0], 0.6, 0.12, 0.35);
+    if (hp) for (const s of [-1, 1]) { // its hair, long, wet, matted: two hanks down from the bowed head over its shoulders, the nape bare between them
+      const sw = s * (0.32 + 0.12 * Math.max(0, s * pl)) + r * 0.6;
+      hang(C, S.hD, hp[0] + s * 0.07 * HK, hp[1] + 0.2 * HK, sw, 0.95 + 0.08 * Math.max(0, -s * pl), false, s, HK);
+    }
     if (p.rise >= 0.5) head(false);
   }
 
@@ -812,14 +923,22 @@
       step(e, g, st, BR, H) {
         const a = e.age;
         e.cl = [[0, e.J + 1, a < 6 || (a > 182 && a < 194) ? BR.flick(a, 4) : a >= 205 && a < 212 ? 0.02 : 1]];
-        if (a === 1) { H.rock = 0; H.bob = 0; H.rise = 0; H.turn = 0; H.jaw = 0; }
+        if (a === 1) { H.rock = 0; H.bob = 0; H.rise = 0; H.turn = 0; H.jaw = 0; H.sl = 0; H.hunch = 0; H.pull = 0; H.tc = 0; H.tl = 1; H.side = Math.random() < 0.5 ? -1 : 1; }
         if (a === 158) vhs(H, st, BR, 3);
         if (a === 212) BR.glitch(st, 2);
         if (H.split > 0) H.split--;
         e.vis = a >= 4 && a < 212 ? 1 : 0;
         if (H.tw > 0) H.tw--; else if (a < 110 && Math.random() < 0.03) H.tw = 2;
-        if (a < 110) { if (!held(H, 0.06)) { H.rock = Math.sin(a * 0.14) * 0.07; H.bob = -Math.abs(Math.sin(a * 0.45)) * 0.05 - (Math.random() < 0.1 ? 0.03 : 0); } }
-        else { H.bob = 0; H.rise = a < 132 ? 0 : a < 140 ? 0.5 : 1; H.turn = a < 150 ? 0 : a < 155 ? 0.3 : a < 160 ? 0.5 : a < 163 ? 0.75 : 1; H.jaw = ss(172, 178, a); H.tilt = a > 186 ? 0.3 : 0; }
+        if (a < 110) {
+          if (!held(H, 0.05)) { // bite after bite: a slow lean down into it, then a sharp tear back and to one side, the blades sliding, the shoulders hunching
+            if (H.tc <= 0) { H.side = Math.random() < 0.7 ? -H.side : H.side; H.tl = H.tc = 15 + ((Math.random() * 16) | 0); }
+            H.tc--;
+            const u = 1 - H.tc / H.tl, dn = ss(0, 0.6, u), te = ss(0.6, 0.7, u) * (1 - ss(0.78, 1, u)), s = H.side, fast = te > 0.2;
+            H.rock += (s * (0.03 + 0.11 * te) - 0.02 * s * dn - H.rock) * (fast ? 0.6 : 0.18);
+            H.bob += (-0.05 * dn * (1 - te) + 0.035 * te - H.bob) * (fast ? 0.7 : 0.22);
+            H.sl += (s * (1.2 * te - 0.35 * dn) - H.sl) * (fast ? 0.6 : 0.25); H.pull = s * te; H.hunch = te + 0.25 * dn;
+          }
+        } else { H.pull = 0; H.hunch *= 0.7; H.bob = 0; H.rise = a < 132 ? 0 : a < 140 ? 0.5 : 1; H.turn = a < 150 ? 0 : a < 155 ? 0.3 : a < 160 ? 0.5 : a < 163 ? 0.75 : 1; H.jaw = ss(172, 178, a); H.tilt = a > 186 ? 0.3 : 0; } // it stops dead, as it was
       },
       draw(e, g, j, c, BR, H) {
         if (c !== 0 || j !== BR.ROW(e.z) || !e.vis || H.rock == null) return;
@@ -827,7 +946,7 @@
         const op = BR.far(e.z - g.camZ), lit = lum(g, BR, e.x, e.z), sx = g.sx, sy = g.sy, dpr = dprOf(g), k = (g.f / g.sz) * dpr, S = pickS(e, g, k); if (!S) return;
         BR.contact(g, e.x, e.z, 1.4, op);
         const C = begin(S, k, dpr, -0.9, 0.9, -0.2, 1.45);
-        backBody(C, { rock: H.rock, bob: H.bob, rise: H.rise, turn: H.turn, jaw: H.jaw, lag: 0, tilt: H.tilt, tw: H.tw > 0 });
+        backBody(C, { rock: H.rock, bob: H.bob, rise: H.rise, turn: H.turn, jaw: H.jaw, lag: 0, tilt: H.tilt, tw: H.tw > 0, sl: H.sl, hunch: H.hunch, pull: H.pull });
         finish(C, lit, g.L, 0);
         blit(C, g, sx, sy, 1, 1, op);
         if (H.split > 0) chroma(C, g, sx, sy, 1, 1, 2 + H.split);
@@ -855,6 +974,7 @@
     },
     step(e, g, st, BR) {
       if (!e.own || !V[e.v]) return;
+      touch();
       bake(e, g);
       if (!sheet(g.L, e.need[0]).ready && e.age < 60) { e.age--; e.vis = 0; return; } // nothing shows before its parts are baked
       V[e.v].step(e, g, st, BR, e.H);
@@ -868,5 +988,6 @@
       if (t > 0.002) { STATS.n++; STATS.sum += t; if (t > STATS.max) STATS.max = t; }
     },
   };
-  Object.defineProperty(window.BR_ENT.hound, 'dbg', { value: { stats: STATS, variants: NAMES, sheet, work } }); // for the test harness only
+  Object.defineProperty(window.BR_ENT.hound, 'dbg', { value: { stats: STATS, variants: NAMES, sheet, work, mem, dropAll, // for the test harness only
+    back(k, L, p, lit) { const S = sheet(L, bucket(k)); while (!work(S, 200)); const C = begin(S, k, 1, -0.9, 0.9, -0.2, 1.45); backBody(C, Object.assign({ rock: 0, bob: 0, rise: 0, turn: 0, jaw: 0, lag: 0, tilt: 0 }, p)); finish(C, lit == null ? 1 : lit, L, 0); return { c: SCR, W: C.W, H: C.H, ox: C.ox, oy: C.oy }; } } });
 })();

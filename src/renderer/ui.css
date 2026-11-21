@@ -707,6 +707,8 @@ body.crt .term-host .xterm-screen { filter: drop-shadow(0 0 1.6px rgba(160, 200,
 .pk-check { width: 14px; height: 14px; color: var(--violet); flex: none; }
 .pv-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .pv-none { color: var(--dim); font-size: 12px; }
+/* a preview holds still until its row or button is pointed at (pvLive in app.js parks it on a telling frame) */
+.pv-rest, .pv-rest::before, .pv-rest::after, .pv-rest *, .pv-rest *::before, .pv-rest *::after { animation-play-state: paused !important; }
 
 /* cursor previews: a tiny prompt with the cursor after it */
 .pv-term { display: inline-flex; align-items: center; font-family: 'Cascadia Mono', Consolas, monospace; font-size: 12px; color: #dfe3ea; }
@@ -1074,3 +1076,27 @@ body.crt .term-host .xterm-screen { filter: drop-shadow(0 0 1.6px rgba(160, 200,
 .vol-range.muted input[type=range] { opacity: .38; filter: grayscale(1); }
 .vol-range.muted .range-val { color: var(--dim); text-decoration: line-through; }
 .vol-range.muted .vol-mute { color: var(--dim); }
+
+/* 백그라운드 작업: a command the agent left running, under its row until it ends (click: its output; hover: stop) */
+.item.child.subagent.bgtask { cursor: pointer; border-radius: 6px; }
+.item.child.subagent.bgtask:hover { background: var(--hover, color-mix(in srgb, var(--text) 6%, transparent)); }
+.bgtask .bg-ico { position: relative; width: 22px; height: 22px; flex: none; display: grid; place-items: center; margin-right: 8px; border-radius: 6px;
+  color: var(--text-2); background: color-mix(in srgb, var(--violet, #8f73ff) 14%, transparent); }
+.bgtask .bg-ico .ico { width: 13px; height: 13px; }
+.bgtask .bg-ico::after { content: ''; position: absolute; right: -2px; bottom: -2px; width: 7px; height: 7px; border-radius: 50%; background: var(--amber, #f59f00);
+  box-shadow: 0 0 0 2px var(--panel, var(--bg)); animation: bgPulse 1.6s ease-in-out infinite; }
+@keyframes bgPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.bgtask .bg-time { flex: none; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bgtask:hover .bg-time { display: none; }
+body.idle .bgtask .bg-ico::after { animation: none; }
+@media (prefers-reduced-motion: reduce) { .bgtask .bg-ico::after { animation: none; } }
+
+/* a split shows as one tab: its panes' names side by side, the focused one brighter */
+.tab.grp-hidden { display: none !important; }
+.tab.group-tab .tab-title { display: flex; align-items: center; gap: 0; min-width: 0; overflow: hidden; }
+.tab.group-tab .gt-pane { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.62; }
+.tab.group-tab .gt-pane.focus { opacity: 1; flex-shrink: 0.4; }
+.tab.group-tab:not(.active) .gt-pane.focus { opacity: 0.85; }
+.tab.group-tab .gt-sep { flex: none; margin: 0 6px; opacity: 0.35; }
+/* a split's tab is as wide as its panes' tabs would be together (within reason) */
+.tab.group-tab { max-width: 440px; flex: 0 1 360px; min-width: 150px; }
