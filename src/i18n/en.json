@@ -726,7 +726,8 @@
  "민트": "Mint",
  "밑줄": "Underline",
  "바다": "Ocean",
- "바다로 해가 지며 구름이 물들고, 개밥바라기와 첫 별이 뜸": "The sun sets into the sea, the clouds take its colours, then the evening star and the first stars come out",
+ "바다 위의 하루": "A day over the sea",
+ "바다 위의 하루 · 해가 지며 구름이 물들고, 별이 뜬 밤과 새벽을 지나 다시 노을": "A day over the sea · the clouds take the colours of the setting sun, then a starry night and dawn, and another sunset",
  "바다빛 청록 배경": "Sea teal background",
  "바랜 양피지": "Faded parchment",
  "바이올렛": "Violet",
@@ -1546,6 +1547,7 @@
  "한지 위에 먹물이 번지며 붓글씨가 맺히고 낙관 쾅": "Ink bleeds into hanji paper, calligraphy forms, and the seal stamps down",
  "합창단": "Choir",
  "항목이 없습니다": "No items",
+ "해가 지며 구름이 물들고, 별이 뜬 밤과 새벽을 지나 다시 노을": "the clouds take the colours of the setting sun, then a starry night and dawn, and another sunset",
  "해독": "Decode",
  "해적선": "Pirate ship",
  "해질녘 구름바다가 흘러가고 날개 끝 불빛이 깜빡임": "A sea of cloud drifts by at dusk while the light on the wingtip blinks",
@@ -1704,5 +1706,6 @@
  "글자=칼질 탁탁 · Space=기름 지글지글 · ⌫=냄비 뚜껑 · ⇧⏎=보글보글 · Enter=전자레인지 띵": "Letters = chop chop · Space = sizzling oil · ⌫ = pot lid · ⇧⏎ = bubbling · Enter = microwave ding",
  "Space=따뜻한 화음": "Space = a warm chord",
  "칠 때마다 아·오·우·에 합창 · Space=따뜻한 화음 · Enter=\"아—멘\"": "An ah·oh·oo·eh choir with every keystroke · Space = a warm chord · Enter = \"Ah—men\"",
- "글자=부드러운 우 화음 진행": "Letters = a soft \"ooh\" chord progression"
+ "글자=부드러운 우 화음 진행": "Letters = a soft \"ooh\" chord progression",
+ "바다로 해가 지며 구름이 물들고, 개밥바라기와 첫 별이 뜸": "The sun sets into the sea, the clouds take its colours, then the evening star and the first stars come out"
 }
