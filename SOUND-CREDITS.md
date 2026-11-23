@@ -57,7 +57,7 @@ The Enter sound of 합창단 is an excerpt (the first "Hallelujah") of [Handel -
 
 ## Background ambience (배경 음악): CC0 from Freesound, or made for MinsuTerm
 
-Each background has its own loop: cut into a seamless loop (whole bars for rhythmic music, the end crossfaded into the start otherwise) and level-matched. The small sounds for the bouncing logo, pong and shooting stars are synthesised in the app.
+Each background has its own loop: cut into a seamless loop (whole bars for rhythmic music, the end crossfaded into the start otherwise) and level-matched. The small sounds for the bouncing logo and shooting stars are synthesised in the app; the rally of 혼자 하는 탁구 plays the clips of the 탁구 랠리 typing sound (made for MinsuTerm, below) and its point whistle is listed with pong.
 
 | Background | Freesound sound |
 |---|---|
@@ -95,7 +95,7 @@ Each background has its own loop: cut into a seamless loop (whole bars for rhyth
 | circuit | [Circuit Synthwave](https://freesound.org/s/460357/) |
 | life | [Lotus music.wav](https://freesound.org/s/507957/) |
 | bounce | [Cute Background Loop Song Thing](https://freesound.org/s/655515/) |
-| pong | [Sequence - 8 bit music loop](https://freesound.org/s/412343/) |
+| pong | [University indoor gymnasium ambient at friday(badminton area)](https://freesound.org/s/734893/) by lastraindrop, the hits softened into the distance; point whistle (pong-whistle.ogg): one blast of [Referee whistle blow, gymnasium.wav](https://freesound.org/s/218318/) by SpliceSound |
 | campfire (fire) | [Campfire 02](https://freesound.org/s/729396/) |
 | campfire (people) | [180615 Party small outside voices kids laughing, chimney swifts.flac](https://freesound.org/s/572414/) |
 | thunder1 | [Distant Thunder 4](https://freesound.org/s/581125/) |

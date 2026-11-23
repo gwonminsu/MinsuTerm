@@ -467,17 +467,17 @@ const BG_KINDS = [
   ['snow', '눈', '흩날리는 눈송이'],
   ['autumn', '가을 단풍길', '붉은 단풍 터널 너머 노을빛, 흩날리는 낙엽이 길에 내려앉음'],
   ['grid', '신스웨이브', '네온 원근 그리드'],
-  ['network', '입자 네트워크', '떠다니는 점과 연결선'],
+  ['network', '입자 네트워크', '깊이 있는 점 구름과 연결선, 신호가 노드를 타고 퍼짐'],
   ['fireflies', '반딧불', '따뜻한 빛이 둥실 떠다니며 깜빡임'],
   ['mushroom', '빛나는 버섯 숲', '스스로 빛나는 버섯과 떠다니는 포자, 이끼 덮인 숲'],
   ['sakura', '벚꽃', '분홍 꽃잎이 흩날리며 떨어짐'],
   ['bamboo', '대나무 숲', '안개 속에 흔들리는 대나무, 사이로 내려오는 햇살과 날리는 댓잎'],
   ['bokeh', '보케', '흐릿한 빛망울이 천천히 떠다님'],
   ['waves', '물결', '아래쪽에서 잔잔하게 일렁이는 파도'],
-  ['shooting', '별똥별', '밤하늘에 가끔 별똥별이 지나감'],
-  ['sunset', '노을', '천천히 물드는 노을빛과 첫 별'],
+  ['shooting', '별똥별', '은하수 아래 숲 너머로 별똥별이 흐름 · 가끔 불덩이 유성과 유성우'],
+  ['sunset', '노을', '바다로 해가 지며 구름이 물들고, 개밥바라기와 첫 별이 뜸'],
   ['planewindow', '구름 위 비행기 창밖', '해질녘 구름바다가 흘러가고 날개 끝 불빛이 깜빡임'],
-  ['blackhole', '블랙홀', '빛이 소용돌이치며 사건의 지평선으로 빨려 들어감'],
+  ['blackhole', '블랙홀', '뜨거운 원반이 돌고 그 뒷면이 휘어 그림자 위를 감쌈 · 가끔 무언가 빨려 들어가 번쩍임'],
   ['warp', '워프 드라이브', '별빛이 길게 늘어지며 우주를 질주'],
   ['jellyfish', '해파리', '빛나는 해파리가 촉수를 흔들며 유영'],
   ['lanterns', '풍등', '따뜻한 등불이 일렁이며 밤하늘로 떠오름'],
@@ -494,19 +494,19 @@ const BG_KINDS = [
   ['steampunk', '스팀펑크', '맞물려 도는 황동 톱니와 시계탑, 증기 속을 떠가는 비행선'],
   ['analog', '아날로그 호러', '낡은 비디오테이프 화면, 잡음 사이로 무언가가 스쳐 지나간다'],
   ['backrooms', '백룸', '끝없이 이어지는 누런 방과 웅웅거리는 형광등'],
-  ['constellation', '별자리', '별들이 하나씩 이어져 별자리를 그렸다 사라짐'],
+  ['constellation', '별자리', '실제 별자리의 별이 밝아지고 선이 이어지며 이름이 떠올랐다 사라짐'],
   ['lavalamp', '라바 램프', '말랑한 빛 덩어리가 천천히 오르내림'],
-  ['dna', 'DNA 나선', '이중 나선이 천천히 회전'],
+  ['dna', 'DNA 나선', '이중 나선이 천천히 회전, 가끔 한 구간이 풀렸다 닫힘'],
   ['pond', '빗방울 연못', '수면 위로 빗방울 동심원이 퍼짐'],
-  ['code', '코드 비', '희미한 코드 글자가 줄기처럼 흘러내림'],
+  ['code', '코드 비', '여러 깊이의 코드 줄기가 흘러내림, 가끔 멈추거나 깨짐'],
   ['circuit', '회로 기판', '회로선을 따라 빛 신호가 달려감'],
-  ['tunnel', '시공간 터널', '빛의 고리가 끝없이 다가오는 터널'],
+  ['tunnel', '시공간 터널', '휘어지며 소용돌이치는 빛의 터널, 끝의 빛을 향해 이따금 속도가 붙음'],
   ['deepsea', '심해', '희미한 빛줄기와 바다눈 사이로 스스로 빛나는 심해 생물들이 떠다님'],
   ['nightfire', '밤하늘 불꽃', '강 건너 마을 위로 불꽃놀이가 연이어 피어나 물에 비침'],
   ['aquarium', '수족관', '꼬리 흔드는 물고기들이 헤엄치고 기포가 보글'],
   ['life', '생명 게임', '빛나는 세포가 태어나고 스러지며, 글라이더가 꼬리를 끌고 지나감'],
-  ['bounce', '튕기는 로고', 'M 로고가 벽에 튕길 때마다 색이 바뀜 · 모서리에 맞으면 반짝!'],
-  ['pong', '혼자 하는 탁구', '양쪽 라켓이 알아서 공을 주고받음'],
+  ['bounce', '튕기는 로고', '앱 로고가 벽에 부딪힐 때마다 찌그러지며 색이 바뀜 · 모서리에 맞으면 반짝!'],
+  ['pong', '혼자 하는 탁구', '탁구대에서 두 라켓이 알아서 랠리 · 가끔 스매시, 공을 놓치면 심판 휘슬'],
   ['balloonsky', '풍선 하늘', '알록달록 풍선이 줄을 늘어뜨리고 둥실 떠오름'],
   ['skywhale', '하늘 고래', '새벽 구름 바다를 천천히 유영하는 거대한 고래 · 가끔 새끼와 함께'],
 ];
@@ -2615,22 +2615,13 @@ function createBg(canvas) {
       bg.items = Array.from({ length: Math.round(32 * area) }, () => ({ x: R() * w, y: R() * h, v: 6 + R() * 6, l: 12 + R() * 16, a: 0.5 + R() * 0.5 }));
       bg.storm = { next: bg.t + 90 + R() * 150, flash: -999, bolt: null }; // counted from now: a resize reseeds, and must not strike
     } else if (k === 'rain') bg.items = Array.from({ length: Math.round(22 * area) }, () => ({ x: R() * w, y: R() * h, v: 4 + R() * 5, l: 8 + R() * 14 }));
-    else if (k === 'network') bg.items = Array.from({ length: Math.min(70, Math.round(14 * area)) }, () => ({ x: R() * w, y: R() * h, vx: (R() - 0.5) * 0.35, vy: (R() - 0.5) * 0.35 }));
     else if (k === 'fireflies') bg.items = Array.from({ length: Math.round(9 * area) + 6 }, () => ({ x: R() * w, y: R() * h, vx: (R() - 0.5) * 0.3, vy: (R() - 0.5) * 0.3, ph: R() * 6, sp: 0.02 + R() * 0.03, r: 1.2 + R() * 1.6 }));
     else if (k === 'bokeh') bg.items = Array.from({ length: Math.round(3 * area) + 6 }, () => ({ x: R() * w, y: R() * h, vx: (R() - 0.5) * 0.12, vy: -0.05 - R() * 0.12, r: 18 + R() * 46, c: (R() * 3) | 0, a: 0.05 + R() * 0.09, ph: R() * 6 }));
-    else if (k === 'shooting') { bg.items = Array.from({ length: Math.round(30 * area) }, () => ({ x: R() * w, y: R() * h * 0.85, z: R(), ph: R() * 6 })); bg.meteors = []; }
-    else if (k === 'sunset') bg.items = Array.from({ length: Math.round(20 * area) }, () => ({ x: R() * w, y: R() * h * 0.45, z: R(), ph: R() * 6 }));
-    else if (k === 'blackhole') bg.items = Array.from({ length: Math.min(260, Math.round(60 * area) + 80) }, () => ({ r: 0.1 + R() * 0.9, a: R() * Math.PI * 2, z: R(), c: (R() * 3) | 0 }));
     else if (k === 'warp') bg.items = Array.from({ length: 160 }, () => ({ x: (R() - 0.5) * 2, y: (R() - 0.5) * 2, z: R(), pz: 0 }));
     else if (k === 'campfire') { bg.items = []; campfireVideo(); }
     else if (SCENE_BGS.includes(k)) { bg.items = []; bg.eyes = []; bg.ghost = null; bg.flick = 0; bg.scene = null; bg.st = null; bg.petals = []; }
     else if (k === 'lanterns') bg.items = Array.from({ length: Math.min(26, Math.round(0.6 * area) + 10) }, () => { const z = 0.25 + R() * 0.75; return { z, x: R() * w, y: R() * h * 1.1, v: (0.1 + z * 0.32) * Math.max(0.5, sc), s: (5 + z * 13) * sc, ph: R() * 6, sw: R() * 6 }; }).sort((a, b) => a.z - b.z);
-    else if (k === 'constellation') { bg.items = Array.from({ length: Math.round(30 * area) }, () => ({ x: R() * w, y: R() * h, z: R(), ph: R() * 6 })); bg.cons = []; }
     else if (k === 'lavalamp') bg.items = Array.from({ length: 7 }, (_, i) => ({ x: (0.15 + R() * 0.7) * w, y: R() * h, r: (50 + R() * 70) * sc, vy: (R() < 0.5 ? -1 : 1) * (0.15 + R() * 0.25) * Math.max(0.4, sc), ph: R() * 6, c: i % 3 }));
-    else if (k === 'code') { const fs = Math.max(8, 14 * sc); bg.fs = fs; bg.items = Array.from({ length: Math.ceil(w / (fs * 1.6)) }, (_, i) => ({ x: i * fs * 1.6 + R() * fs * 0.4, y: R() * h, v: (0.6 + R() * 1.6) * sc + 0.3, len: 6 + ((R() * 14) | 0), chars: [], t: 0 })); }
-    else if (k === 'tunnel') bg.items = Array.from({ length: 14 }, (_, i) => ({ z: i / 14, rot: R() * 6 }));
-    else if (k === 'bounce') { bg.items = [{ x: R() * w * 0.6, y: R() * h * 0.6, vx: 2 * Math.max(0.5, sc), vy: 1.45 * Math.max(0.5, sc), c: 0, flash: 0 }]; }
-    else if (k === 'pong') { bg.items = [{ x: w / 2, y: h / 2, vx: 3.2 * Math.max(0.4, sc), vy: 1.7 * Math.max(0.4, sc), l: h / 2, r: h / 2, sl: 0, sr: 0 }]; }
     else if (k === 'balloonsky') bg.items = Array.from({ length: Math.round(2.6 * area) + 6 }, () => { const z = 0.25 + R() * 0.75; return { z, x: R() * w, y: R() * h * 1.1, v: (0.18 + z * 0.55) * Math.max(0.4, sc), r: (4 + z * 10) * sc, ph: R() * 6, c: (R() * BALLOON_COLS.length) | 0 }; }).sort((a, b) => a.z - b.z);
     else bg.items = [];
   };
@@ -2770,28 +2761,6 @@ function drawBg(bg) {
       ctx.stroke();
       break;
     }
-    case 'network': {
-      const pts = bg.items;
-      for (const p of pts) {
-        p.x += p.vx; p.y += p.vy;
-        if (p.x < 0 || p.x > w) p.vx *= -1;
-        if (p.y < 0 || p.y > h) p.vy *= -1;
-      }
-      ctx.lineWidth = 1;
-      for (let i = 0; i < pts.length; i++) {
-        for (let j = i + 1; j < pts.length; j++) {
-          const dx = pts[i].x - pts[j].x; const dy = pts[i].y - pts[j].y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 < 120 * 120) {
-            ctx.strokeStyle = A(a0, 0.28 * (1 - Math.sqrt(d2) / 120));
-            ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[j].x, pts[j].y); ctx.stroke();
-          }
-        }
-      }
-      ctx.fillStyle = A(a1, 0.6);
-      for (const p of pts) { ctx.beginPath(); ctx.arc(p.x, p.y, 1.6, 0, Math.PI * 2); ctx.fill(); }
-      break;
-    }
     case 'fireflies':
       ctx.globalCompositeOperation = 'lighter';
       for (const f of bg.items) {
@@ -2825,67 +2794,6 @@ function drawBg(bg) {
         ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalCompositeOperation = 'source-over';
-      break;
-    }
-    case 'shooting':
-      for (const s of bg.items) {
-        s.ph += 0.02 + s.z * 0.03;
-        ctx.fillStyle = `rgba(230,235,255,${(0.2 + s.z * 0.5) * (0.6 + 0.4 * Math.sin(s.ph))})`;
-        ctx.beginPath(); ctx.arc(s.x, s.y, 0.5 + s.z * 1.1, 0, Math.PI * 2); ctx.fill();
-      }
-      if (Math.random() < 0.012) { bg.meteors.push({ x: Math.random() * w * 0.8 + w * 0.2, y: Math.random() * h * 0.35, life: 1 }); if (bg.canvas.classList.contains('bg-layer')) ambSfx('meteor'); }
-      bg.meteors = bg.meteors.filter((m) => (m.life -= 0.025) > 0);
-      for (const m of bg.meteors) {
-        const len = 90;
-        m.x -= 7; m.y += 3.2;
-        const g = ctx.createLinearGradient(m.x, m.y, m.x + len, m.y - len * 0.45);
-        g.addColorStop(0, `rgba(255,255,255,${0.9 * m.life})`);
-        g.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.strokeStyle = g; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(m.x + len, m.y - len * 0.45); ctx.stroke();
-      }
-      break;
-    case 'sunset': {
-      const k = (Math.sin(t * 0.004) + 1) / 2; // slow drift between dusk tones
-      const g = ctx.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, `rgba(${Math.round(40 + 30 * k)}, ${Math.round(30 + 10 * k)}, ${Math.round(90 - 20 * k)}, 0.35)`);
-      g.addColorStop(0.55, `rgba(${Math.round(180 + 40 * k)}, ${Math.round(80 + 30 * k)}, ${Math.round(110 - 30 * k)}, 0.28)`);
-      g.addColorStop(1, `rgba(255, ${Math.round(150 + 40 * k)}, 90, 0.32)`);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-      const sun = ctx.createRadialGradient(w * 0.7, h * 0.95, 0, w * 0.7, h * 0.95, h * 0.5);
-      sun.addColorStop(0, 'rgba(255, 190, 120, 0.35)');
-      sun.addColorStop(1, 'rgba(255, 190, 120, 0)');
-      ctx.fillStyle = sun; ctx.fillRect(0, 0, w, h);
-      for (const s of bg.items) {
-        s.ph += 0.02;
-        ctx.fillStyle = `rgba(255,245,230,${(0.15 + s.z * 0.45) * (0.5 + 0.5 * Math.sin(s.ph)) * (1 - s.y / (h * 0.45))})`;
-        ctx.beginPath(); ctx.arc(s.x, s.y, 0.5 + s.z, 0, Math.PI * 2); ctx.fill();
-      }
-      break;
-    }
-    case 'blackhole': {
-      const cx = w * 0.72, cy = h * 0.42, R0 = Math.min(w, h) * 0.5, ev = R0 * 0.09;
-      ctx.globalCompositeOperation = 'lighter';
-      const glow = ctx.createRadialGradient(cx, cy, ev, cx, cy, R0 * 0.6);
-      glow.addColorStop(0, A(a1, 0.22)); glow.addColorStop(0.3, A(a0, 0.08)); glow.addColorStop(1, A(a0, 0));
-      ctx.fillStyle = glow; ctx.fillRect(0, 0, w, h);
-      for (const p of bg.items) {
-        const r = ev + p.r * R0;
-        p.a += 0.004 + 0.035 / (p.r * 8 + 0.4); // faster near the centre
-        p.r -= 0.0009 + 0.002 * (1 - p.r);
-        if (p.r < 0.02) { p.r = 0.85 + Math.random() * 0.15; p.a = Math.random() * Math.PI * 2; }
-        const x = cx + Math.cos(p.a) * r, y = cy + Math.sin(p.a) * r * 0.32; // tilted disk
-        const front = Math.sin(p.a) > 0;
-        const c = [a0, a1, a2][p.c];
-        ctx.fillStyle = A(c, (0.15 + 0.5 * (1 - p.r)) * (front ? 1 : 0.5));
-        ctx.beginPath(); ctx.arc(x, y, 0.6 + (1 - p.r) * 1.6, 0, Math.PI * 2); ctx.fill();
-      }
-      ctx.globalCompositeOperation = 'source-over';
-      // light mode inverts this canvas: a pale, half-clear core turns into a soft dark one that text still reads over
-      ctx.fillStyle = isLight() ? 'rgba(197,192,180,0.38)' : 'rgba(0,0,0,0.85)';
-      ctx.beginPath(); ctx.arc(cx, cy, ev, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = A(a2, 0.35 + 0.1 * Math.sin(t * 0.05)); ctx.lineWidth = 1.5; // photon ring
-      ctx.beginPath(); ctx.arc(cx, cy, ev * 1.12, 0, Math.PI * 2); ctx.stroke();
       break;
     }
     case 'warp': {
@@ -2935,43 +2843,6 @@ function drawBg(bg) {
       ctx.globalAlpha = 1;
       break;
     }
-    case 'constellation': {
-      for (const s of bg.items) {
-        s.ph += 0.02;
-        ctx.fillStyle = `rgba(230,235,255,${(0.2 + s.z * 0.5) * (0.6 + 0.4 * Math.sin(s.ph))})`;
-        ctx.beginPath(); ctx.arc(s.x, s.y, 0.5 + s.z * 1.1, 0, Math.PI * 2); ctx.fill();
-      }
-      if (bg.cons.length < 2 && t % 90 === 0 && bg.items.length > 6) { // a new figure: a walk through nearby stars
-        const pick = [bg.items[(Math.random() * bg.items.length) | 0]];
-        for (let i = 0; i < 5; i++) {
-          const last = pick[pick.length - 1];
-          const next = bg.items.filter((s) => !pick.includes(s)).sort((p, q) => Math.hypot(p.x - last.x, p.y - last.y) - Math.hypot(q.x - last.x, q.y - last.y))[(Math.random() * 2) | 0];
-          if (!next || Math.hypot(next.x - last.x, next.y - last.y) > Math.min(w, h) * 0.35) break;
-          pick.push(next);
-        }
-        if (pick.length > 2) bg.cons.push({ pts: pick, age: 0 });
-      }
-      for (const c of bg.cons) {
-        c.age += 1;
-        const draw = Math.min(c.pts.length - 1, c.age / 25); // segments drawn one by one
-        const al = c.age < 300 ? 0.45 : Math.max(0, 0.45 - (c.age - 300) / 120);
-        ctx.strokeStyle = A(a1, al); ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(c.pts[0].x, c.pts[0].y);
-        for (let i = 1; i <= Math.ceil(draw); i++) {
-          const f = Math.min(1, draw - (i - 1));
-          const p = c.pts[i - 1], q = c.pts[i];
-          ctx.lineTo(p.x + (q.x - p.x) * f, p.y + (q.y - p.y) * f);
-        }
-        ctx.stroke();
-        for (let i = 0; i <= Math.floor(draw); i++) {
-          const p = c.pts[i];
-          ctx.fillStyle = A(a2, Math.min(1, al * 1.6));
-          ctx.beginPath(); ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2); ctx.fill();
-        }
-      }
-      bg.cons = bg.cons.filter((c) => c.age < 420);
-      break;
-    }
     case 'lavalamp':
       ctx.globalCompositeOperation = 'lighter';
       for (const b of bg.items) {
@@ -2989,96 +2860,6 @@ function drawBg(bg) {
       }
       ctx.globalCompositeOperation = 'source-over';
       break;
-    case 'dna': {
-      const small = w < 400; // previews: centre it and pack the rungs closer
-      const cx = small ? w / 2 : w * 0.86, amp = small ? Math.min(14, h * 0.35) : Math.min(70, w * 0.06), step = small ? 6 : 14;
-      for (let y = -step; y < h + step; y += step) {
-        const ph = y * 0.035 + t * 0.03;
-        const x1 = cx + Math.sin(ph) * amp, x2 = cx + Math.sin(ph + Math.PI) * amp;
-        const d1 = (Math.cos(ph) + 1) / 2, d2 = 1 - d1; // depth: the strand in front is brighter
-        ctx.strokeStyle = `rgba(200,210,255,${0.06 + 0.08 * Math.min(d1, d2)})`; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
-        ctx.fillStyle = A(a0, 0.15 + 0.4 * d1);
-        ctx.beginPath(); ctx.arc(x1, y, 1.5 + d1 * 2.2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = A(a2, 0.15 + 0.4 * d2);
-        ctx.beginPath(); ctx.arc(x2, y, 1.5 + d2 * 2.2, 0, Math.PI * 2); ctx.fill();
-      }
-      break;
-    }
-    case 'code': { // columns of faint glyphs falling, the head brightest
-      const GL = '01アイウエオカキクケコサシスセソ{}[]<>/=+*#$%&;:ABCDEF';
-      ctx.font = `${Math.round(bg.fs)}px 'Cascadia Mono', Consolas, Menlo, monospace`;
-      ctx.textAlign = 'center';
-      for (const c of bg.items) {
-        c.y += c.v;
-        if (c.y - c.len * bg.fs > h) { c.y = -Math.random() * h * 0.3; c.len = 6 + ((Math.random() * 14) | 0); }
-        for (let i = 0; i < c.len; i++) {
-          if (!c.chars[i] || Math.random() < 0.02) c.chars[i] = GL[(Math.random() * GL.length) | 0];
-          const yy = c.y - i * bg.fs;
-          if (yy < -bg.fs || yy > h + bg.fs) continue;
-          const al = i === 0 ? 0.55 : 0.28 * (1 - i / c.len);
-          ctx.fillStyle = i === 0 ? `rgba(220,255,230,${al})` : A(a0, al);
-          ctx.fillText(c.chars[i], c.x, yy);
-        }
-      }
-      break;
-    }
-    case 'tunnel': { // rings rushing toward you, twisting
-      const cx = w / 2, cy = h / 2, R0 = Math.hypot(w, h) * 0.6;
-      ctx.lineWidth = 1.5;
-      for (const r of bg.items) {
-        r.z += 0.004; if (r.z > 1) { r.z -= 1; r.rot = Math.random() * 6; }
-        const s = r.z ** 2.2 * R0;
-        const al = Math.min(1, r.z * 1.6) * (1 - r.z) * 0.6;
-        const c = [a0, a1, a2][Math.floor(r.z * 3) % 3];
-        ctx.strokeStyle = A(c, al);
-        ctx.save(); ctx.translate(cx, cy); ctx.rotate(r.rot + r.z * 2 + t * 0.002);
-        ctx.beginPath();
-        for (let i = 0; i <= 6; i++) { const a = (i / 6) * Math.PI * 2; ctx[i ? 'lineTo' : 'moveTo'](Math.cos(a) * s, Math.sin(a) * s * 0.7); }
-        ctx.stroke(); ctx.restore();
-      }
-      break;
-    }
-    case 'bounce': { // the M logo drifting and bouncing — a new colour on every wall, a flash on a corner hit
-      const b = bg.items[0];
-      const fs = Math.max(18, 54 * (bg.sc || 1)); const lw = fs * 1.05; const lh = fs * 0.95;
-      b.x += b.vx; b.y += b.vy;
-      let hitX = false; let hitY = false;
-      if (b.x < 0 || b.x + lw > w) { b.vx *= -1; b.x = Math.max(0, Math.min(w - lw, b.x)); hitX = true; }
-      if (b.y < 0 || b.y + lh > h) { b.vy *= -1; b.y = Math.max(0, Math.min(h - lh, b.y)); hitY = true; }
-      if (hitX || hitY) { b.c = (b.c + 1) % 5; if (bg.canvas.classList.contains('bg-layer')) ambSfx(hitX && hitY ? 'corner' : 'boing'); }
-      if (hitX && hitY) b.flash = 1; // the corner!
-      const COLS = [a0, a1, a2, [96, 220, 160], [255, 214, 90]];
-      ctx.font = `900 ${Math.round(fs)}px 'Segoe UI', 'Pretendard', sans-serif`; ctx.textBaseline = 'top';
-      ctx.fillStyle = A(COLS[b.c], 0.4 + b.flash * 0.5);
-      ctx.fillText('M', b.x, b.y);
-      if (b.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${b.flash * 0.08})`; ctx.fillRect(0, 0, w, h); b.flash *= 0.92; if (b.flash < 0.02) b.flash = 0; }
-      break;
-    }
-    case 'pong': { // two paddles rallying on their own (each one a little slow to react)
-      const p = bg.items[0];
-      const ph = Math.max(20, h * 0.16); const pw = Math.max(3, w * 0.008); const m = Math.max(8, w * 0.03);
-      p.x += p.vx; p.y += p.vy;
-      if (p.y < 4 || p.y > h - 4) { // put it back inside and send it away from the wall
-        p.vy = p.y < 4 ? Math.abs(p.vy) : -Math.abs(p.vy); p.y = Math.max(4, Math.min(h - 4, p.y));
-        if (bg.canvas.classList.contains('bg-layer')) ambSfx('wall');
-      }
-      const wasVx = p.vx;
-      p.l += (p.y - p.l) * 0.06; p.r += (p.y - p.r) * 0.06;
-      if (p.vx < 0 && p.x < m + pw && Math.abs(p.y - p.l) < ph / 2) { p.vx = Math.abs(p.vx); p.vy += (p.y - p.l) * 0.03; }
-      if (p.vx > 0 && p.x > w - m - pw && Math.abs(p.y - p.r) < ph / 2) { p.vx = -Math.abs(p.vx); p.vy += (p.y - p.r) * 0.03; }
-      if (Math.sign(wasVx) !== Math.sign(p.vx) && bg.canvas.classList.contains('bg-layer')) ambSfx('paddle'); // only when the ball really turns
-      if (p.x < 0 || p.x > w) { if (p.x < 0) p.sr++; else p.sl++; p.x = w / 2; p.y = h / 2; p.vy = (Math.random() - 0.5) * 3; } // a point!
-      p.vy = Math.max(-4, Math.min(4, p.vy));
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = A(a0, 0.35); ctx.fillRect(m - pw, p.l - ph / 2, pw, ph);
-      ctx.fillStyle = A(a2, 0.35); ctx.fillRect(w - m, p.r - ph / 2, pw, ph);
-      ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillRect(p.x - pw / 2, p.y - pw / 2, pw, pw);
-      ctx.font = `700 ${Math.round(Math.max(12, h * 0.07))}px 'Cascadia Mono', Consolas, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillText(`${p.sl}   ${p.sr}`, w / 2, h * 0.05);
-      ctx.textAlign = 'start';
-      break;
-    }
     case 'campfire': { // 캠프파이어: footage of a fire by the tents (CC0), painted into soft flat tones and cut out — only the fire, its light and the camp's shapes are drawn, the theme's background stays
       const v = campfireVideo();
       if (!(v.readyState >= 2 && v.videoWidth)) break;
@@ -5824,9 +5605,9 @@ const PV_BG_WARM = 45; // a background's still: how it looks after 1.5 s (its fr
 /* backgrounds known by something that 1.5 s may not show yet: bring it on, then run so many frames more */
 const PV_BG_STILL = {
   thunder: (bg) => { bg.storm.next = bg.t + 1; return 15; }, // a bolt, the clouds lit
-  shooting: (bg) => { bg.meteors.push({ x: bg.w * 0.92, y: bg.h * 0.08, life: 1 }); return 7; },
-  constellation: () => 150, // a figure being drawn
 };
+/* a background kept in its own module (scenes/) can bring its own: window.BG_PV_STILL[kind] */
+const pvStillHook = (kind) => (window.BG_PV_STILL && window.BG_PV_STILL[kind]) || PV_BG_STILL[kind];
 function previewBg(kind, el) {
   if (kind === 'none') { el.innerHTML = '<span class="pv-none">—</span>'; return () => {}; }
   const canvas = h('canvas', 'pv-canvas bg-pv');
@@ -5839,7 +5620,7 @@ function previewBg(kind, el) {
     bg.set(kind);
     bg.stop(); // set() starts the loop: only a preview that is pointed at runs it
     bg.warmLeft = PV_BG_WARM;
-    bg.tweaked = !PV_BG_STILL[kind];
+    bg.tweaked = !pvStillHook(kind);
   };
   // run the scene toward its still, ~8 ms at a time: some build their scenery over many frames (a few ms each)
   const still = () => {
@@ -5848,7 +5629,7 @@ function previewBg(kind, el) {
     while (bg.warmLeft > 0) {
       bg.t += 1;
       drawBg(bg);
-      if (--bg.warmLeft === 0 && !bg.tweaked) { bg.tweaked = true; bg.warmLeft = PV_BG_STILL[kind](bg); }
+      if (--bg.warmLeft === 0 && !bg.tweaked) { bg.tweaked = true; bg.warmLeft = pvStillHook(kind)(bg); }
       if (performance.now() - t0 > 8) break;
     }
     if (bg.warmLeft > 0) return 'more';

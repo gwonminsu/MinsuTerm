@@ -843,9 +843,12 @@ body.grabbing, body.grabbing * { cursor: grabbing !important; }
 .composer-field .mt-cursor:is(.kind-bar-thin, .kind-bar, .kind-bar-thick)::after { content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 3px; background: var(--cc); }
 .composer-field .mt-cursor.kind-bar-thin::after { width: 1px; }
 .composer-field .mt-cursor.kind-bar::after { width: 2px; }
+/* the caret's measuring copy: as long as the text, so it is held to no height (its text still lays out and is measured)
+   or a long draft would make the modal itself scroll, past empty space under the textarea */
 .composer-mirror {
   position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none;
   white-space: pre-wrap; overflow-wrap: break-word; border-style: solid; border-color: transparent; box-sizing: border-box;
+  height: 0; overflow: hidden;
 }
 .composer-fx { position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; border-radius: 10px; }
 .composer-hint { display: flex; gap: 16px; margin-top: 8px; color: var(--dim); font-size: 11.5px; }
