@@ -1,0 +1,46 @@
+/* 작업 중 테두리: 지퍼 · 컨베이어 벨트 · 톱니 체인 · 도미노 — drawn by fx/wg-more.js (window.WG_MORE) inside the
+   pane's .wg-run layer; everything below moves by transform / opacity (compositor); the zipper's and the dominoes'
+   canvas is repainted only in small patches. They draw their own frame: no ring (::before stays empty). */
+
+/* room: the terminal keeps clear of a wide frame while that style is on (data-wg is empty when the frame is off).
+   A lone pane draws part of the frame in the stage's margin; a tile has none, so it gives more. */
+.term-host[data-wg="zipper"]:not(.tiled) { padding: 11px; }
+#terminals.grid .term-host.tiled[data-wg="zipper"] { padding: 11px 12px 12px; }
+.term-host[data-wg="gears"]:not(.tiled) { padding: 4px; }
+#terminals.grid .term-host.tiled[data-wg="gears"] { padding: 6px; }
+.term-host[data-wg="conveyor"]:not(.tiled) { padding: 16px; }
+#terminals.grid .term-host.tiled[data-wg="conveyor"] { padding: 17px; }
+.term-host[data-wg="domino"]:not(.tiled) { padding: 10px; }
+#terminals.grid .term-host.tiled[data-wg="domino"] { padding: 10px; }
+
+/* drawings that never change: their own layer, painted once */
+.wg-run .wm { position: absolute; left: 0; top: 0; display: block; overflow: visible; pointer-events: none; will-change: transform; }
+/* a straight strip or a corner piece of a chain / belt: only its own stretch shows */
+.wg-run .wm-clip { position: absolute; overflow: hidden; transform-origin: 0 0; pointer-events: none; }
+.wg-run .wm-clip > svg { position: absolute; display: block; overflow: visible; }
+/* something riding the frame (orbit keyframes): its (0, 0) on the line */
+.wg-run .wm-mv { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; will-change: transform; pointer-events: none; }
+.wg-run .wm-mv > svg { position: absolute; display: block; overflow: visible; }
+.wg-run .wm-pt { position: absolute; display: block; overflow: visible; transform-origin: 50% 50%; }
+.wg-run .wm-spin { transform-origin: 50% 50%; animation-name: wmSpin; animation-timing-function: linear; animation-iteration-count: infinite; }
+@keyframes wmSpin { to { transform: rotate(360deg); } }
+
+/* 지퍼: the pull hangs from the slider's bridge pointing forward (it lags at the corners: per-lap keyframes) and jiggles a little */
+.wg-run .wm-tab { position: absolute; width: 0; height: 0; transform-origin: 0 0; }
+.wg-run .wm-tab > svg { position: absolute; display: block; overflow: visible; }
+.wg-run .wm-wob { animation: wmWob .46s ease-in-out infinite alternate; }
+@keyframes wmWob { from { transform: rotate(-2.2deg); } to { transform: rotate(2.2deg); } }
+
+/* 톱니 체인 corners · 컨베이어 벨트 rollers: drawn frames side by side in one strip, stepping behind a window */
+.wg-run .wm-win { position: absolute; overflow: hidden; transform-origin: 0 0; pointer-events: none; }
+.wg-run .wm-win > svg { position: absolute; left: 0; top: 0; display: block; will-change: transform; }
+
+/* 도미노: the eight falling tiles (a slot on the ledge, the tile turning on its front foot); the machine's pusher and beacon */
+.wg-run .wd-a { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; will-change: transform; }
+.wg-run .wd-b { position: absolute; display: block; transform-origin: 100% 100%; border-radius: 1px 1px 0 0;
+  box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .42), inset 0 .7px 0 rgba(255, 255, 255, .35); will-change: transform; }
+.wg-run .wm-push { background: #59616d; border-radius: .4px; box-shadow: inset 0 0 0 .4px #2b3139; }
+@keyframes wmPush { 0% { transform: translateX(0); } 12% { transform: translateX(-70%); } 45%, 100% { transform: translateX(0); } }
+.wg-run .wm-beacon { border-radius: 50% 50% 20% 20%; background: #ff922b; box-shadow: 0 0 3px 1px rgba(255, 146, 43, .75); animation: wmBeacon .9s steps(1, end) infinite; }
+@keyframes wmBeacon { 0% { opacity: 1; } 50%, 100% { opacity: .28; } }
+.pv-pane .wg-run .wm-beacon { box-shadow: 0 0 1px .5px rgba(255, 146, 43, .7); }

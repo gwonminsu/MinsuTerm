@@ -509,6 +509,9 @@ const BG_KINDS = [
   ['pong', '혼자 하는 탁구', '탁구대에서 두 라켓이 알아서 랠리 · 가끔 스매시, 공을 놓치면 심판 휘슬'],
   ['balloonsky', '풍선 하늘', '알록달록 풍선이 줄을 늘어뜨리고 둥실 떠오름'],
   ['skywhale', '하늘 고래', '새벽 구름 바다를 천천히 유영하는 거대한 고래 · 가끔 새끼와 함께'],
+  ['domino', '도미노', '탁자 위 끝없는 도미노 코스 · 곡선·갈림길·계단·나선·다리를 따라 촤라락 쓰러지며 그림이 드러나고 종이 울림'],
+  ['spiderweb', '거미줄', '새벽 숲, 바람에 띄운 첫 실부터 거미가 거미줄을 짓고 이슬이 맺힘 · 걸린 벌레는 실로 감아 허브에서 먹음'],
+  ['worker', '작업하는 일꾼', '미니어처 공방 · 에이전트가 일하면 등불 아래 뚝딱뚝딱, 기다리면 꾸벅꾸벅, 끝나면 완성품을 선반에'],
 ];
 
 /* ---------- effect engine ---------- */
@@ -3267,7 +3270,7 @@ const SOUND_KINDS = [
   ['gross', '더러운 소리', '글자=뿡·뽀옹 (매번 다름) · Space=끄으억 트림 · ⌫=후루룩 · ⇧⏎=철퍽 · Enter=대폭발'],
   ['horror', '공포', '거꾸로 차오르는 피아노 · Space=심장 박동 · ⌫=쇠 긁는 소리 · ⇧⏎=귓가의 속삭임 · Enter=비명 현악'],
   ['gun', '총', '글자=탕! · Space=장전 (탄창 탁 + 슬라이드 철컥) · ⌫=탄피 떨어짐 · ⇧⏎=노리쇠 철컥 · Enter=샷건+펌프'],
-  ['edm', 'EDM', '치는 대로 신스 아르페지오 · Space=킥 · ⌫=워블 베이스 · ⇧⏎=라이저 · Enter=드롭!'],
+  ['edm', 'EDM', '치는 대로 멜로딕 테크노 아르페지오 · 계속 치면 비트가 깔림 · Space=킥 · ⌫=테이프 스톱 · ⇧⏎=빌드업 · Enter=드롭!'],
   ['horse', '말 달리기', '글자=다그닥 말발굽 · Space=이럇! · ⌫=푸르륵 · ⇧⏎=워워~ · Enter=질주하다 히히히힝'],
   ['scream', '비명', '글자=꺅! · Space=으아악 · ⌫=헉(숨 들이킴) · ⇧⏎=히익! · Enter=복도에 울리는 긴 비명'],
   ['meow', '냥냥이', '칠 때마다 "야옹" · Space=그르릉 · ⌫=하악 · ⇧⏎="므릅?" · Enter=당당한 야~옹'],
@@ -3495,6 +3498,7 @@ function playKeySound(kind, key = 'key', force = false) {
     const ctx = audioCtx;
     if (ctx.state === 'suspended') ctx.resume(); // the audio engine can doze off after a quiet while
     const t0 = ctx.currentTime + 0.005;
+    if (kind === 'edm' && window.EDM_SOUND) { window.EDM_SOUND.play(ctx, ctx.destination, key, { volume: Math.max(0, Math.min(1, Number(S.settings.typingVolume ?? 0.4))) }); return; } // EDM: its own engine, groove and mix (fx/edm-sound.js)
     const master = ctx.createGain();
     master.gain.value = Math.max(0, Math.min(1, Number(S.settings.typingVolume ?? 0.4))) * (key === 'enter' ? 1.2 : 1);
     master.connect(ctx.destination);
@@ -4612,88 +4616,6 @@ function playKeySound(kind, key = 'key', force = false) {
       return;
     }
 
-    if (kind === 'edm') {
-      // EDM: typing plays an arpeggio over a 4-chord loop (Am · F · C · G) on a bright supersaw pluck,
-      // through a dotted-eighth echo and a big room — so fast typing turns into a track.
-      // space = kick + sub, ⌫ = a wobble-bass "wub", ⇧⏎ = a build-up riser, ⏎ = THE DROP
-      const CHORDS = [[220, 261.63, 329.63], [174.61, 220, 261.63], [261.63, 329.63, 392], [196, 246.94, 293.66]];
-      const ROOTS = [55, 43.65, 65.41, 49];
-      playKeySound.edm = playKeySound.edm ?? -1;
-      // the FX bus: echo (dotted 1/8 at 128 bpm ≈ 0.35 s) and a hall
-      const fx = ctx.createGain(); fx.gain.value = 1;
-      const echo = ctx.createDelay(1); echo.delayTime.value = 0.35;
-      const efb = ctx.createGain(); efb.gain.value = 0.38;
-      const elp = filt('lowpass', 3500);
-      fx.connect(echo); echo.connect(elp); elp.connect(efb); efb.connect(echo);
-      const ewet = ctx.createGain(); ewet.gain.value = 0.42; elp.connect(ewet); ewet.connect(out);
-      dropNodes(12000, efb, echo, elp, ewet);
-      const hall = cathedral(ctx); const hs = ctx.createGain(); hs.gain.value = master.gain.value * 0.35; fx.connect(hs); hs.connect(hall);
-      // a pump: sustained sounds duck and swell back like a side-chained mix
-      const pump = (g, at, peak, len) => {
-        const T0 = t0 + at;
-        g.gain.setValueAtTime(0.0001, T0); g.gain.exponentialRampToValueAtTime(peak, T0 + 0.006);
-        for (let k = 0.23; k < len; k += 0.235) { g.gain.setValueAtTime(peak * 0.25, T0 + k); g.gain.linearRampToValueAtTime(peak, T0 + k + 0.17); }
-        g.gain.exponentialRampToValueAtTime(0.0001, T0 + len);
-      };
-      const supersaw = (freqs, at, len, peak, c0, c1, pumped = false) => {
-        const lp = filt('lowpass', c0, 5);
-        lp.frequency.setValueAtTime(c0, t0 + at); lp.frequency.exponentialRampToValueAtTime(c1, t0 + at + len);
-        const g = ctx.createGain();
-        if (pumped) pump(g, at, peak, len);
-        else { g.gain.setValueAtTime(0.0001, t0 + at); g.gain.exponentialRampToValueAtTime(peak, t0 + at + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + len); }
-        lp.connect(g); g.connect(out); g.connect(fx);
-        for (const f of freqs) {
-          for (const det of [-22, -11, -4, 4, 11, 22]) {
-            const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det;
-            const og = ctx.createGain(); og.gain.value = 1 / (6 * freqs.length);
-            o.connect(og); og.connect(lp); o.start(t0 + at); o.stop(t0 + at + len + 0.02);
-          }
-        }
-      };
-      const kick = (at = 0, peak = 1) => { osc('sine', 180, 44, peak, 0.34, at); osc('sine', 58, 42, peak * 0.6, 0.3, at + 0.02); nz('highpass', 4500, 0.7, 0.35 * peak, 0.006, at); };
-      const clap = (at) => { [0, 0.01, 0.022].forEach((d) => nz('bandpass', 1500, 1.4, 0.55, 0.035, at + d)); nz('bandpass', 1300, 1, 0.3, 0.18, at + 0.03, fx); };
-      if (key === 'key') {
-        playKeySound.edm = (playKeySound.edm + 1) % 16;
-        const step = playKeySound.edm;
-        const chord = CHORDS[Math.floor(step / 4)];
-        const ARP = [0, 2, 1, 2];
-        const f = chord[ARP[step % 4]] * (step % 8 < 4 ? 2 : 4); // the arp climbs an octave every other bar
-        supersaw([f], 0, 0.2, 0.42, 7500, 600);
-        if (step % 4 === 0) { // each new chord: the bass moves and a soft hat ticks
-          osc('sawtooth', ROOTS[Math.floor(step / 4)] * 2, ROOTS[Math.floor(step / 4)] * 2, 0.16, 0.25);
-          nz('highpass', 8000, 0.7, 0.12, 0.03);
-        }
-      } else if (key === 'space') {
-        kick(0, 1.15);
-      } else if (key === 'back') { // wub: a fat bass through a wobbling filter
-        const root = ROOTS[Math.max(0, Math.floor(Math.max(0, playKeySound.edm) / 4))];
-        const lp = filt('lowpass', 300, 10);
-        const lfo = ctx.createOscillator(); lfo.frequency.value = 8; const ld = ctx.createGain(); ld.gain.value = 1100;
-        lfo.connect(ld); ld.connect(lp.frequency);
-        const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.55, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.32);
-        for (const det of [-12, 12]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = root * 2; o.detune.value = det; o.connect(lp); o.start(t0); o.stop(t0 + 0.34); }
-        lp.connect(g); g.connect(out); lfo.start(t0); lfo.stop(t0 + 0.34);
-      } else if (key === 'newline') { // build-up: noise sweeping up, a climbing saw, a snare roll speeding up
-        sweep(300, 10000, 0, 0.5, 0.9, 1.4);
-        osc('sawtooth', 200, 1600, 0.12, 0.5);
-        [0, 0.12, 0.22, 0.3, 0.36, 0.41, 0.45].forEach((at, i) => nz('bandpass', 1800, 1, 0.12 + i * 0.05, 0.04, at));
-      } else { // THE DROP
-        const step = Math.max(0, playKeySound.edm);
-        const ci = Math.floor(step / 4);
-        const chord = CHORDS[ci];
-        kick(0, 1.25); clap(0.235); kick(0.47, 1.1); clap(0.705);
-        supersaw(chord.map((f) => f * 2).concat(chord.map((f) => f * 4)), 0, 1.3, 0.55, 600, 9000, true); // the filter rips open
-        for (const det of [-18, 18]) { // reese bass: two detuned saws growling against each other
-          const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = ROOTS[ci]; o.detune.value = det;
-          const lp = filt('lowpass', 420, 2); const g = ctx.createGain(); pump(g, 0, 0.32, 1.2);
-          o.connect(lp); lp.connect(g); g.connect(out); o.start(t0); o.stop(t0 + 1.25);
-        }
-        nz('highpass', 4500, 0.5, 0.45, 1.6, 0, fx); // crash
-        sweep(9000, 300, 0, 0.6, 0.5, 1.2); // impact sweep down
-      }
-      return;
-    }
-
     if (kind === 'sword') {
       // 검술: letters = quick swish, space = heavy slash, ⌫ = blade slides back into the sheath,
       // ⇧⏎ = drawing the sword (shiiing), ⏎ = a full slash that clashes and rings
@@ -5229,6 +5151,10 @@ const WG_KINDS = [
   ['relay', '계주 이어달리기', '🏃 육상 트랙을 따라 네 명이 바통을 이어 달림'],
   ['santa', '산타 배달', '🎅 눈 쌓인 길을 썰매로 돌며 집마다 선물을 던져 넣음'],
   ['chase', '냠냠 추격전', '😋 노란 먹보가 점을 먹으며 돌고 꼬마 유령들이 뒤쫓음'],
+  ['zipper', '지퍼', '🤐 살짝 벌어진 지퍼를 손잡이가 돌며 맞물려 닫고 반대쪽 손잡이가 다시 엶'],
+  ['conveyor', '컨베이어 벨트', '📦 롤러 위로 도는 벨트가 상자들을 실어 나름'],
+  ['gears', '톱니 체인', '⚙️ 네 모서리 톱니바퀴에 롤러 체인이 맞물려 감겨 돌아감'],
+  ['domino', '도미노', '🁢 도미노가 줄줄이 쓰러지고 뒤따르는 기계가 하나씩 다시 세움'],
 ];
 /**
  * An ant seen from above, heading right: six legs in the ant's tripod gait (front & back on one side with the
@@ -5332,6 +5258,7 @@ const WG_RUNNERS = {
   santa: () => '<em class="wr-santa">' + santaSvg() + '</em>' + Array.from({ length: 8 }, (_, i) => `<b class="wr-house" data-i="${i}">${houseSvg(i)}</b>`).join(''),
   vine: () => ['🌸', '🌼', '🌷', '🌸', '🌺', '🌼', '🌷', '🌸'].map((e, i) => `<b class="wr-f" style="--k:${i};--d:${(i * 12.5 + 4).toFixed(1)}%">${e}</b>`).join('')
     + ['🍃', '🍃', '🍃', '🍃'].map((e, i) => `<b class="wr-leaf" style="--d:${(i * 25 + 15).toFixed(1)}%">${e}</b>`).join(''),
+  ...(window.WG_MORE ? window.WG_MORE.runners : {}), // 지퍼 · 컨베이어 벨트 · 톱니 체인 · 도미노 (fx/wg-more.js)
 };
 /** Keep the runner layer of a pane (or a preview) in step with its frame style. */
 function syncRunners(el, style, on) {
@@ -5343,7 +5270,7 @@ function syncRunners(el, style, on) {
   else { layer = document.createElement('div'); layer.className = 'wg-run'; el.appendChild(layer); }
   layer.dataset.style = style;
   layer.innerHTML = make();
-  const fit = style === 'relay' ? relayGeometry : style === 'santa' ? santaGeometry : RUN_CFG[style] ? runnerGeometry : null;
+  const fit = window.WG_MORE?.fit[style] || (style === 'relay' ? relayGeometry : style === 'santa' ? santaGeometry : RUN_CFG[style] ? runnerGeometry : null);
   if (style === 'santa') startSantaRound(layer);
   if (fit) {
     fit(layer);
@@ -6214,7 +6141,7 @@ function updateTileHead(tab) {
     host.classList.toggle('agent-codex', tab.agent === 'codex');
     for (const s of Object.keys(STATUS_TEXT)) host.classList.toggle(`st-${s}`, tab.status === s);
     host.classList.toggle('busy', !!S.settings.workGlow && !!tab.agent && tab.status === 'working');
-    host.dataset.wg = S.settings.workGlowStyle || 'orbit';
+    host.dataset.wg = S.settings.workGlow ? S.settings.workGlowStyle || 'orbit' : ''; // empty when off: a wide frame's room (glow-b.css) goes too
     syncRunners(host, host.dataset.wg, host.classList.contains('busy'));
     const hs = host.querySelector('.tile-head .ico-slot');
     if (hs && hs.dataset.name !== iname) { hs.innerHTML = icon(iname); hs.dataset.name = iname; }
@@ -6840,9 +6767,14 @@ const PROMPT_STYLES = [
   ['sparkle', '별가루', '모서리에서 작은 별이 반짝반짝'],
   ['washi', '마스킹 테이프', '다이어리처럼 양쪽 위에 무늬 테이프'],
   ['chat', '내 메시지', '메신저의 내가 보낸 말풍선'],
+  ['manuscript', '원고지', '칸마다 한 자씩 또박또박'],
+  ['approval', '결재 서류', '담당·팀장·사장 도장이 쾅'],
+  ['receipt', '영수증', '보낸 시각이 찍힌 감열지 영수증'],
+  ['queue', '대기번호표', '은행 번호표처럼 대기번호 017'],
+  ['chalk', '칠판', '분필 가루 묻은 나무 테 칠판'],
 ];
 // styles drawn as real shapes over the terminal (the cells only carry a hidden marker colour)
-const OVERLAY_PROMPTS = new Set(['card', 'bar', 'neon', 'gradient', 'badge', 'bubble', 'marker', 'bracket', 'glass', 'dot', 'terminal', 'flow', 'sticky', 'quote', 'scan', 'ticket', 'wave', 'pill', 'notebook', 'cyber', 'floating', 'spot', 'ribbon', 'stamp', 'sparkle', 'washi', 'chat']);
+const OVERLAY_PROMPTS = new Set(['card', 'bar', 'neon', 'gradient', 'badge', 'bubble', 'marker', 'bracket', 'glass', 'dot', 'terminal', 'flow', 'sticky', 'quote', 'scan', 'ticket', 'wave', 'pill', 'notebook', 'cyber', 'floating', 'spot', 'ribbon', 'stamp', 'sparkle', 'washi', 'chat', 'manuscript', 'approval', 'receipt', 'queue', 'chalk']);
 const PROMPT_TINT = { sticky: [255, 214, 102] }; // styles with their own colour instead of the accent
 
 // Only styles whose look IS a filled surface keep a fill; frames/lines/marks show the decoration alone,
@@ -7002,17 +6934,282 @@ function drawPromptBoxes(tab) {
   const cw = sr.width / tab.term.cols;
   const ch = sr.height / tab.term.rows;
   const style = S.settings.promptStyle;
-  layer.className = `pbox-layer ps-${style}`;
+  const deco = DECO_PROMPTS.has(style);
+  layer.className = `pbox-layer ps-${style}${deco ? ' pl-own' : ''}`;
+  const geo = boxes.map((bx) => ({
+    left: sr.left - br.left + bx.x0 * cw,
+    top: sr.top - br.top + bx.y0 * ch,
+    w: (bx.x1 - bx.x0 + 1) * cw,
+    hh: (bx.y1 - bx.y0 + 1) * ch,
+  }));
+  const inner = deco ? promptDeco(tab, style, boxes, geo, { cw, ch, right: sr.right - br.left }) : null;
   let html = '';
-  for (const bx of boxes) {
-    const left = sr.left - br.left + bx.x0 * cw;
-    const top = sr.top - br.top + bx.y0 * ch;
-    const w = (bx.x1 - bx.x0 + 1) * cw;
-    const hh = (bx.y1 - bx.y0 + 1) * ch;
-    const fill = OVERLAY_PROMPTS.has(style) ? `;background:${promptTintCss(style)};border-radius:3px` : '';
-    html += `<div class="pbox" style="left:${left.toFixed(1)}px;top:${top.toFixed(1)}px;width:${w.toFixed(1)}px;height:${hh.toFixed(1)}px${fill}">${style === 'badge' ? '<span class="pbox-badge">나</span>' : ''}</div>`;
-  }
+  boxes.forEach((bx, i) => {
+    const { left, top, w, hh } = geo[i];
+    const fill = OVERLAY_PROMPTS.has(style) && !deco ? `;background:${promptTintCss(style)};border-radius:3px` : '';
+    html += `<div class="pbox" style="left:${left.toFixed(1)}px;top:${top.toFixed(1)}px;width:${w.toFixed(1)}px;height:${hh.toFixed(1)}px${fill}">${inner ? inner[i] : style === 'badge' ? '<span class="pbox-badge">나</span>' : ''}</div>`;
+  });
   if (layer.dataset.sig !== html) { layer.innerHTML = html; layer.dataset.sig = html; }
+}
+
+/* ---------- 원고지 · 결재 서류 · 영수증 · 대기번호표 · 칠판 ----------
+ * These read more than the box's place: its characters (원고지 squares), which prompt the agent is on (결재 seals),
+ * when it was sent (영수증) and where it stands among the tab's prompts (대기번호). Their layer is no stacking context
+ * of its own (.pl-own), so a surface laid under the letters blends with the terminal (칠판: lighten) and the letters
+ * keep their colour. All of it is worked out only when the boxes are redrawn: nothing here runs per frame. */
+const DECO_PROMPTS = new Set(['manuscript', 'approval', 'receipt', 'queue', 'chalk']);
+const PROMPT_HEAD = /^\s*[❯>›»] /; // the agent's mark in front of a prompt: the box starts on screen, not above it
+
+/** The prompt's text as on screen, flattened (no spaces), without the agent's "❯ " / "> " / "› " in front. */
+function boxFlat(tab, bx) {
+  const buf = tab.term.buffer.active;
+  let s = '';
+  for (let y = bx.y0; y <= bx.y1; y++) s += buf.getLine(buf.viewportY + y)?.translateToString(true, bx.x0, bx.x1 + 1) || '';
+  return s.replace(/^\s*[❯>›»]/, '').replace(/\s+/g, '');
+}
+
+/** Same seed, same numbers: a prompt's chalk dust and barcode stay put when it is redrawn. */
+function seededRandom(text) {
+  let a = 2166136261;
+  for (let i = 0; i < text.length; i++) a = Math.imul(a ^ text.charCodeAt(i), 16777619);
+  return () => {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * 대기번호: each prompt's place among the tab's prompts, in order. A prompt seen before keeps its number; a new one goes
+ * in after the prompt above it on screen (or before a known one below it) — normally at the end. Only when nothing on
+ * screen is known yet (scrolled back into older prompts) does the line it was last seen on decide.
+ * items: [{ key, line }] top to bottom (key '' = no number: its start is above the screen).
+ */
+function queueNumbers(tab, items) {
+  const buf = tab.term.buffer.active;
+  const list = tab.qList || (tab.qList = seedQueue(tab));
+  const atBottom = buf.viewportY >= buf.baseY;
+  const find = (key, from) => { for (let j = from; j < list.length; j++) if (list[j].key === key) return j; return -1; };
+  let prev = -1;
+  return items.map((it, i) => {
+    if (!it.key) return 0;
+    let at = find(it.key, prev + 1);
+    if (at < 0) {
+      let next = -1;
+      for (let k = i + 1; k < items.length && next < 0; k++) if (items[k].key) next = find(items[k].key, prev + 1);
+      if (next >= 0) at = next;
+      else if (prev >= 0) at = prev + 1;
+      else if (atBottom) at = list.length;
+      else { at = list.findIndex((e) => e.line > it.line); if (at < 0) at = list.length; }
+      list.splice(at, 0, { key: it.key, line: it.line });
+    }
+    list[at].line = it.line;
+    prev = at;
+    return at + 1;
+  });
+}
+
+/** The first time a tab numbers its prompts: the ones already up in its scrollback come first (read by their text,
+ *  as textPromptBoxes does), so a style picked in the middle of a conversation still counts from its start. */
+function seedQueue(tab) {
+  const buf = tab.term.buffer.active;
+  const text = (i) => buf.getLine(i)?.translateToString(true) || '';
+  const list = [];
+  for (let i = 0; i < buf.viewportY; i++) {
+    const s = text(i);
+    const m = /^(\s*)[❯>›] \S/.exec(s);
+    if (!m || (i > 0 && text(i - 1).trim())) continue;
+    let flat = s;
+    for (let j = i + 1; j <= i + 3 && j < buf.length; j++) { const n = text(j); if (!n.trim() || !n.startsWith(' '.repeat(m[1].length + 2))) break; flat += n; }
+    flat = flat.replace(/^\s*[❯>›»]/, '').replace(/\s+/g, '');
+    if (flat) list.push({ key: flat.slice(0, 32), line: i });
+  }
+  return list;
+}
+
+/** 영수증: when the prompt was sent — from the task it started (kept across restarts), or 0 when unknown. */
+function promptSentAt(tab, flat) {
+  const cache = tab.pSent || (tab.pSent = new Map());
+  const k = flat.slice(0, 48);
+  if (cache.has(k)) return cache.get(k);
+  let at = 0;
+  for (let i = S.tasks.length - 1; i >= 0 && !at; i--) {
+    const t = S.tasks[i];
+    if (t.agent !== tab.agent) continue;
+    if (t.tabId !== tab.id && !(t.sessionId && t.sessionId === tab.sessionId) && normP(t.path) !== normP(tab.cwd)) continue;
+    const n = promptNeedle(t);
+    if (n.length >= 4 ? flat.includes(n) : n && flat === n) at = t.sent || t.start || 0;
+  }
+  if (cache.size > 600) cache.clear();
+  cache.set(k, at);
+  return at;
+}
+
+/**
+ * 결재 서류: the prompt the agent is on, and how far it got — 1 담당 (sent), 2 팀장 (being worked on), 3 사장 (done).
+ * The seal just added stamps in once (anim: ms since its stamp, negative while still to come; null: no stamping).
+ * Every other prompt is fully signed.
+ */
+const STAMP_MS = 520;
+function approvalNow(tab, boxes, flats) {
+  const task = tab.agent && tab.taskId && taskById(tab.taskId);
+  if (!task) return null;
+  const stage = task.status === 'pending' ? 1 : task.status === 'working' || task.status === 'attention' ? 2 : 3;
+  let st = tab.apState;
+  // a prompt just sent starts at 담당 alone (its 팀장 stamps in even when the work began before it was first drawn)
+  if (!st || st.id !== task.id) st = tab.apState = { id: task.id, stage: Date.now() - (task.sent || 0) < 3000 ? 1 : stage, at: 0 };
+  // the agent picks a prompt up a moment after it was sent: 팀장 waits a little so the seals still come one by one
+  if (stage !== st.stage) { st.at = stage < st.stage ? 0 : stage === 2 ? Math.max(Date.now(), (task.sent || 0) + 650) : Date.now(); st.stage = stage; }
+  const since = st.at ? Date.now() - st.at : Infinity; // < 0: its stamp is still to come
+  if (stage === 3 && since > STAMP_MS) return null;
+  const needle = promptNeedle(task);
+  const hit = (f) => (needle.length >= 4 ? f.includes(needle) : !!needle && f === needle);
+  const buf = tab.term.buffer.active;
+  // the newest prompt is the last one on screen: when that is not it, it scrolled away (or was never drawn)
+  let i = boxes.length - 1;
+  if (buf.viewportY < buf.baseY) while (i >= 0 && !hit(flats[i])) i--;
+  if (i < 0 || !hit(flats[i])) return null;
+  return { i, stage, anim: since < STAMP_MS ? since : null };
+}
+
+/** 원고지 squares along a row: a wide (Korean) character fills a square, two narrow ones share one (as letters and digits
+ *  are written on real manuscript paper), a narrow one just before a wide one gets half a square. → column cuts */
+function msCuts(wide, n) {
+  const cuts = [0];
+  for (let x = 0; x < n;) {
+    x += wide(x) || (x + 1 < n && !wide(x + 1)) ? 2 : 1;
+    cuts.push(Math.min(x, n));
+  }
+  return cuts;
+}
+/** The sheet: rows of squares with the gap between rows, lines on whole pixels (ox / oy: where the box sits). */
+function msSvg(rows, n, cw, ch, ox, oy) {
+  const d = window.devicePixelRatio || 1;
+  const X = (c) => ((Math.round((ox + c * cw) * d) + 0.5) / d - ox).toFixed(2);
+  const Y = (v) => ((Math.round((oy + v) * d) + 0.5) / d - oy).toFixed(2);
+  const sq = Math.min(ch - 3, Math.round(cw * 2)); // as near a square as the row allows
+  const g = (ch - sq) / 2;
+  let grid = '';
+  rows.forEach((wide, r) => {
+    const t = Y(r * ch + g);
+    const b = Y(r * ch + g + sq);
+    grid += `M${X(0)} ${t}H${X(n)}M${X(0)} ${b}H${X(n)}`;
+    for (const c of msCuts(wide, n).slice(1, -1)) grid += `M${X(c)} ${t}V${b}`;
+  });
+  const frame = `M${X(0)} ${Y(-g)}H${X(n)}V${Y(rows.length * ch + g)}H${X(0)}Z`;
+  return `<svg class="ms-sheet" width="1" height="1"><path class="ms-grid" d="${grid}"/><path class="ms-frame" d="${frame}"/></svg>`;
+}
+
+/** 결재란: 담당 · 팀장 · 사장, a seal in each box that has signed. */
+function approvalBox(stage, anim, x, y) {
+  const seal = (k, name) => {
+    if (k >= stage) return '';
+    const a = k === stage - 1 && anim != null ? ` style="animation-delay:${-Math.round(anim)}ms"` : '';
+    return `<i class="ap-seal${a ? ' ap-new' : ''}"${a}>${name}</i>`;
+  };
+  return `<span class="ap-box" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px"><span class="ap-l">결재</span>`
+    + '<span class="ap-h">담당</span><span class="ap-h">팀장</span><span class="ap-h">사장</span>'
+    + `<span class="ap-c">${seal(0, '나')}</span><span class="ap-c">${seal(1, '김')}</span><span class="ap-c">${seal(2, '박')}</span></span>`;
+}
+const AP_W = 80; // the 결재란's size (prompt.css)
+const AP_H = 32;
+/** The sheet around the prompt (w × hh) and its 결재란 (at x, y). */
+function approvalDoc(w, hh, x, y) {
+  const l = Math.min(-7, x - 5);
+  const t = Math.min(-4, y - 4);
+  const r = Math.max(w + 7, x + AP_W + 5);
+  const b = Math.max(hh + 4, y + AP_H + 4);
+  return `<i class="ap-doc" style="left:${l.toFixed(1)}px;top:${t.toFixed(1)}px;width:${(r - l).toFixed(1)}px;height:${(b - t).toFixed(1)}px"></i>`;
+}
+
+/** Chalk dust and the swipes of an eraser, different on every board (seeded by its prompt). */
+function chalkDust(seed) {
+  const r = seededRandom(seed || 'board');
+  const out = [];
+  for (let k = 0; k < 2; k++) { // eraser swipes: broad, flat smears
+    out.push(`radial-gradient(${(70 + r() * 60).toFixed(0)}px ${(9 + r() * 6).toFixed(0)}px at ${(10 + r() * 80).toFixed(0)}% ${(25 + r() * 50).toFixed(0)}%, rgb(var(--dust) / ${(0.07 + r() * 0.04).toFixed(3)}), transparent)`);
+  }
+  for (let k = 0; k < 4; k++) { // small clouds of dust
+    out.push(`radial-gradient(${(14 + r() * 24).toFixed(0)}px ${(5 + r() * 6).toFixed(0)}px at ${(r() * 100).toFixed(0)}% ${(10 + r() * 80).toFixed(0)}%, rgb(var(--dust) / ${(0.08 + r() * 0.07).toFixed(3)}), transparent)`);
+  }
+  out.push('linear-gradient(180deg, transparent 55%, rgb(var(--dust) / .07))'); // settled along the bottom edge
+  return out.join(',');
+}
+
+/** 칠판: board, frame (and, on a whiteboard, the tray and a marker). The green stays green on every theme: lighten can
+ *  only lift each channel above the theme's own background, so the green channel is lifted further. */
+function chalkBoard(seed) {
+  const [r, g, b] = BASE_STAGE;
+  const board = `rgb(${Math.max(r, 33)},${Math.max(g + 30, 56)},${Math.max(b, 44)})`;
+  return `<i class="ck-board" style="--board:${board};background-image:${chalkDust(seed)}"></i><i class="ck-frame"></i><i class="ck-tray"></i><i class="ck-chalk"></i>`;
+}
+
+/** A short barcode under the receipt (its own pattern for every prompt). */
+function barcode(seed) {
+  const r = seededRandom(seed || 'receipt');
+  const stops = [];
+  for (let x = 0; x < 38;) {
+    const bar = r() < 0.35 ? 2 : 1;
+    const gap = r() < 0.4 ? 2 : 1;
+    stops.push(`currentColor ${x}px ${x + bar}px`, `transparent ${x + bar}px ${x + bar + gap}px`);
+    x += bar + gap;
+  }
+  return `linear-gradient(90deg,${stops.join(',')})`;
+}
+
+const RC_MIN_W = 104; // 영수증: wide enough for its head (number and time) over a short prompt
+const clockHM = (t) => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+
+/** The inside of each box for the styles above (geo: each box's place, g: cell size, right edge of the screen). */
+function promptDeco(tab, style, boxes, geo, g) {
+  const { cw, ch } = g;
+  const buf = tab.term.buffer.active;
+  const cell = promptCell.cell || (promptCell.cell = buf.getNullCell());
+  if (style === 'manuscript') {
+    return boxes.map((bx, i) => {
+      // a sheet, not a frame round the words: every prompt's squares run on to where long prompts wrap
+      const n = Math.max(bx.x1 + 1, tab.term.cols - 1) - bx.x0;
+      const rows = [];
+      for (let y = bx.y0; y <= bx.y1; y++) {
+        const line = buf.getLine(buf.viewportY + y);
+        rows.push((x) => { const c = line && line.getCell(bx.x0 + x, cell); return !!c && c.getWidth() === 2; });
+      }
+      return msSvg(rows, n, cw, ch, geo[i].left, geo[i].top);
+    });
+  }
+  const flats = boxes.map((bx) => boxFlat(tab, bx));
+  const whole = boxes.map((bx) => PROMPT_HEAD.test(buf.getLine(buf.viewportY + bx.y0)?.translateToString(true, bx.x0) || ''));
+  // a prompt cut by the bottom edge before 32 characters would pass for another one: no number for it until it shows
+  const keys = flats.map((f, i) => (whole[i] && f && (f.length >= 32 || boxes[i].y1 < tab.term.rows - 1) ? f.slice(0, 32) : ''));
+  if (style === 'chalk') return keys.map((k, i) => chalkBoard(k || flats[i]));
+  if (style === 'approval') {
+    const ap = approvalNow(tab, boxes, flats);
+    return boxes.map((bx, i) => {
+      const { left, w, hh } = geo[i];
+      const stage = ap && ap.i === i ? ap.stage : 3;
+      const anim = ap && ap.i === i ? ap.anim : null;
+      // the 결재란 sits right of the text when there is room; else in the free end of the last row; else under it
+      const line = buf.getLine(buf.viewportY + bx.y1);
+      let end = bx.x0;
+      if (line) for (let x = bx.x1; x >= bx.x0; x--) { const c = line.getCell(x, cell); if (c && c.getChars().trim()) { end = x + (c.getWidth() === 2 ? 2 : 1); break; } }
+      let x; let y;
+      if (left + w + 12 + AP_W + 8 <= g.right) { x = w + 12; y = (hh - AP_H) / 2; }
+      else if ((end - bx.x0) * cw + 14 + AP_W <= w) { x = w - AP_W; y = hh - ch - 1; }
+      else { x = w - AP_W; y = hh + 4; }
+      return approvalDoc(w, hh, x, y) + approvalBox(stage, anim, x, y);
+    });
+  }
+  const nums = queueNumbers(tab, keys.map((key, i) => ({ key, line: buf.viewportY + boxes[i].y0 })));
+  if (style === 'queue') {
+    return nums.map((no, i) => (no ? `<span class="qn-ticket" style="top:${(-ch + 1).toFixed(1)}px"><b>대기번호</b><em>${String(no).padStart(3, '0')}</em></span>` : ''));
+  }
+  // receipt
+  return boxes.map((bx, i) => {
+    const at = keys[i] ? promptSentAt(tab, flats[i]) : 0;
+    const head = keys[i] ? `<span class="rc-head"><span>No.${String(nums[i]).padStart(4, '0')}</span><span>${at ? clockHM(at) : ''}</span></span>` : '';
+    return `<span class="rc-paper" style="right:${-Math.max(9, RC_MIN_W - 9 - geo[i].w).toFixed(1)}px">${head}<i class="rc-bar" style="background-image:${barcode(keys[i] || flats[i])}"></i></span><i class="rc-cut"></i>`;
+  });
 }
 
 function schedulePromptBoxes(tab) {
@@ -7095,11 +7292,70 @@ function previewPrompt(kind, el) {
   if (kind === 'none') style = `background:transparent;color:${fg}`;
   else if (repl && repl.startsWith('48;2;')) style = `background:rgb(${repl.slice(5).split(';').join(',')});color:${fg}`;
   else if (kind === 'accentText') style = `background:transparent;color:${acc}`;
+  if (DECO_PROMPTS.has(kind)) return decoPreview(kind, el, fg);
   if (OVERLAY_PROMPTS.has(kind)) {
     el.innerHTML = `<span class="pv-pbox ps-${kind}"><span class="pv-prompt" style="background:${promptTintCss(kind)};color:${fg}">❯ 버그 고쳐줘</span>${kind === 'badge' ? '<span class="pbox-badge">나</span>' : ''}</span>`;
     return () => {};
   }
   el.innerHTML = `<span class="pv-prompt" style="${style}">❯ 버그 고쳐줘</span>`;
+  return () => {};
+}
+
+/**
+ * 원고지 · 결재 서류 · 영수증 · 대기번호표 · 칠판 at their real size: the prompt in the terminal's own font and cell size,
+ * a wide character over two cells as xterm draws it, with the very shapes the live boxes get (the picker button shows
+ * the part that tells them apart).
+ */
+function decoPreview(kind, el, fg) {
+  const small = el.classList.contains('pk-pv');
+  const t = activeTab();
+  const scr = t && t.host.querySelector('.xterm-screen');
+  const r = scr && scr.getBoundingClientRect();
+  const fs = S.settings.fontSize || 14;
+  const cw = r && r.width ? r.width / t.term.cols : fs * 0.6;
+  const ch = r && r.height ? r.height / t.term.rows : Math.round(fs * clampLineHeight(S.settings.lineHeight));
+  const text = kind === 'chalk' || kind === 'receipt' || kind === 'manuscript' ? '❯ 고쳐줘' : '❯ 버그 고쳐줘';
+  const isWide = (c) => /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFF00-\uFF60]/.test(c);
+  const wideAt = []; // column → a wide character starts there
+  let cols = 0;
+  const cells = [...text].map((c) => {
+    const n = isWide(c) ? 2 : 1;
+    wideAt[cols] = n === 2;
+    cols += n;
+    return `<span style="width:${(n * cw).toFixed(2)}px">${c === ' ' ? '&nbsp;' : c}</span>`;
+  }).join('');
+  const w = cols * cw;
+  const seed = `preview-${kind}`;
+  let inner = '';
+  let ext = [-2, w + 2, -2, ch + 2]; // how far the shapes reach around the prompt: left, right, top, bottom
+  let focus = ''; // what stays in view when they do not fit: 'right' (결재란) / 'top' (영수증 head)
+  if (kind === 'manuscript') { // the sheet runs on past the words, empty squares to the edge
+    const n = small ? cols + 4 : Math.max(cols + (cols % 2), Math.floor(((el.clientWidth || 118) - 4) / cw));
+    inner = msSvg([(x) => !!wideAt[x]], n, cw, ch, 0, 0);
+    ext = [-1, n * cw + 1, -3, ch + 3];
+  }
+  else if (kind === 'chalk') { inner = chalkBoard(seed); ext = isLight() ? [-12, w + 12, -6, ch + 10] : [-9, w + 9, -6, ch + 6]; }
+  else if (kind === 'queue') { inner = `<span class="qn-ticket" style="top:${(-ch + 1).toFixed(1)}px"><b>대기번호</b><em>017</em></span>`; ext = [-6, Math.max(w, 72), -ch + 1, ch]; focus = 'top'; }
+  else if (kind === 'receipt') {
+    const pr = Math.max(9, RC_MIN_W - 9 - w);
+    inner = `<span class="rc-paper" style="right:${-pr}px"><span class="rc-head"><span>No.0017</span><span>${clockHM(Date.now())}</span></span><i class="rc-bar" style="background-image:${barcode(seed)}"></i></span><i class="rc-cut"></i>`;
+    ext = [-9, w + pr, -14, ch + 12];
+    focus = 'top';
+  } else if (kind === 'approval') {
+    const y = (ch - AP_H) / 2;
+    inner = approvalDoc(w, ch, w + 12, y) + approvalBox(3, null, w + 12, y);
+    ext = small ? [w + 11, w + 13 + AP_W, y - 1, y + AP_H + 1] : [-7, w + 12 + AP_W + 5, y - 4, y + AP_H + 4]; // the button: the 결재란 alone
+    focus = 'right';
+  }
+  // real size in the list (cropped to the telling part); the small button fits the whole of it
+  const bw = el.clientWidth || (small ? 64 : 118);
+  const bh = el.clientHeight || (small ? 28 : 34);
+  const [L, R, T, B] = ext;
+  const z = small ? Math.min(1, (bw - 4) / (R - L), (bh - 3) / (B - T)) : 1;
+  const x = R - L <= (bw - 2) / z ? (bw - (R - L) * z) / 2 - L * z : focus === 'right' ? bw - 3 - R * z : (bw - w * z) / 2;
+  const y = B - T <= (bh - 1) / z ? (bh - (B - T) * z) / 2 - T * z : focus === 'top' ? 2 - T * z : (bh - ch * z) / 2;
+  el.innerHTML = `<span class="pv-deco ps-${kind}" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;width:${w.toFixed(2)}px;height:${ch.toFixed(2)}px;line-height:${ch.toFixed(2)}px;font-size:${fs}px;color:${fg}${z < 1 ? `;transform:scale(${z.toFixed(3)})` : ''}"><span class="pbox" style="left:0;top:0;width:${w.toFixed(2)}px;height:${ch.toFixed(2)}px">${inner}</span><span class="pv-cells">${cells}</span></span>`;
+  el.firstChild.style.fontFamily = termFont(S.settings.fontFamily);
   return () => {};
 }
 
@@ -7206,6 +7462,7 @@ function setAgent(tab, agent) {
   if (tab.agent === agent) return;
   const prev = tab.agent;
   tab.agent = agent;
+  schedulePromptBoxes(tab); // prompts drawn without a background are found by their text, which needs the agent known
   tab.oscTitle = '';
   if (agent) {
     tab.agentSince = Date.now();
@@ -7506,6 +7763,7 @@ function setStatus(tab, status) {
   updateTabEl(tab);
   renderSessions();
   if (tab.id === S.activeId) renderStatus();
+  if (S.settings.promptStyle === 'approval') schedulePromptBoxes(tab); // 팀장 / 사장 sign as the turn starts and ends (the screen may be quiet then)
 }
 
 /** Agent asked something / sent a notification: mark it and tell the user. */

@@ -87,6 +87,27 @@
 }
 [data-theme="light"] .ps-spot .pbox::before, [data-theme="light"] .pv-pbox.ps-spot::before { background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--violet) 70%, transparent), transparent); }
 [data-theme="light"] .ps-scan .pbox::after, [data-theme="light"] .pv-pbox.ps-scan::after { filter: saturate(1.4) brightness(0.85); }
+/* 원고지 · 결재 서류 · 영수증 · 대기번호표: the same shapes in ink on white */
+[data-theme="light"] .ms-grid { stroke: rgba(150, 90, 66, .28); }
+[data-theme="light"] .ms-frame { stroke: rgba(150, 90, 66, .44); }
+[data-theme="light"] .ap-doc { border-color: rgba(20, 24, 40, .14); border-top-color: rgba(20, 24, 40, .22); background: none; box-shadow: 0 2px 6px rgba(20, 24, 40, .06); }
+[data-theme="light"] .ap-box { border-color: rgba(20, 24, 40, .3); background: rgba(255, 255, 255, .6); color: rgba(20, 24, 40, .62); }
+[data-theme="light"] .ap-h, [data-theme="light"] .ap-c { border-color: rgba(20, 24, 40, .3); }
+[data-theme="light"] .ap-seal { border-color: #e03131; color: #e03131; box-shadow: inset 0 0 0 1.1px transparent, inset 0 0 0 2px rgba(224, 49, 49, .35); }
+/* thermal paper: multiplied, so it tints the white around the letters and never greys the letters themselves */
+[data-theme="light"] .rc-paper { background: linear-gradient(180deg, #fbf7ec, #f7f3e6); mix-blend-mode: multiply; color: rgba(20, 24, 40, .6); }
+[data-theme="light"] .rc-head { color: rgba(20, 24, 40, .55); }
+[data-theme="light"] .rc-cut { border-top-color: rgba(20, 24, 40, .25); }
+[data-theme="light"] .qn-ticket { filter: drop-shadow(0 1px 1.5px rgba(20, 24, 40, .16)); }
+[data-theme="light"] .qn-ticket::before { background: linear-gradient(180deg, #ffffff, #f6f7f9); box-shadow: inset 0 0 0 1px rgba(20, 24, 40, .1); }
+/* 칠판 → 화이트보드: dark letters on a light board (darken: the letters stay as they are), faint ghosts of wiped marker,
+   an aluminium frame and a tray with a marker on it */
+[data-theme="light"] .ck-board { --dust: 128 146 186; background-color: #f6f7f9; mix-blend-mode: darken; }
+[data-theme="light"] .ck-frame { border-color: #d3d7de #ccd1d8 #c6cbd3 #d0d4db; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .7), 0 0 0 .5px rgba(20, 24, 40, .12); }
+[data-theme="light"] .ck-tray { display: block; position: absolute; left: -12px; right: -12px; bottom: -10px; height: 4px; border-radius: 0 0 2px 2px;
+  background: linear-gradient(180deg, #e6e9ed, #c8cdd4); box-shadow: 0 1px 1px rgba(20, 24, 40, .12); }
+[data-theme="light"] .ck-chalk { display: block; position: absolute; right: 16px; bottom: -8.5px; width: 22px; height: 4.5px; border-radius: 2px 1.5px 1.5px 2px;
+  background: linear-gradient(90deg, #1c7ed6 0 5px, #dee2e6 5px 6px, #f8f9fa 6px), #f8f9fa; box-shadow: 0 1px 1px rgba(20, 24, 40, .3); }
 
 /* 작업 중 테두리: the all-white ring (프리즘) becomes graphite on light */
 [data-theme="light"] [data-wg="prism"]::before { background: rgba(40, 44, 60, 0.75); }

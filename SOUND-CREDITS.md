@@ -55,7 +55,7 @@ Every clip below is **CC0 (public domain)** on freesound.org — free to use and
 
 The Enter sound of 합창단 is an excerpt (the first "Hallelujah") of [Handel - messiah - 44 hallelujah.ogg](https://commons.wikimedia.org/wiki/File:Handel_-_messiah_-_44_hallelujah.ogg), performed by the MIT Concert Choir, directed by William C. Cutter, licensed [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/). The excerpt (trimmed, faded, level-matched) is shared under the same license.
 
-## Background ambience (배경 음악): CC0 from Freesound, or made for MinsuTerm
+## Background ambience (배경 음악): CC0 from Freesound unless a row says otherwise, or made for MinsuTerm
 
 Each background has its own loop: cut into a seamless loop (whole bars for rhythmic music, the end crossfaded into the start otherwise) and level-matched. The small sounds for the bouncing logo and shooting stars are synthesised in the app; the rally of 혼자 하는 탁구 plays the clips of the 탁구 랠리 typing sound (made for MinsuTerm, below) and its point whistle is listed with pong.
 
@@ -113,6 +113,9 @@ Each background has its own loop: cut into a seamless loop (whole bars for rhyth
 | steampunk | [Tick-Tock - Pendulum Family Clock](https://freesound.org/s/797574/) + [Mechanical alarm clock is ticking (SLAVA).wav](https://freesound.org/s/171043/) + [FactoryHum.wav](https://freesound.org/s/478640/) + [steam.WAV](https://freesound.org/s/672248/) |
 | analog | [VHS VCR Magnetic Tape Cassette Background White Noise Hiss](https://freesound.org/s/719880/) + [square wave drone running through tape deck - 001](https://freesound.org/s/824177/), slowed down |
 | backrooms | [Fluorescent Ballast Buzz - Room Tone](https://freesound.org/s/273625/) |
+| domino | [room-tone empty church in village Bokhoven 357 PM 241220_0967](https://freesound.org/s/788451/) by klankbeeld (freesound.org), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), looped and level-matched; tiles (domino-tile.ogg, domino-tile2-4.ogg) and cascade (domino-run.ogg): single wooden pieces set down on the board in [Board Game Pieces.WAV](https://freesound.org/s/555190/) by taure, softened (EQ, a light room) and, for the cascade, sequenced into a seamless loop; bell (domino-bell.ogg): [bell003mono.wav](https://freesound.org/s/99625/) by tec_studio, softened |
+| spiderweb | [Wind in dry tall grass bulrush type, close recording ...](https://freesound.org/s/666175/) by felix.blume (its gentlest stretch, rumble filtered out), with a few single drops from [regen op planten/ rain on plants](https://freesound.org/s/735714/) by nathan.v as dew falling onto leaves |
+| worker | [Rain on roof recorded from attic.wav](https://freesound.org/s/107187/) by shawnjamesseymour + [small clock in room](https://freesound.org/s/211192/) by Yuval; hammer (worker-hammer.ogg): one hit of [Hammering on Wood_1-2.aif](https://freesound.org/s/154465/) by lucaslara; saw (worker-saw.ogg): one stroke of [Saw wood 3.wav](https://freesound.org/s/566040/) by Pagey1969; snore (worker-snore.ogg): one breath of [Snoring Cat.wav](https://freesound.org/s/196255/) by lolamadeus |
 
 ## Typing sounds made for MinsuTerm
 
