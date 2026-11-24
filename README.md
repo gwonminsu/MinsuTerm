@@ -24,6 +24,7 @@
 - **세션 복원** 껐다 켜도 탭과 대화가 그대로 이어집니다.
 - **화면 분할** 탭을 끌어다 놓으면 끝.
 - **프롬프트 작성기** 긴 프롬프트는 따로 편하게 쓰고 한 번에 보내기.
+- **진행도 보기** 폴더마다 에이전트가 지금 하는 일, 다음 할 일, 끝낸 일과 내가 해 줘야 할 일을 한 화면에서.
 - **꾸미기** 일하는 동안 테두리를 달리는 계주 선수, 끝나면 터지는 축하 효과, 배경, 타이핑 효과와 효과음, 움직이는 커서까지.
 - **한국어 / English / 日本語 / 中文**
 
@@ -38,6 +39,12 @@
 긴 프롬프트는 작성기에서 편하게 쓰고 Ctrl+Enter로 보내세요. 커서와 타이핑 효과도 그대로 나옵니다.
 
 <img src="docs/media/composer.gif" width="880" alt="작성기에서 여러 줄 프롬프트를 써서 Claude에게 보내면 계주 테두리가 돌다가 완료 문구가 뜨는 화면">
+
+### 진행도 보기
+
+사이드바 폴더의 진행도 보기를 누르면 그 폴더에서 에이전트가 적는 할 일과 진행 상황이 터미널 자리에 실시간으로 뜹니다. 요청을 남기거나 먼저 할 일을 고를 수도 있습니다. 처음 한 번 **구축하기**를 누르면 필요한 스킬이 설치되고, Node가 없는 컴퓨터에서도 동작합니다.
+
+<img src="docs/media/progress.png" width="880" alt="my-app 폴더의 진행도: 진행률, 해 주셔야 할 일, 지금 하는 것과 다음에 할 것, 일하는 Claude의 방, 요청 남기기">
 
 ### 작업 중 테두리와 테마
 
@@ -84,6 +91,9 @@ MinsuTerm이 그 용도로 만든 터미널입니다. 작업 현황과 서브에
 **무료인가요? 내 데이터는 어디로 가나요?**
 무료(MIT)이고, 인터넷으로 보내는 건 없습니다. Claude Code / Codex가 원래 PC에 저장하는 대화 기록 파일을 읽기만 합니다.
 
+**진행도 보기는 무엇을 설치하나요?**
+처음 구축하기를 누를 때만 `~/.claude/skills`에 `minsuterm-progress`(진행 보고)와 `minsuterm-dreaming`(자러 가기 때 기억 정리) 스킬을 넣습니다. 진행 기록은 그 폴더의 `progress/`에 남고 git에는 올라가지 않으며, 진행도 페이지는 이 컴퓨터 안(127.0.0.1)에서만 열립니다.
+
 ---
 
 <a id="english"></a>
@@ -99,6 +109,7 @@ Run `claude` or `codex` in your usual shell (cmd, PowerShell, zsh) and the tab s
 - **Session restore.** Close the app and your tabs and Claude / Codex conversations come back next time.
 - **Split panes.** Drag a tab onto the terminal to split it.
 - **Prompt composer.** Write long, multi-line prompts in a separate editor and send them in one go.
+- **Progress view.** Open a folder's progress from the sidebar: what the agent is doing, what's next, what's done and what it needs from you, live in the terminal area. One click sets up the skills it needs (`minsuterm-progress`, `minsuterm-dreaming`); it works without Node, and the page is served on 127.0.0.1 only.
 - **Decorations.** Working borders (a relay race, Santa's sleigh...), celebrations when a task is done, animated backgrounds, typing effects and sounds, animated cursors, dark and light themes.
 - **Languages.** Korean, English, Japanese, Chinese.
 

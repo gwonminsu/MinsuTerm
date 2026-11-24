@@ -7,6 +7,7 @@ const os = require('os');
 const { StringDecoder } = require('string_decoder');
 const { spawn, execFile } = require('child_process');
 const pty = require('@lydell/node-pty');
+const progress = require('./progress'); // 진행도 보기: the progress page, hosted here, and the skills it installs
 
 const IS_MAC = process.platform === 'darwin';
 const IS_WIN = process.platform === 'win32';
@@ -2029,6 +2030,15 @@ ipcMain.on('clip:write', (_e, text) => clipboard.writeText(String(text)));
 
 ipcMain.on('open:external', (_e, url) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); });
 ipcMain.on('open:folder', (_e, dir) => { if (isFolder(dir)) shell.openPath(dir); });
+
+/* 진행도 보기 (src/progress.js): the bundled skills' state, 구축하기 (install them), a folder's page */
+ipcMain.handle('progress:status', () => progress.status());
+ipcMain.handle('progress:setup', () => progress.setup());
+ipcMain.handle('progress:open', (_e, dir) => {
+  if (!isFolder(dir) || !fs.existsSync(dir)) throw new Error('폴더를 찾지 못했어요');
+  return progress.open(dir);
+});
+ipcMain.handle('progress:summary', (_e, dir) => (isFolder(dir) ? progress.summary(dir) : null));
 ipcMain.on('open:userdata', () => shell.openPath(app.getPath('userData')));
 
 /*
@@ -2223,6 +2233,7 @@ app.whenReady().then(() => {
   buildMenu();
   createWindow();
   if (TEST_DIR) runTestScript();
+  progress.refreshInstalled().catch(() => {}); // the skills MinsuTerm installed follow the app's version
 });
 
 async function runTestScript() {
@@ -2355,7 +2366,7 @@ async function runTestScript() {
   app.quit();
 }
 
-app.on('before-quit', () => { saveStoreNow(); });
+app.on('before-quit', () => { saveStoreNow(); progress.stopServer(); });
 app.on('window-all-closed', () => {
   killAll();
   if (probe) { try { probe.kill(); } catch { /* ignore */ } }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none';" />
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-src http://127.0.0.1:*;" />
   <title>MinsuTerm</title>
   <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css" />
   <link rel="stylesheet" href="styles.css" />
@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="fx/cursor-up-c.css" />
   <link rel="stylesheet" href="fx/cursor-up-d.css" />
   <link rel="stylesheet" href="prompt.css" />
+  <link rel="stylesheet" href="progress.css" />
   <link rel="stylesheet" href="donetext.css" />
   <link rel="stylesheet" href="mac.css" />
   <link rel="stylesheet" href="light.css" />
@@ -93,6 +94,38 @@
           <button class="btn small" id="zoombar-exit" title="Ctrl+Shift+Z">분할로 돌아가기</button>
         </div>
         <div id="terminals"></div>
+
+        <!-- 진행도 보기: a folder's progress page over the terminal area (app.js openProgress) -->
+        <section id="progress-view" class="progress-view" hidden aria-label="진행도">
+          <header class="pg-bar">
+            <span class="pg-mark" data-icon="progress"></span>
+            <div class="pg-titles">
+              <span class="pg-label">진행도</span>
+              <span class="pg-title no-i18n"></span>
+              <span class="pg-path no-i18n"></span>
+            </div>
+            <span class="pg-chip" data-state="loading"><i></i><span class="pg-chip-text">준비 중</span></span>
+            <span class="pg-spacer"></span>
+            <button class="icon-btn" id="pg-reload" title="새로고침"><span data-icon="refresh"></span></button>
+            <button class="icon-btn" id="pg-browser" title="브라우저로 열기"><span data-icon="openExternal"></span></button>
+            <button class="btn small primary pg-close" id="pg-close" title="진행도 닫기 (Esc)"><span data-icon="x"></span>진행도 닫기</button>
+          </header>
+          <div class="pg-hint" hidden>
+            <span data-icon="info"></span>
+            <span class="pg-hint-text">이 폴더에 열린 Claude 탭이 있어요. 진행 보고를 바로 시작할 수 있습니다.</span>
+            <button class="btn small" id="pg-ask" hidden>Claude 탭에서 시작하기</button>
+          </div>
+          <div class="pg-body">
+            <div class="pg-state pg-setup" hidden></div>
+            <div class="pg-state pg-loading" hidden><div class="pg-sk pg-sk-a"></div><div class="pg-sk pg-sk-b"></div><div class="pg-sk pg-sk-c"></div></div>
+            <div class="pg-state pg-error" hidden>
+              <span data-icon="info"></span>
+              <p class="pg-error-text">진행도를 열지 못했어요.</p>
+              <button class="btn small" id="pg-retry"><span data-icon="refresh"></span>다시 시도</button>
+            </div>
+            <iframe class="pg-frame" title="진행도" sandbox="allow-scripts allow-same-origin allow-forms" allow="clipboard-write" referrerpolicy="no-referrer" hidden></iframe>
+          </div>
+        </section>
 
         <div id="empty" class="empty" hidden>
           <div class="empty-inner">

@@ -8304,9 +8304,10 @@ function folderHtml(p, agents, ownerOf = ownerProject) {
     ? `<span class="fb-stat st-${top}" title="${esc(tip)}"><i></i>${sessions.length > 1 ? `<b>${sessions.length}</b>` : ''}</span>`
     : '';
 
+  const progressBtn = `<button class="icon-btn${S.progress && S.progress.open && samePath(S.progress.path, p.path) ? ' on' : ''}" data-a="progress" title="진행도 보기">${icon('progress')}</button>`;
   const actions = p.temp
-    ? `<button class="icon-btn" data-a="add" title="프로젝트로 추가">${icon('folderPlus')}</button>`
-    : `${openTabs.length >= 2 ? `<button class="icon-btn${gridOn ? ' on' : ''}" data-a="grid" title="이 폴더의 탭을 한 화면에 보기 (Ctrl+Shift+G)">${icon('grid')}</button>` : ''}
+    ? `${progressBtn}<button class="icon-btn" data-a="add" title="프로젝트로 추가">${icon('folderPlus')}</button>`
+    : `${progressBtn}${openTabs.length >= 2 ? `<button class="icon-btn${gridOn ? ' on' : ''}" data-a="grid" title="이 폴더의 탭을 한 화면에 보기 (Ctrl+Shift+G)">${icon('grid')}</button>` : ''}
        <button class="icon-btn" data-a="shell" title="이 폴더에서 터미널 열기">${icon('terminal')}</button>
        <button class="icon-btn" data-a="more" title="더보기">${icon('more')}</button>`;
 
@@ -8460,6 +8461,7 @@ function openProjectIconPicker(p) {
     if (!head) return;
     const a = e.target.closest('[data-a]')?.dataset.a;
     if (a === 'add') return addProject(head.dataset.path);
+    if (a === 'progress') return toggleProgress(projectOf(head)?.path || head.dataset.path, head.querySelector('.fb-name')?.textContent || '');
     const p = projectOf(head);
     if (a === 'grid' && p) return toggleGrid(p.path);
     if (a === 'shell' && p) return newShell(null, p.path);
@@ -8748,6 +8750,7 @@ function applySettings() {
   for (const t of S.tabs) fitTab(t);
   renderStatus();
   promptLookCheck();
+  if (S.progress && S.progress.open) postProgressTheme(); // the open progress page follows theme / accent / light-dark
 }
 
 /*
@@ -9271,6 +9274,7 @@ function openProjectMenu(p, x, y) {
     { label: p.name },
     { icon: 'palette', text: '아이콘 변경…', run: () => openProjectIconPicker(p) },
     { icon: 'terminal', text: '터미널 열기', run: () => newShell(null, p.path) },
+    { icon: 'progress', text: '진행도 보기', run: () => openProgress(p.path, p.name) },
     { icon: 'history', text: 'Claude 마지막 대화 이어서', cls: 'claude', run: () => newAgent('claude', { cwd: p.path, mode: 'continue' }) },
     { icon: 'history', text: 'Codex 마지막 대화 이어서', cls: 'codex', run: () => newAgent('codex', { cwd: p.path, mode: 'continue' }) },
     '-',
@@ -9281,6 +9285,220 @@ function openProjectMenu(p, x, y) {
     { icon: 'trash', text: '목록에서 제거', danger: true, run: () => removeProject(p) },
   ], x, y);
 }
+
+/* ------------------------------------------------------------------ */
+/* 진행도 보기: a folder's progress page (minsuterm-progress) over the  */
+/* terminal area. The page is served by the main process (progress.js) */
+/* and themed with MinsuTerm's colours through postMessage.            */
+/* ------------------------------------------------------------------ */
+
+S.progress = { open: false, path: '', name: '', origin: '', key: '', skipSetup: false, poll: 0, seq: 0 };
+const PG = {
+  view: $('#progress-view'),
+  frame: $('#progress-view .pg-frame'),
+  chip: $('#progress-view .pg-chip'),
+  hint: $('#progress-view .pg-hint'),
+  setup: $('#progress-view .pg-setup'),
+  loading: $('#progress-view .pg-loading'),
+  error: $('#progress-view .pg-error'),
+};
+
+function pgChip(state, text) {
+  PG.chip.dataset.state = state;
+  PG.chip.querySelector('.pg-chip-text').textContent = text;
+}
+function pgShow(which) { // one body state at a time: setup / loading / error / frame
+  for (const k of ['setup', 'loading', 'error']) PG[k].hidden = which !== k;
+  PG.frame.hidden = which !== 'frame';
+}
+
+/** MinsuTerm's look, for the page: its own variables take these (vars), its palette follows dark, its text the fonts. */
+function progressTheme() {
+  // resolved colours (rgb()), not var(...): the page accepts plain colours only
+  const probe = progressTheme.probe || (progressTheme.probe = document.body.appendChild(Object.assign(document.createElement('i'), { hidden: true })));
+  const col = (expr, fb) => { probe.style.color = ''; probe.style.color = expr; const c = getComputedStyle(probe).color; return c && c !== 'rgba(0, 0, 0, 0)' ? c : fb; };
+  const accent = col('var(--violet)', '#8f73ff');
+  // the page takes letters, digits, spaces, quotes, commas, dots, dashes (quotes built with fromCharCode: a quote inside a regex trips the i18n extractor)
+  const fontOk = new RegExp('[^\\w\\s,.\\-' + String.fromCharCode(39, 34) + ']', 'g');
+  const font = (getComputedStyle(document.documentElement).getPropertyValue('--ui-font').trim() || 'system-ui, sans-serif').replace(fontOk, '');
+  return {
+    type: 'minsuterm-theme',
+    dark: !isLight(),
+    font,
+    mono: "'Cascadia Mono', Consolas, monospace",
+    vars: {
+      bg: col('var(--stage-solid)', isLight() ? '#fafbfc' : '#10131a'),
+      card: col('var(--surface)', isLight() ? '#ffffff' : '#161922'),
+      text: col('var(--text)', isLight() ? '#1f2430' : '#e7eaf0'),
+      muted: col('var(--muted)', '#8a92a5'),
+      faint: col('var(--dim)', '#626a7d'),
+      line: col('var(--border)', isLight() ? '#e2e6ed' : '#232733'),
+      hover: col('var(--surface-2)', isLight() ? '#f4f6f9' : '#1c202a'),
+      accent,
+      accentSoft: col(`color-mix(in srgb, var(--violet) ${isLight() ? 12 : 18}%, var(--surface))`, isLight() ? '#ece8ff' : '#241f3f'),
+      onAccent: '#ffffff',
+    },
+  };
+}
+const b64url = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+function postProgressTheme() {
+  if (!S.progress.open || !S.progress.origin || PG.frame.hidden) return;
+  try { PG.frame.contentWindow.postMessage(progressTheme(), S.progress.origin); } catch { /* not loaded yet: the hash carried the theme */ }
+}
+
+function toggleProgress(dir, name) {
+  if (S.progress.open && samePath(S.progress.path, dir)) return closeProgress();
+  openProgress(dir, name);
+}
+
+async function openProgress(dir, name) {
+  if (!dir) return;
+  const seq = ++S.progress.seq;
+  Object.assign(S.progress, { open: true, path: dir, name: name || String(dir).replace(/[\\/]+$/, '').split(/[\\/]/).pop() || dir });
+  PG.view.querySelector('.pg-title').textContent = S.progress.name;
+  PG.view.querySelector('.pg-path').textContent = dir;
+  PG.view.querySelector('.pg-path').title = dir;
+  PG.view.classList.remove('closing');
+  PG.view.hidden = false;
+  PG.hint.hidden = true;
+  document.activeElement?.blur?.();
+  $('#pg-close').focus({ preventScroll: true });
+  renderProjects();
+  pgChip('loading', '준비 중');
+  pgShow('loading');
+  let st;
+  try { st = await window.mt.progress.status(); } catch (err) { return progressError(seq, err); }
+  if (seq !== S.progress.seq) return;
+  if (!st.ready && !S.progress.skipSetup) return showProgressSetup(st, seq);
+  loadProgressPage(seq);
+}
+
+async function loadProgressPage(seq) {
+  pgChip('loading', '준비 중');
+  pgShow('loading');
+  let r;
+  try { r = await window.mt.progress.open(S.progress.path); } catch (err) { return progressError(seq, err); }
+  if (seq !== S.progress.seq || !S.progress.open) return;
+  S.progress.origin = r.origin;
+  S.progress.key = r.key;
+  const theme = progressTheme();
+  PG.frame.classList.add('fading');
+  PG.frame.onload = () => {
+    if (seq !== S.progress.seq) return;
+    postProgressTheme();
+    PG.frame.classList.remove('fading');
+  };
+  PG.frame.src = `${r.url}#p=${r.key}&embed=1&theme=${b64url(JSON.stringify(theme))}`;
+  pgShow('frame');
+  progressHint(r.empty);
+}
+
+/* the page reports its state ({ready, ok, live, empty}, never the record itself): the chip and the empty hint follow it */
+window.addEventListener('message', (e) => {
+  const d = e.data;
+  if (!S.progress.open || e.source !== PG.frame.contentWindow || e.origin !== S.progress.origin || !d || d.type !== 'minsuterm-progress') return;
+  if (!d.ready) return pgChip('loading', '준비 중');
+  if (!d.ok) pgChip('error', '기록 없음');
+  else if (d.live) pgChip('live', '실시간');
+  else pgChip('loading', '다시 연결 중');
+  progressHint(!!d.ok && !!d.empty);
+});
+
+/** While the record is still empty: say so, and offer to start the skill in the folder's Claude tab. */
+function progressHint(empty) {
+  clearInterval(S.progress.poll);
+  // the page explains an empty record itself; this line only offers the one thing the page can't do: start it in a tab
+  const claudeTab = empty && S.tabs.find((t) => t.agent === 'claude' && t.alive && samePath(t.cwd, S.progress.path));
+  PG.hint.hidden = !claudeTab;
+  if (!claudeTab) return;
+  const ask = $('#pg-ask');
+  ask.hidden = false;
+  ask.onclick = () => {
+    const t = S.tabs.find((x) => x.agent === 'claude' && x.alive && samePath(x.cwd, S.progress.path));
+    if (!t) return;
+    window.mt.pty.write(t.id, '/minsuterm-progress'); // typed, not sent: the user presses Enter
+    closeProgress();
+    activate(t.id);
+    toast('Claude 입력창에 /minsuterm-progress 를 넣었어요 · Enter로 시작', { icon: 'progress' });
+  };
+}
+
+function progressError(seq, err) {
+  if (seq !== S.progress.seq) return;
+  pgChip('error', '오류');
+  PG.error.querySelector('.pg-error-text').textContent = `진행도를 열지 못했어요. ${String(err?.message || err || '').split(': ').slice(-1)[0]}`;
+  pgShow('error');
+}
+
+/** First use on this computer: what 구축하기 sets up, then the page. */
+function showProgressSetup(st, seq) {
+  pgChip('setup', '구축 필요');
+  const dirOf = (n) => (st.skills.find((s) => s.name === n) || {}).target || '';
+  const step = (id, title, sub) => `<li data-step="${id}"><span class="pg-step-dot"><i></i>${icon('check')}</span><div><div class="pg-step-title">${title}</div><div class="pg-step-sub">${sub}</div></div></li>`;
+  PG.setup.innerHTML = `<div class="pg-card">
+    <h2>이 컴퓨터에 진행 보고 환경을 구축할까요?</h2>
+    <p>에이전트가 할 일과 진행 상황을 이 폴더의 진행 기록에 적고, 여기서 실시간으로 볼 수 있게 됩니다. 한 번만 하면 모든 폴더에서 쓸 수 있어요.</p>
+    <ul class="pg-steps">
+      ${step('progress', '진행 보고 스킬 설치', `<code class="no-i18n">${esc(dirOf('minsuterm-progress'))}</code>`)}
+      ${step('dreaming', '수면 스킬 설치', `자러 가기를 누르면 일을 마치고 기억을 정리한 뒤 잡니다 · <code class="no-i18n">${esc(dirOf('minsuterm-dreaming'))}</code>`)}
+      ${step('record', '이 폴더의 진행 기록 준비', `<code class="no-i18n">${esc(S.progress.path)}</code> 안의 progress 폴더 (git에는 올라가지 않아요)`)}
+      ${step('node', st.node ? '이 컴퓨터의 Node 사용' : 'Node를 MinsuTerm이 대신 실행', st.node ? '스킬의 도구를 설치된 Node로 실행합니다' : 'Node가 없어도 MinsuTerm이 스킬의 도구를 실행합니다')}
+    </ul>
+    <div class="pg-card-actions">
+      <span class="pg-card-note">${st.ownProgress ? '쓰고 계신 progress 스킬은 그대로 두고, 같은 기록을 함께 씁니다' : ''}</span>
+      <button class="btn small" data-pg="view">지금은 보기만</button>
+      <button class="btn small primary" data-pg="build">${icon('progress')}구축하기</button>
+    </div>
+  </div>`;
+  pgShow('setup');
+  PG.setup.onclick = async (e) => {
+    const b = e.target.closest('[data-pg]');
+    if (!b) return;
+    if (b.dataset.pg === 'view') { S.progress.skipSetup = true; return loadProgressPage(seq); }
+    b.disabled = true;
+    const items = [...PG.setup.querySelectorAll('.pg-steps li')];
+    items.forEach((li) => li.classList.add('doing'));
+    let res;
+    try { res = await window.mt.progress.setup(); } catch (err) { items.forEach((li) => li.classList.remove('doing')); b.disabled = false; return progressError(seq, err); }
+    if (seq !== S.progress.seq) return;
+    for (const li of items) {
+      li.classList.remove('doing');
+      const d = (res.done || []).find((x) => x.name === `minsuterm-${li.dataset.step}`);
+      li.classList.add(d && d.skipped ? 'skip' : 'done');
+    }
+    toast('진행 보고 환경을 구축했어요', { icon: 'progress' });
+    setTimeout(() => { if (seq === S.progress.seq && S.progress.open) loadProgressPage(seq); }, 650);
+  };
+}
+
+function closeProgress() {
+  if (!S.progress.open) return;
+  S.progress.open = false;
+  S.progress.seq++;
+  clearInterval(S.progress.poll);
+  PG.view.classList.add('closing');
+  setTimeout(() => {
+    if (S.progress.open) return;
+    PG.view.hidden = true;
+    PG.view.classList.remove('closing');
+    PG.frame.removeAttribute('src'); // the page's live connection closes with it
+    PG.frame.hidden = true;
+  }, 140);
+  renderProjects();
+  const t = activeTab();
+  if (t && t.term) requestAnimationFrame(() => t.term.focus());
+}
+
+$('#pg-close').addEventListener('click', closeProgress);
+$('#pg-reload').addEventListener('click', () => { if (S.progress.open) loadProgressPage(S.progress.seq); });
+$('#pg-retry').addEventListener('click', () => { if (S.progress.open) openProgress(S.progress.path, S.progress.name); });
+$('#pg-browser').addEventListener('click', () => { if (S.progress.origin && S.progress.key) window.mt.openExternal(`${S.progress.origin}/#p=${S.progress.key}`); });
+window.addEventListener('keydown', (e) => { // Esc closes it, unless a dialog is open or the page itself has the focus
+  if (e.key !== 'Escape' || !S.progress.open || S.overlay || document.activeElement === PG.frame) return;
+  e.preventDefault();
+  e.stopPropagation();
+  closeProgress();
+}, true);
 
 function openNewMenu(x, y) {
   openMenu([

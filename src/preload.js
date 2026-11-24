@@ -71,6 +71,12 @@ contextBridge.exposeInMainWorld('mt', {
   clipWrite: (t) => ipcRenderer.send('clip:write', t),
   openExternal: (u) => ipcRenderer.send('open:external', u),
   openFolder: (d) => ipcRenderer.send('open:folder', d),
+  progress: {
+    status: () => ipcRenderer.invoke('progress:status'),
+    setup: () => ipcRenderer.invoke('progress:setup'),
+    open: (dir) => ipcRenderer.invoke('progress:open', dir),
+    summary: (dir) => ipcRenderer.invoke('progress:summary', dir),
+  },
   openUserData: () => ipcRenderer.send('open:userdata'),
   diagRecord: (ms, snapshot) => ipcRenderer.invoke('diag:record', ms, snapshot),
   devtools: () => ipcRenderer.send('win:devtools'),
