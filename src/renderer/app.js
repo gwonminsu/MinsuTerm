@@ -212,6 +212,19 @@ function prettyPath(p) {
   return p;
 }
 
+/** A path shortened in the middle: the first folders and the last two stay, '…' between (the bar's ellipsis
+ * would cut the end, the folder that matters). */
+function shortMiddlePath(p, max = 44) {
+  if (!p || p.length <= max) return p;
+  const sep = p.includes('\\') ? '\\' : '/';
+  const parts = p.split(/[\\/]/);
+  if (parts.length <= 4) return p;
+  const tail = parts.slice(-2);
+  const head = [parts[0]];
+  for (const seg of parts.slice(1, -2)) { if ([...head, seg, '…', ...tail].join(sep).length > max) break; head.push(seg); }
+  return [...head, '…', ...tail].join(sep);
+}
+
 /* ------------------------------------------------------------------ */
 /* Persistence                                                         */
 /* ------------------------------------------------------------------ */
@@ -7639,6 +7652,11 @@ function choiceBubbleHtml(style = S.settings.choiceBubble || 'classic') {
   return `<span class="choice-bubble cb-${style}">${pre}${body}</span>`;
 }
 function previewBubble(kind, el) { el.innerHTML = choiceBubbleHtml(kind); return () => {}; }
+/** 꾸미기 → 진행도: a progress bar style at three of six done. */
+function previewProgressBar(kind, el) {
+  el.innerHTML = `<div class="pv-pbar">${progressBarHtml(kind, { done: 3, total: 6 })}</div>`;
+  return () => {};
+}
 
 const CHOICE_PROMPT = /Enter to select|↑\/↓ to navigate|Do you want to (proceed|make this edit|create|allow|run)|Would you like to (run|make|apply|proceed|allow)|Press enter to confirm|Allow (this )?command\?/i;
 function screenSaysChoice(tab) {
@@ -8041,64 +8059,6 @@ function sessionRowHtml(t, subs = true) {
     </div>${!subs ? '' : (t.status === 'working' || hasRunningSubs(t) ? subagentRowsHtml(t) : '') + bgRowsHtml(t)}`;
 }
 
-/* ---------- 하수인: little worker characters for an agent's sub-agents ---------- */
-
-const MINION_COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#748ffc', '#9775fa', '#f783ac', '#e599f7', '#66d9e8', '#a9e34b', '#ff8787', '#ffc078'];
-// Bold, simple silhouettes that still read at 20 px: shape + colour + big eyes, nothing more.
-const MINION_BODIES = [
-  { d: '<circle cx="10" cy="10.5" r="7.5"/>', ey: 10 }, // 동글이
-  { d: '<rect x="3" y="5" width="14" height="12.5" rx="3.5"/><rect x="9" y="1.6" width="2" height="4" rx="1"/>', ey: 11 }, // 로봇
-  { d: '<path d="M3 18.5V10a7 7 0 0 1 14 0v8.5l-2.4-1.8-2.3 1.8L10 16.7l-2.3 1.8-2.3-1.8z"/>', ey: 10 }, // 유령
-  { d: '<path d="M3.2 7.6 3 1.8l4.6 3.1h4.8L17 1.8l-.2 5.8A7.4 7.4 0 1 1 3.2 7.6z"/>', ey: 11.2 }, // 고양이
-  { d: '<rect x="4.6" y=".8" width="3.4" height="8.4" rx="1.7"/><rect x="12" y=".8" width="3.4" height="8.4" rx="1.7"/><circle cx="10" cy="12.4" r="6.6"/>', ey: 12 }, // 토끼
-  { d: '<path d="M10 1.6c2.8 3.9 7.4 7.5 7.4 11a7.4 7.4 0 0 1-14.8 0c0-3.5 4.6-7.1 7.4-11z"/>', ey: 12.6 }, // 물방울
-  { d: '<circle cx="4.6" cy="5" r="2.8"/><circle cx="15.4" cy="5" r="2.8"/><circle cx="10" cy="11" r="7"/>', ey: 10.6 }, // 곰
-  { d: '<circle cx="7.3" cy="6.4" r="3.2"/><circle cx="12.7" cy="6.4" r="3.2"/><ellipse cx="10" cy="12.8" rx="8" ry="5.6"/>', ey: 6.4 }, // 개구리
-  { d: '<path d="M3 11a7 7 0 0 1 14 0v3.6c0 1-.9 1.2-1.4.5-.5 1.3-1.9 1.3-2.4 0-.5 1.3-1.9 1.3-2.4 0-.5 1.3-1.9 1.3-2.4 0-.5 1.3-1.9 1.3-2.4 0-.5.7-1.4.5-1.4-.5z"/>', ey: 10 }, // 문어
-  { d: '<path d="M10 1.4l2.4 5.2 5.6.6-4.2 3.8 1.2 5.6L10 13.8l-5 2.8 1.2-5.6L2 7.2l5.6-.6z" stroke-linejoin="round"/>', ey: 9.4 }, // 별
-  { d: '<path d="M5 6.4h10l2.2 11H2.8z"/><path d="M5 6.4c0-2.6 2.2-3.4 5-3.4s5 .8 5 3.4" opacity=".55"/>', ey: 11.4 }, // 푸딩
-];
-function minionHash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
-/** A tiny worker character: one of 6 shapes × 14 colours × 3 eye styles, picked from the sub-agent's id. */
-function minionSvg(seed, work = '') {
-  let h = minionHash(String(seed));
-  const pick = (n) => { const v = h % n; h = Math.floor(h / n) ^ (h << 7); h >>>= 0; return v; };
-  const body = MINION_BODIES[pick(MINION_BODIES.length)];
-  const c = MINION_COLORS[pick(MINION_COLORS.length)];
-  const ink = '#1a1d26';
-  const ey = body.ey;
-  const kind = pick(3);
-  let eyes;
-  if (kind === 0) eyes = `<circle cx="7.3" cy="${ey}" r="1.7"/><circle cx="12.7" cy="${ey}" r="1.7"/>`; // big dots
-  else if (kind === 1) eyes = `<path d="M5.7 ${ey + 0.8}q1.6-2.4 3.2 0M11.1 ${ey + 0.8}q1.6-2.4 3.2 0" fill="none" stroke="${ink}" stroke-width="1.7" stroke-linecap="round"/>`; // happy ^^
-  else eyes = `<circle cx="10" cy="${ey}" r="3.3" fill="#fff"/><circle cx="10.6" cy="${ey}" r="1.8"/>`; // one big eye
-  // welding: a dark visor with a glint instead of eyes
-  const face = work === 'weld'
-    ? `<rect x="3.6" y="${ey - 2.4}" width="12.8" height="4.8" rx="1.6" fill="#2a3140"/><rect x="5" y="${ey - 1.2}" width="10" height="2.2" rx="1" fill="#5ff0ff" class="mn-visor"/>`
-    : `<g fill="${ink}" class="mn-eyes">${eyes}</g>`;
-  return `<svg viewBox="0 0 20 20" aria-hidden="true"><g fill="${c}">${body.d}</g>${face}</svg>`;
-}
-// what a minion is doing (one per sub-agent): a little prop, and the effect of the work
-const MINION_WORK = ['magnify', 'weld', 'hammer', 'laptop', 'papers', 'gear', 'dig', 'paint', 'saw', 'broom', 'flask', 'drill', 'water', 'book', 'radio'];
-const MINION_PROPS = {
-  magnify: '<svg class="mn-prop" viewBox="0 0 12 12"><circle cx="5" cy="5" r="3.2" fill="rgba(170,225,255,.45)" stroke="#d6dde9" stroke-width="1.5"/><path d="M7.4 7.4 10.8 10.8" stroke="#b07a4a" stroke-width="2" stroke-linecap="round"/><path d="M3.6 3.8a1.8 1.8 0 0 1 1.6-1" stroke="#fff" stroke-width=".8" fill="none" stroke-linecap="round"/></svg>',
-  weld: '<svg class="mn-prop" viewBox="0 0 12 12"><rect x="5" y="2" width="2.6" height="7" rx="1" fill="#8d96a8" transform="rotate(35 6 6)"/><rect x="2.4" y="8.2" width="2.2" height="1.6" rx=".5" fill="#c9d1de" transform="rotate(35 6 6)"/><circle class="mn-flame" cx="2.2" cy="10" r="1.6" fill="#bff6ff"/></svg>',
-  hammer: '<svg class="mn-prop" viewBox="0 0 12 12"><rect x="5.3" y="3.6" width="1.5" height="7.6" rx=".6" fill="#b07a4a"/><rect x="2" y="1.2" width="8" height="3.4" rx="1" fill="#9aa3b5"/></svg>',
-  laptop: '<svg class="mn-prop" viewBox="0 0 12 12"><rect x="1.5" y="2.5" width="9" height="6" rx=".8" fill="#5b6478"/><rect x="2.4" y="3.3" width="7.2" height="4.4" rx=".4" fill="#38e1ff" class="mn-screen"/><path d="M.5 9.2h11l-1 1.6h-9z" fill="#8d96a8"/></svg>',
-  papers: '<svg class="mn-prop" viewBox="0 0 12 12"><rect x="2" y="4" width="7" height="7" rx=".6" fill="#f1f3f7"/><path d="M3.4 6h4.2M3.4 7.6h4.2M3.4 9.2h2.8" stroke="#9aa3b5" stroke-width=".8"/></svg>',
-  gear: '<svg class="mn-prop" viewBox="0 0 12 12"><circle cx="6" cy="6" r="3.7" fill="none" stroke="#9aa3b5" stroke-width="2.6" stroke-dasharray="1.7 1.2"/><circle cx="6" cy="6" r="2.2" fill="#9aa3b5"/><circle cx="6" cy="6" r=".9" fill="#1a1d26"/></svg>',
-  dig: '<svg class="mn-prop" viewBox="0 0 12 12"><path d="M9.6 1.2 5.4 6.6" stroke="#b07a4a" stroke-width="1.5" stroke-linecap="round"/><path d="M4.2 5.4 7 7.6 4.6 10.8c-.8.9-2.6-.4-2.1-1.6z" fill="#aab3c3"/></svg>',
-  paint: '<svg class="mn-prop" viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="8" height="3.4" rx="1.6" fill="var(--paint)"/><path d="M9.5 3.2h1.3v3.4H6v4.4" fill="none" stroke="#9aa3b5" stroke-width="1.1"/></svg>',
-};
-MINION_PROPS.saw = '<svg class="mn-prop" viewBox="0 0 12 12"><path d="M1 5.2h8.6v2.6H1z" fill="#c9d1de"/><path d="M1 7.8l.9 1 .9-1 .9 1 .9-1 .9 1 .9-1 .9 1 .9-1 .9 1" fill="none" stroke="#c9d1de" stroke-width=".8"/><rect x="9.2" y="4.2" width="2.4" height="4.6" rx="1" fill="#b07a4a"/></svg>';
-MINION_PROPS.broom = '<svg class="mn-prop" viewBox="0 0 12 12"><path d="M8.6 .8 6 7" stroke="#b07a4a" stroke-width="1.3" stroke-linecap="round"/><path d="M4.2 6.4 7.6 7.8 6.6 11.4 1.8 9.4z" fill="#e8c56a"/></svg>';
-MINION_PROPS.flask = '<svg class="mn-prop" viewBox="0 0 12 12"><path d="M4.6 1.2h2.8M5 1.2v3.6L2 10.2c-.4.8.1 1.4.9 1.4h6.2c.8 0 1.3-.6.9-1.4L7 4.8V1.2" fill="#e9f4ff" stroke="#c9d1de" stroke-width=".7"/><path d="M3.2 8.4h5.6l1.1 1.9c.3.6 0 1-.6 1H2.7c-.6 0-.9-.4-.6-1z" fill="#7cf29a"/></svg>';
-MINION_PROPS.drill = '<svg class="mn-prop" viewBox="0 0 12 12"><rect x="1" y="3" width="6.4" height="3.6" rx="1.2" fill="#ffb02e"/><rect x="2.4" y="6" width="2.2" height="4.6" rx=".8" fill="#4a5163"/><path d="M7.4 4.8h4" stroke="#c9d1de" stroke-width="1.2" stroke-dasharray="1 .5"/></svg>';
-MINION_PROPS.water = '<svg class="mn-prop" viewBox="0 0 12 12"><path d="M1.6 4.4h5.6v5.4c0 .7-.5 1.2-1.2 1.2H2.8c-.7 0-1.2-.5-1.2-1.2z" fill="#4dabf7"/><path d="M7.2 6l3.6-2.4" stroke="#4dabf7" stroke-width="1.3" stroke-linecap="round"/><path d="M2.6 4.4a1.8 1.8 0 0 1 3.6 0" fill="none" stroke="#4dabf7" stroke-width=".9"/></svg>';
-MINION_PROPS.book = '<svg class="mn-prop" viewBox="0 0 12 12"><path d="M6 3.2C4.4 2.2 2.6 2 1 2.4v7.4c1.6-.4 3.4-.2 5 .8 1.6-1 3.4-1.2 5-.8V2.4c-1.6-.4-3.4-.2-5 .8z" fill="#f1f3f7" stroke="#9775fa" stroke-width=".7"/><path class="mn-page" d="M6 3.2v7.4C7.6 9.6 9.4 9.4 11 9.8V2.4c-1.6-.4-3.4-.2-5 .8z" fill="#e3e6ee"/></svg>';
-MINION_PROPS.radio = '<svg class="mn-prop" viewBox="0 0 12 12"><rect x="2" y="4.6" width="5" height="6.8" rx="1" fill="#4a5163"/><rect x="3" y="5.6" width="3" height="1.6" rx=".3" fill="#69db7c"/><path d="M5.6 4.6V1" stroke="#9aa3b5" stroke-width=".9"/></svg>';
-const MINION_FX = { weld: 4, hammer: 1, laptop: 3, papers: 3, dig: 3, magnify: 0, gear: 0, paint: 1, saw: 3, broom: 3, flask: 3, drill: 3, water: 3, book: 0, radio: 3 }; // particles per action
-
 const SUBAGENT_KIND = { 'general-purpose': '범용', claude: '범용', shell: '명령', fork: '분신', explore: '탐색', plan: '계획', 'statusline-setup': '설정', 'claude-code-guide': '안내', 'code-reviewer': '리뷰', 'test-runner': '테스트' };
 const subagentKind = (k) => SUBAGENT_KIND[String(k).toLowerCase()] || k;
 
@@ -8106,22 +8066,9 @@ const subagentKind = (k) => SUBAGENT_KIND[String(k).toLowerCase()] || k;
 function subagentRowsHtml(tab) {
   const list = (tab && tab.subagents) || [];
   const now = Date.now();
-  // the check badge: pops onto the minion with a ring and sparkles, the tick drawing itself in
-  const badge = (a) => {
-    if (a.status !== 'done') return '';
-    const fresh = !!(tab.subCheer && tab.subCheer.has(a.id));
-    return `<span class="mn-check${fresh ? ' fresh' : ''}"><i class="ring"></i><i class="sp s0"></i><i class="sp s1"></i><i class="sp s2"></i><i class="sp s3"></i><svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="5.4"/><path d="M3.4 6.3l1.8 1.8 3.6-3.8"/></svg></span>`;
-  };
   const rows = list.map((a) => `
     <div class="item child subagent sa-${a.status}" title="${esc(a.kind)}${a.name ? ' · ' + esc(a.name) : ''}">
-      ${(() => {
-        const w = MINION_WORK[minionHash((a.look || a.id) + ':work') % MINION_WORK.length];
-        const live = a.status === 'running';
-        const paint = MINION_COLORS[minionHash((a.look || a.id) + ':paint') % MINION_COLORS.length];
-        const fx = live ? Array.from({ length: MINION_FX[w] || 0 }, (_, i) => `<i class="mfx f${i}"></i>`).join('') : '';
-        const fresh = a.status === 'done' && !!(tab.subCheer && tab.subCheer.has(a.id));
-        return `<span class="minion mw-${w}${fresh ? ' mn-cheer' : ''}" style="--paint:${paint}">${minionSvg(a.look || a.id, live ? w : '')}${live ? MINION_PROPS[w] : ''}${fx}${badge(a)}</span>`;
-      })()}
+      ${minionHtml(a.look || a.id, { live: a.status === 'running', done: a.status === 'done', fresh: a.status === 'done' && !!(tab.subCheer && tab.subCheer.has(a.id)) })}
       <span class="sa-text"><b>${esc(subagentKind(a.kind))}</b>${a.name ? `<span class="sa-sum no-i18n">(${esc(a.name)})</span>` : ''}</span>
       <span class="sa-state">${a.status === 'running' ? '<i></i><i></i><i></i>' : a.status === 'failed' ? icon('x') : ''}</span>
     </div>`).join('');
@@ -9356,7 +9303,7 @@ function openProjectMenu(p, x, y) {
     { label: p.name },
     { icon: 'palette', text: '아이콘 변경…', run: () => openProjectIconPicker(p) },
     { icon: 'terminal', text: '터미널 열기', run: () => newShell(null, p.path) },
-    { icon: 'progress', text: '진행도 보기', run: () => openProgress(p.path, p.name) },
+    { icon: 'progressRing', text: '진행도 보기', run: () => openProgress(p.path, p.name) },
     { icon: 'history', text: 'Claude 마지막 대화 이어서', cls: 'claude', run: () => newAgent('claude', { cwd: p.path, mode: 'continue' }) },
     { icon: 'history', text: 'Codex 마지막 대화 이어서', cls: 'codex', run: () => newAgent('codex', { cwd: p.path, mode: 'continue' }) },
     '-',
@@ -9379,15 +9326,23 @@ const PG = {
   view: $('#progress-view'),
   frame: $('#progress-view .pg-frame'),
   chip: $('#progress-view .pg-chip'),
+  mark: $('#progress-view .pg-mark'),
   hint: $('#progress-view .pg-hint'),
   setup: $('#progress-view .pg-setup'),
   loading: $('#progress-view .pg-loading'),
   error: $('#progress-view .pg-error'),
 };
 
+/*
+ * The connection, shown as a dot on the 진행도 mark (as the sidebar's session icons show theirs): green while the page
+ * is live, violet pulsing while it connects. Words only when something needs a hand (구축 필요, 기록 없음, 오류);
+ * otherwise they are the mark's tooltip.
+ */
 function pgChip(state, text) {
   PG.chip.dataset.state = state;
   PG.chip.querySelector('.pg-chip-text').textContent = text;
+  PG.mark.dataset.state = state;
+  PG.mark.title = text;
 }
 function pgShow(which) { // one body state at a time: setup / loading / error / frame
   for (const k of ['setup', 'loading', 'error']) PG[k].hidden = which !== k;
@@ -9408,6 +9363,8 @@ function progressTheme() {
     dark: !isLight(),
     font,
     mono: "'Cascadia Mono', Consolas, monospace",
+    bar: S.settings.progressBar || 'plain', // 꾸미기 → 진행도: the summary card's progress bar
+    room: S.settings.roomStyle || 'default', // and the room's style
     vars: {
       bg: col('var(--stage-solid)', isLight() ? '#fafbfc' : '#10131a'),
       card: col('var(--surface)', isLight() ? '#ffffff' : '#161922'),
@@ -9433,7 +9390,7 @@ async function openProgress(dir, name) {
   const seq = ++S.progress.seq;
   Object.assign(S.progress, { open: true, path: dir, name: name || String(dir).replace(/[\\/]+$/, '').split(/[\\/]/).pop() || dir });
   PG.view.querySelector('.pg-title').textContent = S.progress.name;
-  PG.view.querySelector('.pg-path').textContent = dir;
+  PG.view.querySelector('.pg-path').textContent = shortMiddlePath(prettyPath(dir));
   PG.view.querySelector('.pg-path').title = dir;
   PG.view.classList.remove('closing');
   PG.view.hidden = false;
@@ -9595,7 +9552,7 @@ function progressHint(empty) {
     window.mt.pty.write(t.id, '/minsuterm-progress'); // typed, not sent: the user presses Enter
     closeProgress();
     activate(t.id);
-    toast('Claude 입력창에 /minsuterm-progress 를 넣었어요 · Enter로 시작', { icon: 'progress' });
+    toast('Claude 입력창에 /minsuterm-progress 를 넣었어요 · Enter로 시작', { icon: 'progressRing' });
   };
 }
 
@@ -9617,13 +9574,14 @@ function showProgressSetup(st, seq) {
     <ul class="pg-steps">
       ${step('progress', '진행 보고 스킬 설치', `<code class="no-i18n">${esc(dirOf('minsuterm-progress'))}</code>`)}
       ${step('dreaming', '수면 스킬 설치', `자러 가기를 누르면 일을 마치고 기억을 정리한 뒤 잡니다 · <code class="no-i18n">${esc(dirOf('minsuterm-dreaming'))}</code>`)}
+      ${st.codex ? step('codex', 'Codex용 진행 보고 스킬 설치', `Codex도 진행 보고를 할 수 있어요 · <code class="no-i18n">${esc(st.codex.target)}</code>`) : ''}
       ${step('record', '이 폴더의 진행 기록 준비', `<code class="no-i18n">${esc(S.progress.path)}</code> 안의 progress 폴더 (git에는 올라가지 않아요)`)}
       ${step('node', st.node ? '이 컴퓨터의 Node 사용' : 'Node를 MinsuTerm이 대신 실행', st.node ? '스킬의 도구를 설치된 Node로 실행합니다' : 'Node가 없어도 MinsuTerm이 스킬의 도구를 실행합니다')}
     </ul>
     <div class="pg-card-actions">
       <span class="pg-card-note">${st.ownProgress ? '쓰고 계신 progress 스킬은 그대로 두고, 같은 기록을 함께 씁니다' : ''}</span>
       <span class="pg-card-btns"><button class="btn small" data-pg="view">지금은 보기만</button>
-      <button class="btn small primary" data-pg="build">${icon('progress')}구축하기</button></span>
+      <button class="btn small primary" data-pg="build">${icon('progressRing')}구축하기</button></span>
     </div>
   </div>`;
   pgShow('setup');
@@ -9639,10 +9597,10 @@ function showProgressSetup(st, seq) {
     if (seq !== S.progress.seq) return;
     for (const li of items) {
       li.classList.remove('doing');
-      const d = (res.done || []).find((x) => x.name === `minsuterm-${li.dataset.step}`);
+      const d = (res.done || []).find((x) => (li.dataset.step === 'codex' ? x.agent === 'codex' : x.agent !== 'codex' && x.name === `minsuterm-${li.dataset.step}`));
       li.classList.add(d && d.skipped ? 'skip' : 'done');
     }
-    toast('진행 보고 환경을 구축했어요', { icon: 'progress' });
+    toast('진행 보고 환경을 구축했어요', { icon: 'progressRing' });
     setTimeout(() => { if (seq === S.progress.seq && S.progress.open) loadProgressPage(seq); }, 650);
   };
 }
@@ -9889,7 +9847,7 @@ function openCommandPalette() {
     { group: '보기', icon: 'x', text: '글꼴 작게', hint: 'Ctrl+-', run: () => setFontSize(S.settings.fontSize - 1) },
     { group: '보기', icon: 'type', text: '글꼴 크기 초기화', hint: 'Ctrl+0', run: () => setFontSize(14) },
     { group: '앱', icon: 'folderPlus', text: '프로젝트 추가', run: () => addProject() },
-    { group: '앱', icon: 'progress', text: '진행도 보기', hint: 'Ctrl+Shift+J', keywords: 'progress todo board', run: () => openProgressPicker() },
+    { group: '앱', icon: 'progressRing', text: '진행도 보기', hint: 'Ctrl+Shift+J', keywords: 'progress todo board', run: () => openProgressPicker() },
     { group: '앱', icon: 'settings', text: '설정', hint: 'Ctrl+,', run: openSettings },
     { group: '앱', icon: 'folderOpen', text: '설정 폴더 열기', run: () => window.mt.openUserData() },
     { group: '앱', icon: 'bolt', text: '성능 기록 (30초)', sub: '느릴 때 실행: 무엇이 CPU를 쓰는지 파일로 저장', keywords: 'performance profile cpu diagnostics lag', run: () => recordPerformance(30000) },
@@ -10522,6 +10480,9 @@ function openSettings() {
       <div class="field"><div class="field-label"><b>작업 중 테두리</b><span>에이전트가 일하는 동안 테두리가 빛납니다</span></div><div class="ctl-row">${sw('workGlow')}${subBtn('workGlow')}</div></div>
       ${subBox('workGlow', `
         <div class="field" data-dep="workGlow"><div class="field-label"><b>테두리 스타일</b></div>${pk('workGlowStyle')}</div>`)}`)}
+    ${decoSec('progress', 'progressRing', '진행도', `
+      <div class="field"><div class="field-label"><b>진행 바</b><span>진행도 요약 카드에 보이는 진행 바의 모양</span></div>${pk('progressBar')}</div>
+      <div class="field"><div class="field-label"><b>방 스타일</b><span>진행도의 방 그림. 가구 자리는 같고 분위기가 바뀝니다</span></div>${pk('roomStyle')}</div>`)}
     ${decoSec('done', 'star', '작업 완료', `
       <div class="field"><div class="field-label"><b>축하 효과</b><span>작업을 마치면 그 화면 위로 효과가 터집니다</span></div><div class="ctl-row">${sw('celebrate')}${subBtn('celebrate')}</div></div>
       ${subBox('celebrate', `
@@ -10592,6 +10553,7 @@ function openSettings() {
     typing: () => `${tr('효과')} ${nameOf(FX_KINDS, cur('typingFx') || 'none')} · ${tr('소리')} ${nameOf(SOUND_KINDS, SOUND_ALIASES[cur('typingSound')] || cur('typingSound') || 'none')}`,
     bg: () => [nameOf(BG_KINDS, cur('bgAnim') || 'none'), cur('bgImage') ? '이미지' : '', cur('crt') ? 'CRT' : ''].filter(Boolean).join(' · '),
     agent: () => `${nameOf(PROMPT_STYLES, cur('promptStyle') || 'default')} · ${tr('테두리')} ${cur('workGlow') ? nameOf(WG_KINDS, cur('workGlowStyle')) : tr('끔')} · ${tr('말풍선')} ${nameOf(BUBBLE_STYLES, cur('choiceBubble') || 'classic')}`,
+    progress: () => `${nameOf(PROGRESS_BARS, cur('progressBar') || 'plain')} · ${nameOf(ROOM_STYLES, cur('roomStyle') || 'default')}`,
     done: () => `${cur('celebrate') ? nameOf(CELEB_KINDS, cur('celebrateStyle') || 'party') : '축하 끔'} · ${cur('doneText') ? `${tr('텍스트')} ${nameOf(DONE_TEXT_STYLES, cur('doneTextStyle') || 'pop')}` : '텍스트 끔'}`,
   };
   const wasOn = {};
@@ -10677,6 +10639,8 @@ function openSettings() {
   setupPicker(body.querySelector('[data-picker="promptStyle"]'), { key: 'promptStyle', items: PROMPT_STYLES, preview: previewPrompt, onPick: () => applySettings() });
   setupPicker(body.querySelector('[data-picker="choiceBubble"]'), { key: 'choiceBubble', items: BUBBLE_STYLES, preview: previewBubble, onPick: () => { renderSessions(); renderProjects(); } });
   setupPicker(body.querySelector('[data-picker="workGlowStyle"]'), { key: 'workGlowStyle', items: WG_KINDS, preview: previewGlow, onPick: () => applySettings() });
+  setupPicker(body.querySelector('[data-picker="progressBar"]'), { key: 'progressBar', items: PROGRESS_BARS, preview: previewProgressBar, onPick: () => postProgressTheme() });
+  setupPicker(body.querySelector('[data-picker="roomStyle"]'), { key: 'roomStyle', items: ROOM_STYLES, preview: previewRoomStyle, onPick: () => postProgressTheme() });
   setupPicker(body.querySelector('[data-picker="celebrateStyle"]'), { key: 'celebrateStyle', items: CELEB_KINDS, preview: previewCelebrate, onPick: () => applySettings() });
   setupDoneTextSettings(body);
   if (SOUND_ALIASES[S.settings.typingSound]) S.settings.typingSound = SOUND_ALIASES[S.settings.typingSound];

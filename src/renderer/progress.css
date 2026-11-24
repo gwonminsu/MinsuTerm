@@ -89,30 +89,29 @@
 .pg-path { flex: 0 1 auto; min-width: 0; font-size: 11.5px; color: var(--dim); font-family: 'Cascadia Mono', Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pg-spacer { flex: 1 1 auto; }
 
-.pg-chip {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 22px;
-  padding: 0 9px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  color: var(--muted);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-}
-.pg-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
-.pg-chip[data-state="loading"] i { background: var(--violet); animation: pg-pulse 1.1s ease-in-out infinite; }
-.pg-chip[data-state="live"] i { background: #3ccf8e; box-shadow: 0 0 0 3px rgba(60, 207, 142, .18); }
-.pg-chip[data-state="setup"] i { background: #f0b44c; }
-.pg-chip[data-state="error"] i { background: #ef6a6a; }
+/* the connection: a dot on the mark's corner, as on the sidebar's session icons (app.js pgChip). Words only when
+   something needs a hand; live / connecting stay quiet (their words are the mark's tooltip) */
+.pg-mark { position: relative; }
+.pg-dot { position: absolute; right: -3px; bottom: -3px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--surface); background: var(--dim); }
+.pg-mark[data-state="live"] .pg-dot { background: var(--green); }
+.pg-mark[data-state="loading"] .pg-dot { background: var(--violet); animation: pg-pulse 1.1s ease-in-out infinite; }
+.pg-mark[data-state="setup"] .pg-dot { background: var(--amber); }
+.pg-mark[data-state="error"] .pg-dot { background: var(--red); }
+.pg-chip { flex: 0 0 auto; display: none; align-items: center; font-size: 11.5px; font-weight: 600; }
+.pg-chip i { display: none; }
+.pg-chip[data-state="setup"] { display: inline-flex; color: var(--amber); }
+.pg-chip[data-state="error"] { display: inline-flex; color: var(--red); }
 @keyframes pg-pulse { 50% { opacity: .35; } }
 
 .pg-bar .icon-btn { flex: none; width: 32px; height: 32px; }
 .pg-bar .icon-btn .ico { width: 16px; height: 16px; }
 .pg-close { flex: none; height: 34px; padding: 0 14px 0 11px; gap: 6px; font-weight: 650; white-space: nowrap; }
 .pg-close .ico { width: 15px; height: 15px; }
+.pg-close { gap: 7px; padding: 0 9px 0 13px; }
+.pg-close-x { display: none; }
+/* the key that closes it, drawn as a key on the button */
+.pg-kbd { font: 600 10.5px/16px 'Cascadia Mono', Consolas, monospace; padding: 0 4px; border-radius: 4px; color: rgba(255, 255, 255, .92);
+  border: 1px solid rgba(255, 255, 255, .45); border-bottom-width: 2px; background: rgba(255, 255, 255, .1); }
 /* a narrow pane: the path goes first, then the chip's words, then the close button keeps only its × (never a wrapped label) */
 #progress-view { container-type: inline-size; }
 @container (max-width: 620px) {
@@ -120,10 +119,10 @@
   .pg-title { max-width: 160px; }
 }
 @container (max-width: 470px) {
-  .pg-chip { padding: 0 7px; }
-  .pg-chip-text { display: none; }
+  .pg-chip[data-state] { display: none; } /* the dot on the mark still tells */
   .pg-close { width: 34px; padding: 0; justify-content: center; }
-  .pg-close-label { display: none; }
+  .pg-close-label, .pg-kbd { display: none; }
+  .pg-close-x { display: inline-flex; }
 }
 
 /* a slim line under the bar while the record is still empty */

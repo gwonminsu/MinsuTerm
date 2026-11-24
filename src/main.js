@@ -897,6 +897,7 @@ function parseCodex(file, stat) {
   let cwd = '';
   let firstPrompt = '';
   let branch = '';
+  let spawned = false; // a thread Codex started itself (a sub-agent, a /review), not one the user opened
   for (const line of text.split('\n')) {
     if (!line || line[0] !== '{') continue;
     if (id && firstPrompt) break;
@@ -904,6 +905,9 @@ function parseCodex(file, stat) {
     try { o = JSON.parse(line); } catch { continue; }
     const pl = o.payload || {};
     if (o.type === 'session_meta') {
+      if (!id) { // the first one is this thread's own: user-opened threads say thread_source "user"
+        spawned = (pl.thread_source != null && pl.thread_source !== 'user') || /subagent/i.test(typeof pl.source === 'string' ? pl.source : JSON.stringify(pl.source || ''));
+      }
       id = pl.id || pl.session_id || id;
       cwd = pl.cwd || cwd;
       if (pl.git && pl.git.branch) branch = pl.git.branch;
@@ -919,7 +923,7 @@ function parseCodex(file, stat) {
     if (m) id = m[1];
   }
   if (!id) return null;
-  return { agent: 'codex', id, cwd, firstPrompt: firstPrompt.slice(0, 200), branch, mtime: stat.mtimeMs };
+  return { agent: 'codex', id, cwd, firstPrompt: firstPrompt.slice(0, 200), branch, mtime: stat.mtimeMs, spawned };
 }
 
 function codexSessionsFor(cwd, limit) {
@@ -942,6 +946,26 @@ function codexSessionsFor(cwd, limit) {
   }
   return out;
 }
+
+/**
+ * Codex sessions in a folder written in the last `withinMs`, for the room in 진행도, which stands them in beside the
+ * Claude sessions it reads from the Claude transcripts: [{ id, title, named, mtimeMs }]. Each open page asks every
+ * 5 s; the walk of the sessions tree (a stat of every file) is kept for 12 s. Threads Codex spawned itself (sub-agents,
+ * /review) are not sessions of their own. Codex titles every thread itself, so none counts as named by the user.
+ */
+let codexCrewFiles = { at: 0, files: [] };
+function codexCrew(root, withinMs) {
+  if (Date.now() - codexCrewFiles.at > 12000) codexCrewFiles = { at: Date.now(), files: codexFiles(30) };
+  const titles = codexTitles(), cut = Date.now() - withinMs, out = [];
+  for (const { file, stat } of codexCrewFiles.files) {
+    if (stat.mtimeMs < cut) break; // newest first
+    const info = cached(file, stat, parseCodex);
+    if (!info || info.spawned || !samePath(info.cwd, root)) continue;
+    out.push({ id: String(info.id).toLowerCase(), title: String(titles.get(info.id) || info.firstPrompt || '').slice(0, 140), named: false, mtimeMs: stat.mtimeMs });
+  }
+  return out;
+}
+progress.setCodexCrew(codexCrew);
 
 function listSessions(cwd, limit = 40) {
   const claude = [];
@@ -1234,7 +1258,7 @@ function subagentLine(agent, c, line) {
       } else if (q.name === 'SendMessage' && inp.to) {
         // to a sub-agent that had finished, it starts another run (its result says so); the run shows as that agent
         const to = String(inp.to), was = [...map.values()].reverse().find((x) => x.agentId && (x.agentId === to || x.agentId.startsWith(to)));
-        map.set(q.id, { id: q.id, kind: was ? was.kind : 'agent', name: was ? was.name : '', status: 'running', start, end: 0, msg, resume: to });
+        map.set(q.id, { id: q.id, kind: was ? was.kind : 'agent', name: was ? was.name : '', status: 'running', start, end: 0, msg, resume: to, look: was ? was.look || was.id : '' });
       } else if (inp.run_in_background === true) { // a shell command left running in the background
         map.set(q.id, { id: q.id, kind: 'shell', name: String(inp.description || inp.command || '').replace(/\s+/g, ' ').slice(0, 60), status: 'running', start, end: 0, msg, bg: true, shell: true, cmd: String(inp.command || ''), tool: String(q.name || '') });
       } else if (q.name === 'TaskStop' || q.name === 'KillShell' || q.name === 'KillBash') {
@@ -1433,7 +1457,8 @@ function subagents(agent, cwd, id, since = 0) {
     if (x.status === 'running' && agent !== 'claude' && !x.shell && now - (c.mtime || now) > SUB_LOST) { c.map.delete(x.id); continue; } // Codex: no end was ever written (a background command runs on with the transcript still)
     if (x.status === 'running' && x.shell && now - (x.start || now) > SHELL_LOST) { c.map.delete(x.id); continue; } // its end never came (the agent was closed)
     if (x.status !== 'running' && x.start < since && x.end < since) { if (now - Math.max(x.start, x.end) > 3600000) c.map.delete(x.id); continue; }
-    out.push({ id: x.id, look: x.agentId ? `ag:${x.agentId}` : x.id, kind: x.kind, name: x.name, status: x.status, start: x.start, ...(x.shell ? { task: x.taskId || '', cmd: x.cmd || '' } : {}) });
+    // look (its minion): the call that first launched it — what the progress room reads too (toolUseId in its meta file)
+    out.push({ id: x.id, look: x.look || x.id, kind: x.kind, name: x.name, status: x.status, start: x.start, ...(x.shell ? { task: x.taskId || '', cmd: x.cmd || '' } : {}) });
   }
   if (agent === 'codex') codexNames(id, c);
   // at most 12, but never one still running (a long list of finished ones must not push a live one off)

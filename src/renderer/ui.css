@@ -772,17 +772,10 @@ body.crt .term-host .xterm-screen { filter: drop-shadow(0 0 1.6px rgba(160, 200,
 /* 하수인: sub-agent rows hanging under a running task */
 .item.child.subagent { display: flex; align-items: center; gap: 7px; min-height: 26px; padding: 3px 8px 3px 30px; position: relative; cursor: default; }
 .item.child.subagent::before { content: ''; position: absolute; left: 21px; top: -2px; height: 15px; width: 7px; border-left: 1.5px solid var(--border-strong); border-bottom: 1.5px solid var(--border-strong); border-bottom-left-radius: 5px; }
-.minion { width: 22px; height: 22px; flex: none; display: grid; place-items: center; }
-.minion svg { width: 22px; height: 22px; overflow: visible; }
-.sa-running .minion .mn-eyes { animation: minionBlink 3.2s infinite; transform-origin: 50% 50%; transform-box: fill-box; }
-@keyframes minionBob { 0%, 100% { transform: translateY(0) scale(1, 1); } 45% { transform: translateY(-2px) scale(0.96, 1.04); } 55% { transform: translateY(-2px) rotate(-4deg); } }
-@keyframes minionBlink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
 .sa-text { flex: 1; min-width: 0; font-size: 11.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sa-text b { font-weight: 600; color: var(--text); }
 .sa-sum { margin-left: 4px; color: var(--muted); }
 .sa-done .sa-text, .sa-failed .sa-text { opacity: 0.6; }
-.sa-failed .minion { opacity: 0.7; }
-.sa-done .minion > svg:first-child { opacity: 0.75; }
 .sa-state { flex: none; display: inline-flex; gap: 2px; align-items: center; color: var(--muted); }
 .sa-state .ico { width: 12px; height: 12px; }
 .sa-done .sa-state { color: var(--green); }
@@ -790,125 +783,6 @@ body.crt .term-host .xterm-screen { filter: drop-shadow(0 0 1.6px rgba(160, 200,
 .sa-state i { width: 3px; height: 3px; border-radius: 50%; background: var(--violet); animation: saDot 1.2s infinite; }
 .sa-state i:nth-child(2) { animation-delay: .2s; } .sa-state i:nth-child(3) { animation-delay: .4s; }
 @keyframes saDot { 0%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
-
-/* 하수인 at work: a prop and the effect of the job (running only; one action per sub-agent) */
-.minion { position: relative; margin-right: 8px; }
-.minion > svg:first-child { transform-origin: 50% 100%; }
-.mn-prop { position: absolute; width: 13px; height: 13px; right: -9px; bottom: -1px; overflow: visible; }
-.mfx { position: absolute; display: block; pointer-events: none; }
-/* 돋보기: the glass searches around, the minion leans in to look */
-.sa-running .mw-magnify .mn-prop { animation: mnSearch 2.6s ease-in-out infinite; }
-.sa-running .mw-magnify > svg:first-child { animation: mnPeer 2.6s ease-in-out infinite; }
-@keyframes mnSearch { 0% { transform: translate(0, 0); } 25% { transform: translate(-12px, -8px) rotate(-15deg); } 50% { transform: translate(-3px, -11px); } 75% { transform: translate(2px, -4px) rotate(10deg); } 100% { transform: translate(0, 0); } }
-@keyframes mnPeer { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-8deg); } 75% { transform: rotate(6deg); } }
-/* 용접: visor down, the torch flickers, sparks fly */
-.sa-running .mw-weld .mn-visor { animation: mnGlint 0.3s steps(2) infinite; }
-.sa-running .mw-weld .mn-flame { animation: mnFlame 0.12s steps(2) infinite; }
-.mw-weld .mfx { width: 2px; height: 2px; border-radius: 50%; background: #ffe066; box-shadow: 0 0 3px #ffb703; right: 6px; bottom: 1px; animation: mnSpark 0.5s linear infinite; }
-.mw-weld .f1 { animation-delay: .12s; --sx: -7px; --sy: -4px; } .mw-weld .f2 { animation-delay: .25s; --sx: 4px; --sy: -7px; } .mw-weld .f3 { animation-delay: .38s; --sx: -3px; --sy: 3px; }
-@keyframes mnSpark { from { transform: translate(0, 0); opacity: 1; } to { transform: translate(var(--sx, 6px), var(--sy, -5px)); opacity: 0; } }
-@keyframes mnFlame { from { opacity: 1; transform: scale(1.2); } to { opacity: .5; transform: scale(.8); } }
-@keyframes mnGlint { from { opacity: 1; } to { opacity: .55; } }
-/* 망치질: swing, and a flash where it lands */
-.sa-running .mw-hammer .mn-prop { transform-origin: 50% 95%; animation: mnSwing 0.55s ease-in infinite; }
-.sa-running .mw-hammer > svg:first-child { animation: mnRock 0.55s ease-in-out infinite; }
-.mw-hammer .mfx { width: 7px; height: 7px; right: -11px; bottom: -3px; background: radial-gradient(circle, #fff 0 25%, #ffd43b 30%, transparent 70%); animation: mnBang 0.55s ease-out infinite; }
-@keyframes mnSwing { 0% { transform: rotate(-70deg); } 70% { transform: rotate(20deg); } 100% { transform: rotate(-70deg); } }
-@keyframes mnRock { 0%, 100% { transform: rotate(-4deg); } 70% { transform: rotate(5deg) translateY(1px); } }
-@keyframes mnBang { 0%, 60% { transform: scale(0); opacity: 0; } 70% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
-/* 노트북: typing away, bits of code float up */
-.sa-running .mw-laptop .mn-screen { animation: mnScreen 0.4s steps(2) infinite; }
-.sa-running .mw-laptop > svg:first-child { animation: mnTypeBob 0.3s ease-in-out infinite; }
-.mw-laptop .mfx { right: -4px; bottom: 8px; font: 700 6px/1 monospace; color: #38e1ff; animation: mnBits 1.2s ease-out infinite; }
-.mw-laptop .f0::before { content: '1'; } .mw-laptop .f1::before { content: '0'; } .mw-laptop .f2::before { content: '{'; }
-.mw-laptop .f1 { animation-delay: .4s; right: -9px; } .mw-laptop .f2 { animation-delay: .8s; right: 0; }
-@keyframes mnScreen { from { opacity: 1; } to { opacity: .6; } }
-@keyframes mnTypeBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(.8px); } }
-@keyframes mnBits { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-10px); opacity: 0; } }
-/* 서류 정리: sheets fly off the stack */
-.mw-papers .mfx { width: 4px; height: 5px; background: #f1f3f7; border-radius: 1px; right: -5px; bottom: 6px; animation: mnPaper 1.5s ease-out infinite; }
-.mw-papers .f1 { animation-delay: .5s; --px: -9px; } .mw-papers .f2 { animation-delay: 1s; --px: 5px; }
-.sa-running .mw-papers > svg:first-child { animation: mnRock 0.75s ease-in-out infinite; }
-@keyframes mnPaper { from { transform: translate(0, 0) rotate(0); opacity: 1; } to { transform: translate(var(--px, -3px), -12px) rotate(200deg); opacity: 0; } }
-/* 톱니: cranking the machine */
-.sa-running .mw-gear .mn-prop { animation: mnSpin 1.4s linear infinite; }
-.sa-running .mw-gear > svg:first-child { animation: mnCrank 0.7s ease-in-out infinite; }
-@keyframes mnSpin { to { transform: rotate(360deg); } }
-@keyframes mnCrank { 0%, 100% { transform: translateX(0) rotate(-3deg); } 50% { transform: translateX(1px) rotate(4deg); } }
-/* 삽질: dig in, throw the dirt */
-.sa-running .mw-dig .mn-prop { transform-origin: 80% 10%; animation: mnShovel 0.9s ease-in-out infinite; }
-.sa-running .mw-dig > svg:first-child { animation: mnDigBody 0.9s ease-in-out infinite; }
-.mw-dig .mfx { width: 2.5px; height: 2.5px; border-radius: 50%; background: #a47148; right: -8px; bottom: 0; animation: mnDirt 0.9s ease-out infinite; }
-.mw-dig .f1 { --dx: -3px; animation-delay: .05s; } .mw-dig .f2 { --dx: 4px; animation-delay: .1s; }
-@keyframes mnShovel { 0%, 100% { transform: rotate(0); } 45% { transform: rotate(-35deg) translateY(2px); } }
-@keyframes mnDigBody { 0%, 100% { transform: scale(1, 1); } 45% { transform: scale(1.08, .9); } }
-@keyframes mnDirt { 0%, 45% { transform: translate(0, 0); opacity: 0; } 50% { opacity: 1; } 100% { transform: translate(var(--dx, 1px), -9px); opacity: 0; } }
-/* 페인트: rolling paint up and down, the wall fills with colour */
-.sa-running .mw-paint .mn-prop { animation: mnRoll 1s ease-in-out infinite; }
-.mw-paint .mfx { width: 4px; right: -5px; bottom: 0; height: 0; background: var(--paint); border-radius: 2px; opacity: .8; animation: mnStripe 2s ease-in-out infinite; }
-@keyframes mnRoll { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
-@keyframes mnStripe { 0% { height: 0; } 60%, 85% { height: 14px; } 100% { height: 0; opacity: 0; } }
-
-/* 톱질: sawing back and forth, sawdust falls */
-.sa-running .mw-saw .mn-prop { animation: mnSaw .35s ease-in-out infinite; }
-.mw-saw .mfx { width: 2px; height: 2px; background: #e8c56a; right: -4px; bottom: -1px; animation: mnDust .7s ease-in infinite; }
-.mw-saw .f1 { animation-delay: .23s; right: -7px; } .mw-saw .f2 { animation-delay: .46s; right: -2px; }
-@keyframes mnSaw { 0%, 100% { transform: translateX(-3px); } 50% { transform: translateX(3px); } }
-@keyframes mnDust { from { transform: translateY(0); opacity: 1; } to { transform: translateY(6px); opacity: 0; } }
-/* 빗자루: sweeping, dust puffs */
-.sa-running .mw-broom .mn-prop { transform-origin: 70% 5%; animation: mnSweep .6s ease-in-out infinite; }
-.sa-running .mw-broom > svg:first-child { animation: mnRock .6s ease-in-out infinite; }
-.mw-broom .mfx { width: 4px; height: 4px; border-radius: 50%; background: rgba(200, 200, 210, .7); right: -10px; bottom: -2px; animation: mnPuff .6s ease-out infinite; }
-.mw-broom .f1 { animation-delay: .2s; right: -13px; } .mw-broom .f2 { animation-delay: .4s; right: -7px; }
-@keyframes mnSweep { 0%, 100% { transform: rotate(-22deg); } 50% { transform: rotate(18deg); } }
-@keyframes mnPuff { from { transform: scale(.4); opacity: .9; } to { transform: translate(3px, -4px) scale(1.4); opacity: 0; } }
-/* 실험: the flask bubbles */
-.sa-running .mw-flask > svg:first-child { animation: mnPeer 1.8s ease-in-out infinite; }
-.mw-flask .mfx { width: 2.5px; height: 2.5px; border-radius: 50%; border: .8px solid #7cf29a; right: -4px; bottom: 6px; animation: mnBubble 1.2s ease-in infinite; }
-.mw-flask .f1 { animation-delay: .4s; right: -6px; } .mw-flask .f2 { animation-delay: .8s; right: -3px; }
-@keyframes mnBubble { from { transform: translateY(0) scale(.6); opacity: 1; } to { transform: translateY(-9px) scale(1.2); opacity: 0; } }
-/* 드릴: buzzing, chips fly */
-.sa-running .mw-drill .mn-prop { animation: mnBuzz .06s linear infinite; }
-.sa-running .mw-drill > svg:first-child { animation: mnBuzz .08s linear infinite; }
-.mw-drill .mfx { width: 2px; height: 2px; background: #c9d1de; right: -11px; bottom: 6px; animation: mnChip .4s ease-out infinite; }
-.mw-drill .f1 { animation-delay: .13s; --cy: -4px; } .mw-drill .f2 { animation-delay: .26s; --cy: 4px; }
-@keyframes mnBuzz { 0% { transform: translate(0, 0); } 50% { transform: translate(.6px, -.4px); } 100% { transform: translate(-.4px, .4px); } }
-@keyframes mnChip { from { transform: translate(0, 0); opacity: 1; } to { transform: translate(5px, var(--cy, 0)); opacity: 0; } }
-/* 물주기: tilt the can, droplets fall */
-.sa-running .mw-water .mn-prop { transform-origin: 20% 80%; animation: mnTilt 1.6s ease-in-out infinite; }
-.mw-water .mfx { width: 1.6px; height: 3px; border-radius: 1px; background: #74c0fc; right: -12px; bottom: 5px; animation: mnDrop .6s linear infinite; }
-.mw-water .f1 { animation-delay: .2s; right: -13.5px; } .mw-water .f2 { animation-delay: .4s; right: -11px; }
-@keyframes mnTilt { 0%, 100% { transform: rotate(0); } 30%, 70% { transform: rotate(28deg); } }
-@keyframes mnDrop { from { transform: translateY(0); opacity: 1; } to { transform: translateY(7px); opacity: 0; } }
-/* 독서: turning the pages */
-.sa-running .mw-book .mn-page { transform-origin: 50% 50%; transform-box: fill-box; animation: mnPage 1.4s ease-in-out infinite; }
-.sa-running .mw-book > svg:first-child { animation: mnPeer 2.8s ease-in-out infinite; }
-@keyframes mnPage { 0%, 40% { transform: scaleX(1); } 60% { transform: scaleX(-1) translateX(100%); } 100% { transform: scaleX(1); } }
-/* 무전: signal waves go out */
-.mw-radio .mfx { width: 8px; height: 8px; border-radius: 50%; border: 1px solid #69db7c; border-left-color: transparent; border-bottom-color: transparent; right: -10px; bottom: 11px; animation: mnWave 1.2s ease-out infinite; transform-origin: 0 100%; }
-.mw-radio .f1 { animation-delay: .4s; } .mw-radio .f2 { animation-delay: .8s; }
-.sa-running .mw-radio > svg:first-child { animation: mnHop 1.6s ease-in-out infinite; }
-@keyframes mnWave { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
-
-/* 하수인 done: a check badge pops onto it */
-.mn-check { position: absolute; right: -5px; top: -4px; width: 12px; height: 12px; pointer-events: none; }
-.mn-check svg { position: relative; width: 12px; height: 12px; overflow: visible; filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .35)); }
-.mn-check circle { fill: #22c55e; stroke: #fff; stroke-width: 1.1; }
-.mn-check path { fill: none; stroke: #fff; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 8; stroke-dashoffset: 0; }
-.mn-check .ring, .mn-check .sp { position: absolute; left: 50%; top: 50%; display: none; }
-/* the moment it finishes */
-.mn-check.fresh svg { animation: chkPop .6s cubic-bezier(.2, 1.7, .4, 1) both; }
-.mn-check.fresh path { stroke-dashoffset: 8; animation: chkDraw .35s .3s ease-out forwards; }
-.mn-check.fresh .ring { display: block; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; border: 1.5px solid #4ade80; animation: chkRing .7s .15s ease-out both; }
-.mn-check.fresh .sp { display: block; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: #ffe066; animation: chkSpark .65s .2s ease-out both; }
-.mn-check.fresh .s0 { --sx: -10px; --sy: -7px; } .mn-check.fresh .s1 { --sx: 10px; --sy: -8px; background: #9ae6b4; }
-.mn-check.fresh .s2 { --sx: -9px; --sy: 8px; background: #9ae6b4; } .mn-check.fresh .s3 { --sx: 9px; --sy: 7px; }
-.minion.mn-cheer > svg:first-child { animation: mnCheer .6s cubic-bezier(.3, 1.6, .5, 1); }
-@keyframes chkPop { 0% { transform: scale(0) rotate(-120deg); } 70% { transform: scale(1.35) rotate(8deg); } 100% { transform: scale(1) rotate(0); } }
-@keyframes chkDraw { to { stroke-dashoffset: 0; } }
-@keyframes chkRing { from { transform: scale(.5); opacity: 1; } to { transform: scale(2.4); opacity: 0; } }
-@keyframes chkSpark { 0% { transform: translate(0, 0) scale(.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(var(--sx), var(--sy)) scale(1); opacity: 0; } }
-@keyframes mnCheer { 0% { transform: translateY(0); } 40% { transform: translateY(-4px) scale(1.06, .94); } 70% { transform: translateY(0) scale(.95, 1.05); } 100% { transform: none; } }
 
 /* 선택지를 기다리는 중: a speech bubble on the running task */
 .choice-bubble { position: relative; display: inline-flex; align-items: center; margin: 2px 0 1px 6px; padding: 2px 8px; border-radius: 9px;

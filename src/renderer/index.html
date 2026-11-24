@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="ui.css" />
+  <link rel="stylesheet" href="minions.css" />
+  <link rel="stylesheet" href="progress-bars.css" />
   <link rel="stylesheet" href="folders.css" />
   <link rel="stylesheet" href="glow.css" />
   <link rel="stylesheet" href="glow-b.css" />
@@ -99,7 +101,7 @@
         <!-- 진행도 보기: a folder's progress page over the terminal area (app.js openProgress) -->
         <section id="progress-view" class="progress-view" hidden aria-label="진행도">
           <header class="pg-bar">
-            <span class="pg-mark" data-icon="progress"></span>
+            <span class="pg-mark" data-icon="progressRing" data-state="loading"><i class="pg-dot"></i></span>
             <div class="pg-titles">
               <span class="pg-label">진행도</span>
               <span class="pg-title no-i18n"></span>
@@ -109,7 +111,7 @@
             <span class="pg-spacer"></span>
             <button class="icon-btn" id="pg-reload" title="새로고침"><span data-icon="refresh"></span></button>
             <button class="icon-btn" id="pg-browser" title="브라우저로 열기"><span data-icon="openExternal"></span></button>
-            <button class="btn small primary pg-close" id="pg-close" title="진행도 닫기 (Esc)"><span data-icon="x"></span><span class="pg-close-label">진행도 닫기</span></button>
+            <button class="btn small primary pg-close" id="pg-close" title="진행도 닫기 (Esc)"><span class="pg-close-x" data-icon="x"></span><span class="pg-close-label">닫기</span><kbd class="pg-kbd">Esc</kbd></button>
           </header>
           <div class="pg-hint" hidden>
             <span data-icon="info"></span>
@@ -200,6 +202,9 @@
   <script src="fx/submit-e.js"></script>
   <script src="fx/wg-more.js"></script>
   <script src="fx/edm-sound.js"></script>
+  <script src="minions.js"></script>
+  <script src="progress-bars.js"></script>
+  <script src="room-styles.js"></script>
   <script src="app.js"></script>
   <script src="scenes/core.js"></script>
   <script src="scenes/haunted.js"></script>

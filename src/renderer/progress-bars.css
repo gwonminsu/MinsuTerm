@@ -1,0 +1,144 @@
+/*
+ * 진행 바 스타일 (progress-bars.js draws them): shared by the settings preview and 진행도's summary card. Colours from
+ * --pb-*; the empty track is a translucent grey so it reads on dark and light.
+ */
+.pb {
+  --pb-done: #3ccf8e; --pb-done-2: #2fae75;
+  --pb-track: rgba(128, 136, 160, .2); --pb-edge: rgba(128, 136, 160, .38);
+  position: relative; width: 100%; min-width: 0;
+}
+.pb svg { display: block; width: 100%; overflow: visible; }
+
+/* 기본 */
+.pb-plain { height: 8px; border-radius: 999px; background: var(--pb-track); overflow: hidden; }
+.pb-plain > i { display: block; height: 100%; border-radius: 999px; background: var(--pb-done); transition: width .6s; }
+
+/* 빛이 흐르는 막대 */
+.pb-sheen { height: 8px; border-radius: 999px; background: var(--pb-track); }
+.pb-sheen > i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: linear-gradient(90deg, var(--pb-done-2), var(--pb-done)); overflow: hidden; transition: width .6s; }
+.pb-sheen > i > s { position: absolute; top: 0; bottom: 0; width: 40%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); animation: pb-sweep 2.8s ease-in-out infinite; }
+.pb-sheen > b { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: #c8ffe4; animation: pb-breathe 1.8s ease-in-out infinite; }
+@keyframes pb-sweep { from { left: -40%; } to { left: 120%; } }
+@keyframes pb-breathe { 0%, 100% { box-shadow: 0 0 0 0 rgba(60, 207, 142, .6); } 50% { box-shadow: 0 0 0 5px rgba(60, 207, 142, 0); } }
+
+/* 눈금자 */
+.pb-ruler { height: 26px; }
+.pb-ruler .tr, .pb-ruler .fl { position: absolute; left: 0; top: 12px; height: 4px; border-radius: 2px; }
+.pb-ruler .tr { right: 0; background: var(--pb-track); }
+.pb-ruler .fl { background: var(--pb-done); transition: width .6s; }
+.pb-ruler > i { position: absolute; top: 8px; width: 1.5px; height: 12px; margin-left: -.75px; background: var(--pb-edge); }
+.pb-ruler > i.on { background: var(--pb-done); }
+.pb-ruler > b { position: absolute; top: 0; width: 0; height: 0; margin-left: -5px; border: 5px solid transparent; border-top: 7px solid currentColor; transition: left .6s; }
+
+/* 네온관 */
+.pb-neon { height: 10px; border-radius: 999px; background: rgba(128, 136, 160, .08); border: 1px solid var(--pb-track); }
+.pb-neon > i { position: absolute; inset: 1px auto 1px 1px; border-radius: 999px; background: #b4ffd8; box-shadow: 0 0 6px var(--pb-done), 0 0 14px var(--pb-done), 0 0 24px rgba(60, 207, 142, .6); animation: pb-flick 4s steps(1) infinite; }
+@keyframes pb-flick { 0%, 92%, 96%, 100% { opacity: 1; } 94% { opacity: .55; } }
+
+/* 오로라 */
+.pb-aurora { height: 10px; border-radius: 999px; background: var(--pb-track); overflow: hidden; }
+.pb-aurora > i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #8f73ff, #4fd1ff, #3ccf8e, #b6f36b, #8f73ff); background-size: 300% 100%; animation: pb-aurora 6s linear infinite; transition: width .6s; }
+@keyframes pb-aurora { to { background-position: 300% 0; } }
+
+/* LED 전광판 */
+.pb-led { display: grid; grid-auto-flow: column; grid-template-rows: repeat(3, 5px); gap: 3px; justify-content: space-between; }
+.pb-led > i { width: 5px; height: 5px; border-radius: 50%; background: var(--pb-track); }
+.pb-led > i.on { background: var(--pb-done); box-shadow: 0 0 4px rgba(60, 207, 142, .8); }
+.pb-led > i.edge { background: var(--pb-done); animation: pb-blink .6s steps(1) infinite; }
+@keyframes pb-blink { 50% { opacity: .35; } }
+
+/* 8비트 픽셀 */
+.pb-pixel { display: flex; height: 14px; border: 2px solid var(--pb-edge); padding: 2px; }
+.pb-pixel > i { flex: 1; }
+.pb-pixel .on { background: var(--pb-done); }
+.pb-pixel .d1 { background: repeating-linear-gradient(90deg, var(--pb-done) 0 2px, transparent 2px 4px); }
+.pb-pixel .d2 { background: repeating-linear-gradient(90deg, var(--pb-done) 0 1px, transparent 1px 4px); }
+
+/* 심전도 */
+.pb-ecg svg { height: 30px; }
+.pb-ecg .rest { stroke: var(--pb-edge); stroke-width: 1.5; stroke-dasharray: 3 4; fill: none; }
+.pb-ecg .trace { fill: none; stroke: var(--pb-done-2); stroke-width: 2; opacity: .6; }
+.pb-ecg .blip { fill: none; stroke: #7dffbf; stroke-width: 2; stroke-dasharray: 40 360; animation: pb-blip 2s linear infinite; }
+@keyframes pb-blip { from { stroke-dashoffset: 400; } to { stroke-dashoffset: 0; } }
+
+/* 고리 */
+.pb-ring { display: flex; align-items: center; gap: 12px; }
+.pb-ring svg { width: 40px; height: 40px; flex: none; transform: rotate(-90deg); }
+.pb-ring .bg { fill: none; stroke: var(--pb-track); stroke-width: 5; }
+.pb-ring .fg { fill: none; stroke: var(--pb-done); stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset .6s; }
+.pb-ring span { font-size: 12px; opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* VU 미터 */
+.pb-vu { display: flex; gap: 2px; height: 16px; }
+.pb-vu > i { flex: 1; border-radius: 1.5px; background: var(--pb-track); }
+.pb-vu > i.g { background: var(--pb-done); } .pb-vu > i.y { background: #f2d45c; } .pb-vu > i.r { background: #ff6b5f; }
+.pb-vu > i.peak { animation: pb-peak .5s ease-in-out infinite alternate; }
+@keyframes pb-peak { to { opacity: .25; } }
+
+/* 아날로그 게이지 */
+.pb-gauge { display: flex; align-items: center; gap: 12px; }
+.pb-gauge svg { width: 70px; height: 40px; flex: none; }
+.pb-gauge .arc { fill: none; stroke: var(--pb-track); stroke-width: 4; }
+.pb-gauge .arc.on { stroke: var(--pb-done); }
+.pb-gauge line { stroke: currentColor; opacity: .55; }
+.pb-gauge line.hot { stroke: #ff6b5f; opacity: 1; }
+.pb-gauge .needle { transform-origin: 39px 40px; transition: transform .7s cubic-bezier(.3, 1.4, .5, 1); }
+.pb-gauge .needle line { stroke: currentColor; opacity: 1; stroke-width: 2; stroke-linecap: round; }
+.pb-gauge .hub { fill: currentColor; }
+.pb-gauge span { font-size: 12px; opacity: .75; white-space: nowrap; }
+
+/* 이퀄라이저 */
+.pb-eq { display: flex; align-items: flex-end; gap: 2px; height: 26px; }
+.pb-eq > i { flex: 1; border-radius: 1.5px; background: var(--pb-track); height: 3px; }
+.pb-eq > i.on { background: linear-gradient(180deg, #8ff0c0, var(--pb-done-2)); animation: pb-eqb var(--s) ease-in-out infinite alternate; }
+@keyframes pb-eqb { from { height: 20%; } to { height: 100%; } }
+
+/* 글리치 */
+.pb-glitch { height: 10px; border-radius: 2px; background: var(--pb-track); }
+.pb-glitch > i { position: absolute; inset: 0 auto 0 0; background: var(--pb-done); }
+.pb-glitch > i::before, .pb-glitch > i::after { content: ''; position: absolute; inset: 0; mix-blend-mode: screen; opacity: .7; }
+.pb-glitch > i::before { background: #ff2a6d; animation: pb-gla 1.4s steps(2) infinite; }
+.pb-glitch > i::after { background: #05d9e8; animation: pb-glb 1.1s steps(2) infinite; }
+@keyframes pb-gla { 0%, 80% { transform: translate(0, 0); clip-path: inset(0 0 0 0); } 85% { transform: translate(-3px, -1px); clip-path: inset(0 0 60% 0); } 92% { transform: translate(3px, 1px); clip-path: inset(50% 0 0 0); } }
+@keyframes pb-glb { 0%, 75% { transform: translate(0, 0); } 80% { transform: translate(3px, 0); clip-path: inset(30% 0 30% 0); } 90% { transform: translate(-2px, 1px); } }
+
+/* 회로 기판: a stretch of trace per task, a pad at its end */
+.pb-pcb { display: flex; align-items: center; height: 32px; }
+.pb-pcb > s { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--pb-done); }
+.pb-pcb > i { flex: 1; min-width: 6px; position: relative; display: flex; align-items: center; height: 32px; }
+.pb-pcb > i svg { flex: 1; height: 32px; }
+.pb-pcb > i path { fill: none; stroke: var(--pb-edge); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.pb-pcb > i > b { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--pb-bg, #181b24); border: 1.4px solid var(--pb-edge); }
+.pb-pcb > i.lit path { stroke: var(--pb-done); filter: drop-shadow(0 0 3px rgba(60, 207, 142, .8)); }
+.pb-pcb > i.lit > b { background: var(--pb-done); border-color: var(--pb-done); }
+
+/* 소나 펄스 */
+.pb-sonar { height: 10px; border-radius: 999px; background: var(--pb-track); }
+.pb-sonar > i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--pb-done); transition: width .6s; }
+.pb-sonar > s { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; border: 1.5px solid var(--pb-done); animation: pb-sonar 1.8s ease-out infinite; }
+@keyframes pb-sonar { from { transform: scale(.6); opacity: 1; } to { transform: scale(3.4); opacity: 0; } }
+
+/* 7세그먼트 */
+.pb-seg { display: flex; gap: 3px; height: 16px; }
+.pb-seg > i { flex: 1; clip-path: polygon(15% 0, 85% 0, 100% 50%, 85% 100%, 15% 100%, 0 50%); background: var(--pb-track); }
+.pb-seg > i.on { background: var(--pb-done); filter: drop-shadow(0 0 3px rgba(60, 207, 142, .7)); }
+
+/* 줄자: the case keeps its size, the tape runs across the rest */
+.pb-tape { display: flex; align-items: center; height: 28px; }
+.pb-tape .case { flex: none; width: 44px; height: 26px; position: relative; z-index: 1; }
+.pb-tape .case rect, .pb-tape .case circle { fill: #e0453a; }
+.pb-tape .case .hole { fill: #8f2a22; }
+.pb-tape .run { flex: 1; position: relative; height: 20px; margin-left: -3px; }
+.pb-tape .band { position: absolute; left: 0; top: 0; bottom: 0; background-color: #ffd43b; transition: width .6s;
+  background-image: repeating-linear-gradient(90deg, #3a2f0a 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #3a2f0a 0 1px, transparent 1px 8px);
+  background-size: 100% 9px, 100% 5px; background-repeat: repeat-x; background-position: 0 0, 0 0; }
+.pb-tape .band em { position: absolute; bottom: 1px; transform: translateX(-100%); padding-right: 2px; font: normal 8px/1 Consolas, monospace; color: #3a2f0a; }
+.pb-tape .band b { position: absolute; right: -3px; top: -3px; bottom: -3px; width: 5px; border-radius: 1px; background: #c9cfdb; }
+
+@media (prefers-reduced-motion: reduce) { .pb *, .pb *::before, .pb *::after { animation: none !important; } }
+
+/* the settings preview (꾸미기 → 진행도): the bar in the picker's boxes */
+.pv-pbar { width: 86%; color: var(--text); }
+.pk-pv .pv-pbar { zoom: .6; width: 150%; }
+/* 꾸미기 → 진행도 → 방 스타일: the sketch fills the picker's box */
+.pv-room { display: block; width: 100%; height: 100%; }

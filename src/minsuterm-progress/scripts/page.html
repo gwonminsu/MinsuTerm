@@ -219,7 +219,12 @@
   .cap-hat { fill: #4a6fd8; } .cap-brim { fill: #dfe7ff; } .cap-pom { fill: #ffffff; }
   .lid { fill: #c4ccd8; } .lid-dot { fill: #ffffff; opacity: .8; }
   .sipper { transform-origin: 13px 3px; }
-  .ag-eye { fill: #2b1a12; } .ag-laptop { fill: #e3e8ef; stroke: #8a94a6; stroke-width: .6; }
+  /* minsuterm: 서브 에이전트 하수인 (모양과 움직임은 minions.css). 하수인이 캐릭터 자리 가운데에 오고 도구·효과는 삐져나가도 된다 */
+  .mn-fo { overflow: visible; }
+  .mn-host { position: relative; width: 44px; height: 40px; }
+  .mn-host .minion { position: absolute; left: 11px; top: 16px; margin: 0; }
+  .cmn { flex: none; width: 14px; height: 14px; display: grid; place-items: center; }
+  .cmn svg { width: 14px; height: 14px; overflow: visible; }
   /* Codex: 로고의 구름 그라데이션과 흰 >_ 프롬프트 */
   .cx-eye { fill: #1e2470; }
   .cx-line { fill: none; stroke: #1e2470; stroke-width: 1.7; stroke-linecap: round; }
@@ -250,7 +255,6 @@
   @keyframes talk { 50% { transform: scaleY(.3); } }
   .confetti { animation: burst 1.3s ease-out forwards; }
   @keyframes burst { 0% { transform: translate(0, 0) rotate(0deg); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; } }
-  .check circle { fill: #22a06b; } .check path { stroke: #fff; stroke-width: 1.3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
   /* 상태별 동작: 일할 때는 빛살이 저마다의 박자로 길어졌다 짧아지며 천천히 공전한다 */
   .act-work .rays { animation: spin 18s linear infinite; }
@@ -300,7 +304,6 @@
   @keyframes snooze { 50% { transform: translateY(.9px); } }
   .act-doze .lean { animation: doze 4.2s ease-in-out infinite; }
   @keyframes doze { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(8deg); } }
-  .act-busy .bob { animation: tap .5s ease-in-out infinite; animation-delay: var(--d, 0s); }
   .walk-l .lean, .walk-r .lean { animation: none; }
   .walk-l .lean { transform: rotate(-6deg); } .walk-r .lean { transform: rotate(6deg); }
   .bob.walking { animation: walk .36s ease-in-out infinite; }
@@ -324,6 +327,9 @@
   .tag-text { fill: var(--text); font: 600 5.6px var(--font); }
   .agent .tag-text { font-size: 4.8px; font-weight: 500; fill: var(--muted); }
   @media (max-width: 520px) { #room .agent .nametag { display: none !important; } }
+  /* minsuterm: 서브 에이전트가 셋 이상이면 이름표끼리 겹친다. 그때는 하수인에 마우스를 올렸을 때만 (이름은 옆 목록에 있다) */
+  #room.many-agents .char.agent .nametag { opacity: 0; transition: opacity .15s; }
+  #room.many-agents .char.agent:hover .nametag { opacity: 1; }
 
   /* 자러 가기 띠 */
   .band { background: var(--purple-soft); border-color: var(--purple-line); }
@@ -529,6 +535,8 @@
   .mt-sum-text { display: flex; flex-direction: column; min-width: 0; max-width: 48%; }
   .mt-sum .batch-name { font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mt-sum .bar { flex: 1 1 120px; min-width: 60px; margin: 0; height: 8px; }
+  .pb-slot { margin-top: 12px; color: var(--text); --pb-bg: var(--card); }
+  .mt-sum .pb-slot { flex: 1 1 120px; min-width: 60px; margin: 0; }
   .mt-sum .pct { font-size: 22px; font-weight: 750; letter-spacing: -.01em; }
   .mt-sum .pct span { font-size: 13px; }
   .mt-top .chips { gap: 5px; }
@@ -540,21 +548,24 @@
   .mt-top-acts input[type="search"] { height: 30px; }
   .mt-top-acts .btn { height: 30px; }
 
-  /* 칸 배치: 좁으면 한 줄로 쌓고(방 → 칸 → 요청 남기기 → 보낸 요청 → 끝낸 일), 넓으면 두 단.
-     한 줄일 때는 위 띠의 '요청 남기기'가 입력 칸으로 데려다준다 */
+  /* 칸 배치: 좁으면 한 줄로 쌓고(방 → 요청 남기기 → 보낸 요청 → 지금 하는 것 → 다른 에이전트 → 다음에 할 것 → 보류
+     → 끝낸 일, 2026-11-25 사용자가 정한 순서), 넓으면 두 단 */
   .mt-cols { display: flex; flex-direction: column; }
   .mt-col { display: contents; }
   .mt-cols .room-card { order: 1; }
-  .mt-cols .mt-noitems, .mt-cols #groups { order: 2; }
-  .mt-cols .tools { order: 3; }
-  .mt-cols #requests { order: 4; }
+  .mt-cols .tools { order: 2; }
+  .mt-cols #requests { order: 3; }
+  .mt-cols .mt-noitems, .mt-cols #groups { order: 4; }
   .mt-cols #logSec { order: 5; }
+  @media (max-width: 899.98px) {
+    .mt-cols #groups { display: flex; flex-direction: column; }
+    #sec-now { order: 1; } #sec-agent { order: 2; } #sec-next { order: 3; } #sec-hold { order: 4; }
+  }
   @media (min-width: 900px) {
     .mt-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); column-gap: 14px; align-items: start; }
     .mt-col { display: block; min-width: 0; }
     .mt-col-main { grid-column: 1; grid-row: 1; }
     .mt-col-side { grid-column: 2; grid-row: 1; }
-    .mt-jump { display: none !important; }
   }
   @media (max-width: 899.98px) { /* 한 줄 배치에서는 칸 이름이 바로 아래 보이니 칸별 개수는 빼고 '확인 필요'만 둔다 */
     .mt-top .chip:not(.wait) { display: none; }
@@ -715,6 +726,16 @@
 
   function apply(t) {
     if (!t || typeof t !== 'object' || (t.type !== undefined && t.type !== 'minsuterm-theme')) return false;
+    // minsuterm: 꾸미기에서 고른 진행 바 스타일. 바뀌면 요약 카드를 다시 그리게 알린다
+    if (typeof t.bar === 'string' && /^[a-z0-9-]{1,24}$/.test(t.bar) && root.dataset.pbar !== t.bar) {
+      root.dataset.pbar = t.bar;
+      window.dispatchEvent(new Event('mt-pbar'));
+    }
+    // minsuterm: 꾸미기에서 고른 방 스타일 (방 그림은 같은 자리에 같은 가구, 색과 덧그림만 바뀐다: :root[data-room="…"] #room)
+    if (typeof t.room === 'string' && /^[a-z0-9-]{1,24}$/.test(t.room) && root.dataset.room !== t.room) {
+      root.dataset.room = t.room;
+      window.dispatchEvent(new Event('mt-room'));
+    }
     const vars = t.vars && typeof t.vars === 'object' ? t.vars : {};
     const set = [];
     for (const [k, name] of Object.entries(VARS)) if (Object.hasOwn(vars, k) && okColor(vars[k])) set.push([name, vars[k].trim()]);
@@ -758,6 +779,12 @@
   });
 })();
 </script>
+<!-- minsuterm: 서브 에이전트는 사이드바와 같은 하수인으로 그린다 (MinsuTerm의 src/renderer/minions.*를 진행 서버가 내준다) -->
+<link rel="stylesheet" href="/minions.css">
+<script src="/minions.js"></script>
+<!-- minsuterm: 진행 바는 꾸미기 → 진행도에서 고른 스타일로 (src/renderer/progress-bars.*) -->
+<link rel="stylesheet" href="/progress-bars.css">
+<script src="/progress-bars.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -827,8 +854,10 @@
         <g id="scene">
           <rect class="wall" x="0" y="0" width="400" height="120"/>
           <rect class="base" x="0" y="116" width="400" height="4"/>
+          <g class="rs-slot" data-slot="wall"></g><!-- minsuterm: 방 스타일의 벽 장식 (rooms/<id>.js) -->
           <rect class="floor" x="0" y="120" width="400" height="110"/>
           <path class="floor-line" d="M0 142H400M0 172H400M0 202H400M60 120V142M170 142V172M300 120V142M90 172V202M240 172V202M340 202V230M150 202V230"/>
+          <g class="rs-slot" data-slot="floor"></g><!-- 방 스타일의 바닥 (러그 아래) -->
           <ellipse class="rug" cx="200" cy="166" rx="165" ry="17"/>
           <ellipse class="rug-line" cx="200" cy="166" rx="154" ry="12.5"/>
           <!-- 선반과 책 -->
@@ -851,6 +880,7 @@
             <circle class="star" cx="180" cy="22" r="1"/><circle class="star" cx="191" cy="33" r=".8"/><circle class="star" cx="184" cy="52" r=".9"/>
             <circle class="star" cx="232" cy="52" r=".8"/><circle class="star" cx="210" cy="20" r=".7"/>
           </g>
+          <g class="rs-slot" data-slot="view"></g><!-- 방 스타일의 창밖 (창틀 안, 창살 아래) -->
           <path class="win-bar" d="M205 15V63M171 39H239"/>
           <rect class="frame" x="162" y="65" width="86" height="4" rx="1.5"/>
           <!-- 책상과 노트북 -->
@@ -904,9 +934,11 @@
           <rect class="wood" x="300" y="100" width="6" height="38" rx="1.5"/>
           <rect class="wood-dark" x="300" y="118" width="96" height="7" rx="1.5"/>
           <rect class="wood-dark" x="389" y="125" width="4" height="13"/>
+          <g class="rs-slot" data-slot="props"></g><!-- 방 스타일의 소품 (가구 위, 캐릭터 아래) -->
         </g>
         <rect class="night-shade" x="0" y="0" width="400" height="230"/>
         <circle id="lampGlow" cx="285" cy="62" r="40" fill="url(#glow)" pointer-events="none"/>
+        <g class="rs-slot" data-slot="glow" pointer-events="none"></g><!-- 방 스타일의 빛 (밤 그늘 위: 밤에도 어두워지지 않는다) -->
         <g id="codeFx" pointer-events="none">
           <text class="codefx f1" x="78" y="72">&lt;/&gt;</text><text class="codefx f2" x="94" y="70">{ }</text><text class="codefx f3" x="88" y="73">( )</text>
         </g>
@@ -962,7 +994,7 @@
 <dialog id="sleepDlg" aria-labelledby="sleepTitle">
   <div class="dlg">
     <h2 id="sleepTitle">마무리할 작업을 선택해 주세요</h2>
-    <p>고른 작업을 마치면 Claude가 남은 일을 정리하고 잠들어요. 아무것도 고르지 않으면 바로 정리하고 잠들어요.</p>
+    <p id="sleepLead">고른 작업을 마치면 Claude가 남은 일을 정리하고 잠들어요. 아무것도 고르지 않으면 바로 정리하고 잠들어요.</p>
     <div id="sleepList" class="dlg-body"></div>
     <div class="dlg-foot">
       <span id="sleepCount" class="muted small"></span>
@@ -1016,6 +1048,7 @@
   const LABEL = { now: '지금 하는 것', next: '다음에 할 것', agent: '다른 에이전트가 하는 것', hold: '보류' };
   const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
   const ORANGE = '#d97757';
+  const CODEX_BLUE = '#6d7cff'; // minsuterm: 세션 목록의 Codex 점
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   let reduce = motion.matches;
   motion.addEventListener?.('change', (e) => { reduce = e.matches; });
@@ -1323,10 +1356,7 @@
     const top = el('div', 'card mt-top');
     top.id = 'mtTop';
     const acts = el('div', 'mt-top-acts');
-    const jump = el('button', 'btn mt-jump', '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4.5 19.5h4l10.2-10.2-4-4L4.5 15.5z M13.2 6.8l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>요청 남기기</span>');
-    jump.type = 'button';
-    jump.dataset.act = 'toRequest';
-    acts.append(document.querySelector('.search-box'), jump, $('sleepBtn'));
+    acts.append(document.querySelector('.search-box'), $('sleepBtn'));
     top.append($('summary'), acts);
 
     const room = document.querySelector('.room-card');
@@ -1401,7 +1431,7 @@
     $('summary').innerHTML = `<div class="mt-sum">
         <div class="mt-sum-text"><span class="batch-name" title="${esc(name)}">${esc(name)}</span>
           <span class="muted small">남은 ${remaining}개 · 끝낸 ${done}개<span id="mtUpdated">${data.updated ? ` · 갱신 ${esc(rel(data.updated))}` : ''}</span></span></div>
-        <div class="bar" aria-hidden="true"><span style="width:${pct}%"></span></div>
+        ${barHtml(done, pct)}
         <div class="pct" aria-label="진행도 ${pct}%">${pct}<span>%</span></div>
       </div>${wait || chips ? `<div class="chips">${wait}${chips}</div>` : ''}`;
   }
@@ -1448,6 +1478,9 @@
     const b = $('sleepBtn');
     b.hidden = Boolean(data.leftAt); // minsuterm: 방이 비었으면 재울 에이전트가 없다
     b.querySelector('span').textContent = data.sleep ? '자러 가기 고치기' : `${agentName()} 자러 가기`;
+    // minsuterm: 요청 칸과 자러 가기 창도 지금 메인 에이전트(Claude·Codex)의 이름으로
+    $('reqText').placeholder = `${agentName()}에게 부탁할 일 (Ctrl+Enter로 보내기)`;
+    $('sleepLead').textContent = `고른 작업을 마치면 ${agentName()}가 남은 일을 정리하고 잠들어요. 아무것도 고르지 않으면 바로 정리하고 잠들어요.`;
     renderScope();
   }
 
@@ -1497,9 +1530,54 @@
         <div class="muted small">남은 ${remaining}개 · 끝낸 ${done}개 (보류 제외)</div></div>
         <div class="pct" aria-label="진행도 ${pct}%">${pct}<span>%</span></div>
       </div>
-      <div class="bar"><span style="width:${pct}%"></span></div>
+      ${barHtml(done, pct)}
       ${chips ? `<div class="chips">${chips}</div>` : ''}`;
   }
+
+  // minsuterm: 진행 바 (꾸미기 → 진행도에서 고른 스타일, progress-bars.js). 고리는 옆에 지금(없으면 다음) 할 일을 보인다
+  const HAS_BARS = typeof progressBarHtml === 'function';
+  function barHtml(done, pct) {
+    if (!HAS_BARS) return `<div class="bar" aria-hidden="true"><span style="width:${pct}%"></span></div>`;
+    const rank = { now: 0, agent: 1, next: 2 };
+    const rest = data.items.filter((i) => i.group !== 'hold').sort((a, b) => (rank[a.group] ?? 3) - (rank[b.group] ?? 3));
+    const now = rest.find((i) => i.group === 'now');
+    const next = now ? `지금: ${now.title}` : rest.length ? `다음: ${rest[0].title}` : '';
+    return `<div class="pb-slot" aria-hidden="true">${progressBarHtml(document.documentElement.dataset.pbar || 'plain', { done, total: done + rest.length, next })}</div>`;
+  }
+  window.addEventListener('mt-pbar', () => { if (data) renderSummary(); });
+
+  // minsuterm: 방 스타일 (꾸미기 → 진행도). 스타일마다 rooms/<id>.js 하나가 window.MT_ROOMS[id] = { css, wall, view,
+  // floor, props, glow }를 준다: CSS(#room[data-room="<id>"]로 한정)와, 방 그림의 정해진 자리(.rs-slot)에 끼울 SVG.
+  // 가구와 캐릭터 자리는 그대로다. 고른 스타일만 불러온다
+  function loadRoomStyle(id) {
+    if (window.MT_ROOMS && window.MT_ROOMS[id]) return Promise.resolve(window.MT_ROOMS[id]);
+    return new Promise((res) => {
+      const s = document.createElement('script');
+      s.src = `/rooms/${id}.js`;
+      s.onload = () => res((window.MT_ROOMS && window.MT_ROOMS[id]) || null);
+      s.onerror = () => res(null);
+      document.head.append(s);
+    });
+  }
+  let roomStyleSeq = 0;
+  async function applyRoomStyle() {
+    const id = document.documentElement.dataset.room || 'default';
+    const svg = $('room');
+    if (!svg) return;
+    const seq = ++roomStyleSeq;
+    const m = id === 'default' || !/^[a-z0-9-]{1,24}$/.test(id) ? null : await loadRoomStyle(id);
+    if (seq !== roomStyleSeq) return;
+    if (m && m.css && !document.getElementById(`rs-css-${id}`)) {
+      const st = document.createElement('style');
+      st.id = `rs-css-${id}`;
+      st.textContent = m.css;
+      document.head.append(st);
+    }
+    svg.dataset.room = m ? id : 'default';
+    for (const slot of svg.querySelectorAll('.rs-slot')) slot.innerHTML = (m && m[slot.dataset.slot]) || '';
+  }
+  window.addEventListener('mt-room', applyRoomStyle);
+  applyRoomStyle();
 
   function renderRequests() {
     const sec = $('requests');
@@ -1589,7 +1667,9 @@
       await post('/answer', { id, text });
       answerDrafts.delete(id);
       if (ta) { ta.value = ''; ta.blur(); }
-      toast('답을 보냈어요');
+      toast(data?.agent === 'codex' ? '답을 보냈어요 · Codex는 다음 차례에 확인해요' : '답을 보냈어요');
+      openItems.add(id); // 답이 그 항목의 메모에 쌓인 것이 보이게 펼친다
+      store.set(`progress:${scope.key}:items`, [...openItems]);
       load(false);
     } catch (e) {
       toast(`보내기 실패: ${e.message}`, true);
@@ -1679,8 +1759,8 @@
   };
   const OTHER_Y = 150;
   const AGENT_Y = [202, 210];
-  const AGENT_GAP = 22;
-  const ACTS = ['work', 'sip', 'tobed', 'sleep', 'doze', 'busy', 'call', 'talk', 'watch', 'read', 'plant', 'stretch', 'yawn', 'bow', 'bye'];
+  const AGENT_GAP = 28; // minsuterm: 하수인은 도구까지 30쯤 된다. 앞뒤 두 줄로 엇갈려 서니 조금 겹쳐도 된다
+  const ACTS = ['work', 'sip', 'tobed', 'sleep', 'doze', 'call', 'talk', 'watch', 'read', 'plant', 'stretch', 'yawn', 'bow', 'bye'];
   const ACT_CLASSES = ACTS.map((a) => `act-${a}`);
   const chars = new Map();
   const agentName = () => (data?.agent === 'codex' ? 'Codex' : 'Claude');
@@ -1718,26 +1798,14 @@
     closed: '<g class="eyes"><path class="cx-line" d="M-6.6-9.4Q-4.4-6.6-2.2-9.4"/><path class="cx-line" d="M2.2-9.4Q4.4-6.6 6.6-9.4"/></g>',
   };
   CX_EYES.talk = CX_EYES.open;
-  const KINDS = {
-    'general-purpose': { shape: 'diamond', color: '#ec6fae' },
-    fork: { shape: 'diamond', color: '#ec6fae' },
-    Explore: { shape: 'circle', color: '#9b6bf2', prop: 'magnifier' },
-    Plan: { shape: 'rsquare', color: '#2fb36d', prop: 'pencil' },
-    'claude-code-guide': { shape: 'circle', color: '#1fb5a8', prop: 'book' },
-  };
-  const OTHER_KIND = { shape: 'hex', color: '#f0a43a' };
-  const kindOf = (type) => (Object.hasOwn(KINDS, type) ? KINDS[type] : OTHER_KIND);
-  const SHAPES = {
-    diamond: '<path d="M0-7.5L7 0L0 7.5L-7 0Z"/>',
-    circle: '<circle r="6.6"/>',
-    rsquare: '<rect x="-6.2" y="-6.2" width="12.4" height="12.4" rx="3.2"/>',
-    hex: '<path d="M0-7.4L6.4-3.7L6.4 3.7L0 7.4L-6.4 3.7L-6.4-3.7Z"/>',
-  };
-  const PROPS = {
-    magnifier: '<circle cx="9.2" cy="-3.2" r="2.6" fill="none" stroke="#5b3fb8" stroke-width="1.2"/><path d="M11.1-1.3L13.2 0.8" stroke="#5b3fb8" stroke-width="1.5" stroke-linecap="round"/>',
-    pencil: '<g transform="translate(9.5 -3) rotate(30)"><rect x="-1" y="-4.5" width="2.1" height="7" fill="#f2c94c"/><path d="M-1 2.5L0 4.7L1.1 2.5Z" fill="#5a4a2a"/></g>',
-    book: '<rect x="-13.5" y="-5" width="5.2" height="7" rx=".8" fill="#0f7f76"/><path d="M-10.9-5V2" stroke="#e9fffb" stroke-width=".6"/>',
-  };
+  // minsuterm: 서브 에이전트는 사이드바와 같은 하수인이다 (minions.js). 같은 서브 에이전트를 같은 하수인으로 그리려고
+  // 사이드바처럼 그것을 띄운 호출의 id(look)로 고른다. minions.js를 못 받았으면 빈 자리로 둔다
+  const HAS_MINIONS = typeof minionHtml === 'function';
+  const minionSeed = (a) => a.look || `ag:${a.id}`;
+  const minionState = (a) => (a.finished ? 'done' : 'running');
+  function minionBody(a, fresh = false) {
+    return HAS_MINIONS ? minionHtml(minionSeed(a), { live: !a.finished, done: a.finished, fresh }) : '';
+  }
 
   // 글자 폭 어림 (화면에 숨어 있어도 잴 수 있게 글자 수로 계산한다)
   function textW(s, fs) {
@@ -1806,14 +1874,12 @@
       </g></g></g></g>${OVER}`;
   }
 
+  // 하수인은 HTML이라 foreignObject에 담는다. 22×22 하수인이 캐릭터 자리(가운데 0,0)에 오고, 손에 든 도구와 효과가
+  // 삐져나갈 여유를 둔다. sa-running / sa-done은 사이드바 줄과 같은 상태 표시다
   function agentSVG(a) {
-    const k = kindOf(a.type);
     return `<title></title><ellipse class="shadow" cx="0" cy="9" rx="6.5" ry="1.6"/>
-      <g class="hop"><g class="bob" style="--d:${(-Math.random() * 0.5).toFixed(2)}s"><g class="lean"><g class="appear">
-        ${PROPS[k.prop] || ''}<g fill="${k.color}">${SHAPES[k.shape]}</g>
-        <circle class="ag-eye" cx="-2.3" cy="-1.8" r="1"/><circle class="ag-eye" cx="2.3" cy="-1.8" r="1"/>
-        <rect class="ag-laptop" x="-5.5" y="2.2" width="11" height="5.4" rx="1"/>
-        <g class="check" style="display:none"><circle cx="6.6" cy="-7.4" r="3.6"/><path d="M4.9-7.5L6.2-6.1L8.4-8.9"/></g>
+      <g class="hop"><g class="bob"><g class="lean"><g class="appear">
+        <foreignObject class="mn-fo" x="-22" y="-27" width="44" height="40"><div xmlns="http://www.w3.org/1999/xhtml" class="mn-host sa-${minionState(a)}">${minionBody(a)}</div></foreignObject>
       </g></g></g></g>
       <g class="nametag"><rect class="tag-bg"/><text class="tag-text" dominant-baseline="central"></text></g>`;
   }
@@ -2044,16 +2110,18 @@
       const going = leavingOthers.get(s.id); // minsuterm: 내쫓기면 몸을 흔들어 인사하고 가까운 쪽 밖으로 걸어 나간다
       if (going === 'out') x = x < ROOM_W / 2 ? -50 : ROOM_W + 50;
       want.set(`s:${s.id}`, {
-        kind: 'claude', skin: 'claude', x, y: OTHER_Y, face: going ? 'smile' : ss.face, cap: false, act: going ? (going === 'bye' ? 'bye' : '') : ss.act,
+        // minsuterm: 같은 폴더의 Codex 세션은 Codex로 선다
+        kind: 'claude', skin: s.agent === 'codex' ? 'codex' : 'claude', x, y: OTHER_Y, face: going ? 'smile' : ss.face, cap: false, act: going ? (going === 'bye' ? 'bye' : '') : ss.act,
         props: going ? {} : ss.props, awake: Boolean(going) || ss.key !== 'sleep', shadow: false, cushion: !going, tag: name, label: `${name} · ${going ? '방을 나가는 중' : ss.label}`,
       });
       const ag = going ? [] : (s.agents || []).slice(-3);
       ag.forEach((a, j) => row.push({ a, sid: s.id, want: x + (j - (ag.length - 1) / 2) * AGENT_GAP }));
     });
-    spread(row, AGENT_GAP, 12, ROOM_W - 12);
+    svg.classList.toggle('many-agents', row.length > 2);
+    spread(row, AGENT_GAP, 14, ROOM_W - 24); // (하수인의 도구는 오른쪽으로 삐져나간다)
     row.forEach((r, i) => {
       want.set(`a:${r.sid}:${r.a.id}`, {
-        kind: 'agent', x: r.x, y: AGENT_Y[i % 2], agent: r.a, act: r.a.finished ? '' : 'busy',
+        kind: 'agent', x: r.x, y: AGENT_Y[i % 2], agent: r.a, act: '', // (일하는 동작은 하수인이 스스로 한다)
         tag: r.a.description || r.a.type, label: `${r.a.description || r.a.type} · ${r.a.finished ? '끝냄' : '작업 중'}`,
       });
     });
@@ -2208,7 +2276,14 @@
         if (w.main) setBubble(e, w.say, w.x);
         setTag(e, w.tag, w.x, false); // minsuterm: 메인 에이전트도 이름을 붙여 주면 이름표를 단다
       } else {
-        show(e.g.querySelector('.check'), w.agent.finished);
+        // 일하던 하수인이 끝나면 사이드바처럼 체크가 튀어나오고 폴짝 뛴다 (처음부터 끝난 것은 조용히)
+        const stt = minionState(w.agent);
+        if (e.mn && e.mn !== stt) {
+          const host = e.g.querySelector('.mn-host');
+          host.className = `mn-host sa-${stt}`;
+          host.innerHTML = minionBody(w.agent, e.mn === 'running' && stt === 'done');
+        }
+        e.mn = stt;
         setTag(e, w.tag, w.x, true);
       }
       e.act = w.act;
@@ -2271,14 +2346,17 @@
   }
 
   function renderCrewList(ownAgents, others) {
-    const row = (color, text, status, ago, sub) => `<li class="${sub ? 'nested' : ''}">
-      <span class="cdot" style="background:${color}"></span><span class="ctext" title="${esc(text)}">${esc(text)}</span>
+    const row = (dot, text, status, ago, sub) => `<li class="${sub ? 'nested' : ''}">
+      ${dot}<span class="ctext" title="${esc(text)}">${esc(text)}</span>
       <span class="cstat">${esc(status)}</span><span class="cago">${agoText(ago)}</span></li>`;
+    const dotOf = (color) => `<span class="cdot" style="background:${color}"></span>`;
+    // minsuterm: 서브 에이전트는 방 안과 같은 하수인 얼굴로
+    const agentDot = (a) => (HAS_MINIONS ? `<span class="cmn">${minionSvg(minionSeed(a))}</span>` : dotOf(ORANGE));
     const rows = [];
-    for (const a of ownAgents) rows.push(row(kindOf(a.type).color, a.description || a.type, a.finished ? '끝냄' : '작업 중', a.ago, false));
+    for (const a of ownAgents) rows.push(row(agentDot(a), a.description || a.type, a.finished ? '끝냄' : '작업 중', a.ago, false));
     for (const s of others) {
-      rows.push(row(ORANGE, s.title || '이름 없는 세션', sessState(s.ago).label, s.ago, false));
-      for (const a of (s.agents || []).slice(-3)) rows.push(row(kindOf(a.type).color, a.description || a.type, a.finished ? '끝냄' : '작업 중', a.ago, true));
+      rows.push(row(dotOf(s.agent === 'codex' ? CODEX_BLUE : ORANGE), s.title || '이름 없는 세션', sessState(s.ago).label, s.ago, false));
+      for (const a of (s.agents || []).slice(-3)) rows.push(row(agentDot(a), a.description || a.type, a.finished ? '끝냄' : '작업 중', a.ago, true));
     }
     const ul = $('crewList');
     ul.innerHTML = rows.join('');
@@ -2316,7 +2394,7 @@
       return { main: true, sid: data.owner || '', agent: data.agent === 'codex' ? 'codex' : 'claude', title: me?.title || '', named: Boolean(me?.named) };
     }
     const s = crew.find((x) => `s:${x.id}` === key);
-    return s ? { main: false, sid: s.id, agent: 'claude', title: s.title || '', named: Boolean(s.named) } : null;
+    return s ? { main: false, sid: s.id, agent: s.agent === 'codex' ? 'codex' : 'claude', title: s.title || '', named: Boolean(s.named) } : null;
   }
 
   let menuFor = null;
@@ -2715,7 +2793,7 @@
       await post('/request', { text });
       ta.value = '';
       grow();
-      toast('요청을 보냈어요');
+      toast(data?.agent === 'codex' ? '요청을 보냈어요 · Codex는 다음 차례에 확인해요' : '요청을 보냈어요');
       load(false);
     } catch (e) {
       toast(`보내기 실패: ${e.message}`, true);
@@ -2845,9 +2923,6 @@
         const folded = !document.querySelector('.room-card').classList.contains('mt-folded');
         store.set(ROOM_KEY, folded);
         setRoomFolded(folded);
-      } else if (a === 'toRequest') { // minsuterm: 한 줄 배치에서 요청 남기기 칸으로
-        $('reqText').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
-        $('reqText').focus({ preventScroll: true });
       } else if (a === 'scrollWait') {
         const it = document.querySelector('#groups .tag.wait')?.closest('.item');
         if (it) {
@@ -2855,6 +2930,7 @@
           it.classList.remove('flash');
           void it.offsetWidth;
           it.classList.add('flash');
+          it.querySelector('.ans-text')?.focus({ preventScroll: true }); // minsuterm: 바로 답을 적을 수 있게
         }
       }
     } catch (e) {

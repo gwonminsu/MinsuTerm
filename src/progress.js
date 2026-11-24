@@ -22,6 +22,15 @@ const HOME = os.homedir();
 const REGISTRY = path.join(HOME, '.claude', 'progress', 'projects.json');
 const PROJECTS_DIR = path.join(HOME, '.claude', 'projects');
 const SKILLS_DIR = path.join(HOME, '.claude', 'skills');
+// Codex reads skills from $CODEX_HOME/skills (~/.codex/skills when unset); it gets the progress skill only (the
+// dreaming one tidies Claude's memory), and only where Codex is in use (its home exists)
+const CODEX_DIR = process.env.CODEX_HOME || path.join(HOME, '.codex');
+const CODEX_SKILLS_DIR = path.join(CODEX_DIR, 'skills');
+const CODEX_SKILL = 'minsuterm-progress';
+const codexHere = () => fs.existsSync(CODEX_DIR);
+// written once MinsuTerm has put the Codex copy in: app start adds it on its own only before that (a copy the user
+// removed later stays removed; 구축하기 puts it back)
+const CODEX_GIVEN = path.join(HOME, '.claude', 'progress', 'minsuterm-codex.json');
 const BUNDLED = { 'minsuterm-progress': path.join(__dirname, 'minsuterm-progress'), 'minsuterm-dreaming': path.join(__dirname, 'minsuterm-dreaming') };
 const PAGE = path.join(BUNDLED['minsuterm-progress'], 'scripts', 'page.html');
 const MARKER = '.minsuterm.json';
@@ -300,11 +309,16 @@ function subagents(dir, nowMs) {
     try { m = JSON.parse(fs.readFileSync(meta, 'utf8')); } catch { continue; }
     const finished = Boolean(m.finished);
     if (finished && ago > 15 * 60) continue;
-    list.push({ id: n.slice(6, -10), type: m.agentType ?? 'general-purpose', description: String(m.description ?? ''), finished, ago: Math.max(0, Math.round(ago)), at: stamp(new Date(st.mtimeMs)) });
+    // look: the call that launched it, which the sidebar picks the same sub-agent's minion by
+    list.push({ id: n.slice(6, -10), look: String(m.toolUseId ?? ''), type: m.agentType ?? 'general-purpose', description: String(m.description ?? ''), finished, ago: Math.max(0, Math.round(ago)), at: stamp(new Date(st.mtimeMs)) });
   }
   list.sort((a, b) => b.ago - a.ago);
   return list;
 }
+// Codex sessions in a folder (main.js hands the finder in: it already reads Codex's transcripts)
+let codexCrew = () => [];
+function setCodexCrew(fn) { codexCrew = typeof fn === 'function' ? fn : () => []; }
+
 function crew(proj) {
   const fold = (s) => (IS_WIN ? s.toLowerCase() : s);
   const want = fold(proj.root.replace(/[^A-Za-z0-9]/g, '-'));
@@ -315,7 +329,7 @@ function crew(proj) {
     dirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
       .filter((d) => d.isDirectory() && (fold(d.name) === want || fold(d.name).startsWith(want + '-')))
       .map((d) => path.join(PROJECTS_DIR, d.name));
-  } catch { return out; }
+  } catch { /* no Claude transcripts: Codex's may still be there */ }
   for (const dir of dirs) {
     let files;
     try { files = fs.readdirSync(dir).filter((n) => n.endsWith('.jsonl')); } catch { continue; }
@@ -327,9 +341,15 @@ function crew(proj) {
       if (ago > 6 * 3600) continue;
       const id = name.slice(0, -'.jsonl'.length);
       const t = sessionTitle(file, st);
-      out.push({ id, title: t.title, named: t.named, ago: Math.max(0, Math.round(ago)), agents: subagents(path.join(dir, id, 'subagents'), nowMs) });
+      out.push({ id, agent: 'claude', title: t.title, named: t.named, ago: Math.max(0, Math.round(ago)), agents: subagents(path.join(dir, id, 'subagents'), nowMs) });
     }
   }
+  // Codex sessions in the same folder (their sub-agents are not read here)
+  try {
+    for (const s of codexCrew(proj.root, 6 * 3600 * 1000)) {
+      out.push({ id: s.id, agent: 'codex', title: s.title, named: s.named, ago: Math.max(0, Math.round((nowMs - s.mtimeMs) / 1000)), agents: [] });
+    }
+  } catch { /* the room goes on with Claude's */ }
   out.sort((a, b) => a.ago - b.ago);
   return out;
 }
@@ -466,7 +486,19 @@ async function handle(req, res) {
         case '/events': return subscribe(projectFor(url), req, res);
         case '/crew': return send(res, 200, JSON.stringify(crew(projectFor(url))), JSON_TYPE);
         case '/favicon.ico': return send(res, 204);
-        default: return send(res, 404, '없는 경로예요');
+        // shared with the app window (one source for both): the sidebar's minions, which the room draws its sub-agents
+        // as, and the progress bar styles picked in 꾸미기 → 진행도
+        case '/minions.js': case '/progress-bars.js':
+          return send(res, 200, fs.readFileSync(path.join(__dirname, 'renderer', url.pathname.slice(1))), 'text/javascript; charset=utf-8');
+        case '/minions.css': case '/progress-bars.css':
+          return send(res, 200, fs.readFileSync(path.join(__dirname, 'renderer', url.pathname.slice(1))), 'text/css; charset=utf-8');
+        default: {
+          // a room style (꾸미기 → 진행도 → 방 스타일): one script per style, only the picked one is asked for
+          const room = /^\/rooms\/([a-z0-9-]{1,24})\.js$/.exec(url.pathname);
+          const file = room ? path.join(BUNDLED['minsuterm-progress'], 'scripts', 'rooms', `${room[1]}.js`) : '';
+          if (file && fs.existsSync(file)) return send(res, 200, fs.readFileSync(file), 'text/javascript; charset=utf-8');
+          return send(res, 404, '없는 경로예요');
+        }
       }
     }
     const manage = url.pathname === '/rename' || url.pathname === '/delete';
@@ -555,6 +587,8 @@ function bundle(name) {
   const dir = BUNDLED[name];
   let files = [];
   try { files = walk(dir).sort(); } catch { files = []; }
+  // the room styles are served by this app to its own page, never used by the skill: they don't go into the copies
+  files = files.filter((f) => !f.split(path.sep).join('/').startsWith('scripts/rooms/'));
   const h = crypto.createHash('sha1');
   for (const f of files) { h.update(f.split(path.sep).join('/')); h.update(fs.readFileSync(path.join(dir, f))); }
   const b = { dir, files, hash: h.digest('hex').slice(0, 16) };
@@ -579,13 +613,14 @@ function readMarker(target) {
   try { return JSON.parse(fs.readFileSync(path.join(target, MARKER), 'utf8')); } catch { return null; }
 }
 
-function skillState(name) {
-  const target = path.join(SKILLS_DIR, name);
+function skillState(name, agent = 'claude') {
+  const target = path.join(agent === 'codex' ? CODEX_SKILLS_DIR : SKILLS_DIR, name);
   const exists = fs.existsSync(path.join(target, 'SKILL.md'));
   const marker = exists ? readMarker(target) : null;
   const b = bundle(name);
   return {
     name,
+    agent,
     target,
     installed: exists,
     ours: !!marker, // installed by MinsuTerm (only those are ever rewritten)
@@ -594,13 +629,30 @@ function skillState(name) {
   };
 }
 
+/*
+ * The copy for Codex: its SKILL.md front matter keeps name and description only (when_to_use, Claude's, goes into
+ * the description), and the marker says agent "codex", which the skill's cli reads to record Codex as the agent.
+ */
+function forCodex(md) {
+  const m = /^---\n([\s\S]*?)\n---\n/.exec(md);
+  if (!m) return md;
+  const fields = {};
+  let key = '';
+  for (const line of m[1].split('\n')) {
+    const k = /^([a-z_]+):\s*(.*)$/.exec(line);
+    if (k) { key = k[1]; fields[key] = k[2]; } else if (key) fields[key] += ` ${line.trim()}`;
+  }
+  const desc = [fields.description, fields.when_to_use].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  return `---\nname: ${fields.name}\ndescription: ${desc}\n---\n${md.slice(m[0].length)}`;
+}
+
 /** Write one skill: the bundled files, SKILL.md filled in for this machine, the Node wrapper when needed, the marker. */
-function installSkill(name, useNode) {
+function installSkill(name, useNode, agent = 'claude') {
   const b = bundle(name);
   if (!b.files.length) throw new Error(`${name}: 앱에 스킬 파일이 없어요`);
-  const target = path.join(SKILLS_DIR, name);
-  const st = skillState(name);
-  if (st.installed && !st.ours) return { name, skipped: 'own' }; // someone's own skill of that name: never touched
+  const st = skillState(name, agent);
+  const target = st.target;
+  if (st.installed && !st.ours) return { name, agent, skipped: 'own' }; // someone's own skill of that name: never touched
   const slash = (p) => p.split(path.sep).join('/');
   // Node for the skill's scripts: the real one, or MinsuTerm itself run as Node through a wrapper. Two wrappers on
   // Windows: a sh one for Git Bash ({{NODE}}: a .cmd there goes through cmd /c, which cuts spaces and &), a .cmd for
@@ -624,23 +676,31 @@ function installSkill(name, useNode) {
     const out = path.join(target, f);
     fs.mkdirSync(path.dirname(out), { recursive: true });
     let buf = fs.readFileSync(path.join(b.dir, f));
-    if (/\.md$/i.test(f)) buf = Buffer.from(buf.toString('utf8').split('{{NODE_PS}}').join(nodePs).split('{{NODE}}').join(nodeCmd).split('{{SKILL}}').join(slash(target)));
+    if (/\.md$/i.test(f)) {
+      let md = buf.toString('utf8').split('{{NODE_PS}}').join(nodePs).split('{{NODE}}').join(nodeCmd).split('{{SKILL}}').join(slash(target));
+      if (agent === 'codex' && f === 'SKILL.md') md = forCodex(md);
+      buf = Buffer.from(md);
+    }
     fs.writeFileSync(out, buf);
     if (/\.(mjs|sh)$/.test(f) && !IS_WIN) try { fs.chmodSync(out, 0o755); } catch { /* ignore */ }
   }
-  fs.writeFileSync(path.join(target, MARKER), JSON.stringify({ by: 'MinsuTerm', hash: b.hash, exec: process.execPath, node: useNode ? 'node' : 'mtnode', installedAt: stamp() }, null, 2) + '\n');
-  return { name, installed: true, node: useNode ? 'node' : 'mtnode' };
+  fs.writeFileSync(path.join(target, MARKER), JSON.stringify({ by: 'MinsuTerm', agent, hash: b.hash, exec: process.execPath, node: useNode ? 'node' : 'mtnode', installedAt: stamp() }, null, 2) + '\n');
+  if (agent === 'codex') {
+    try { fs.mkdirSync(path.dirname(CODEX_GIVEN), { recursive: true }); fs.writeFileSync(CODEX_GIVEN, JSON.stringify({ target, at: stamp() }) + '\n'); } catch { /* only the once-only rule rests on it */ }
+  }
+  return { name, agent, installed: true, node: useNode ? 'node' : 'mtnode' };
 }
 
 const SKILLS = ['minsuterm-progress', 'minsuterm-dreaming'];
 
 async function status() {
   const node = await hasNode();
-  const skills = SKILLS.map(skillState);
+  const skills = SKILLS.map((n) => skillState(n));
   const own = (n) => fs.existsSync(path.join(SKILLS_DIR, n, 'SKILL.md'));
   return {
     node,
     skills,
+    codex: codexHere() ? skillState(CODEX_SKILL, 'codex') : null, // null: no Codex on this computer
     ready: skills[0].installed, // the progress skill is what the page needs; dreaming only adds the memory tidy to 자러 가기
     ownProgress: own('progress'),
     ownDreaming: own('dreaming'),
@@ -651,16 +711,26 @@ async function status() {
 async function setup() {
   const node = await hasNode();
   const done = SKILLS.map((n) => installSkill(n, node));
+  if (codexHere()) done.push(installSkill(CODEX_SKILL, node, 'codex'));
   return { done, status: await status() };
 }
 
-/** On app start: bring the copies MinsuTerm installed up to this version (or to this executable's path). */
+/**
+ * On app start: bring the copies MinsuTerm installed up to this version (or to this executable's path). Where the
+ * progress skill was set up before Codex got its copy (1.33.1), and Codex is in use, Codex gets it now, once:
+ * 구축하기 was the go-ahead for the progress skill. A Codex skill of that name that is not ours is never touched, and
+ * one the user removed after MinsuTerm put it in is not put back (CODEX_GIVEN).
+ */
 async function refreshInstalled() {
   const node = await hasNode();
   for (const n of SKILLS) {
     const st = skillState(n);
     if (st.ours && !st.current) try { installSkill(n, node); } catch { /* next start tries again */ }
   }
+  if (!codexHere() || !skillState(CODEX_SKILL).ours) return;
+  const cx = skillState(CODEX_SKILL, 'codex');
+  const due = cx.installed ? cx.ours && !cx.current : !fs.existsSync(CODEX_GIVEN);
+  if (due) try { installSkill(CODEX_SKILL, node, 'codex'); } catch { /* next start tries again */ }
 }
 
 /** Open a folder's page: make sure its record exists, start the server, return the page address. */
@@ -692,4 +762,4 @@ function summary(folder) {
   } catch { return { exists: false, remaining: 0, done: 0, waiting: 0, updated: '', asleep: false }; }
 }
 
-module.exports = { status, setup, refreshInstalled, open, summary, stopServer, origin: () => (serverPort ? `http://${HOST}:${serverPort}` : '') };
+module.exports = { status, setup, refreshInstalled, open, summary, stopServer, setCodexCrew, origin: () => (serverPort ? `http://${HOST}:${serverPort}` : '') };

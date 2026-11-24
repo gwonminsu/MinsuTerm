@@ -36,6 +36,7 @@ when_to_use: MinsuTerm에서 여러 단계로 이어지는 작업을 하는 동�
 3. Monitor로 `{{NODE}} "{{SKILL}}/scripts/watch-inbox.mjs"`를 지켜본다.
    - 새 줄 하나가 알림 하나가 된다.
    - Monitor는 최대 30분이라, 끝나면 다시 건다.
+   - Monitor가 없는 에이전트(Codex)는 아래 'Codex에서 쓸 때'를 따른다.
 
 ## 명령
 
@@ -145,11 +146,15 @@ when_to_use: MinsuTerm에서 여러 단계로 이어지는 작업을 하는 동�
 
 ## Codex에서 쓸 때
 
-- 명령은 같다. 다만 cli를 부를 때 `PROGRESS_AGENT=codex`를 붙여야 Codex 캐릭터가 나온다.
-  - Bash: `PROGRESS_AGENT=codex {{NODE}} "{{SKILL}}/scripts/cli.mjs" ...`
-  - PowerShell: `$env:PROGRESS_AGENT='codex'; & {{NODE_PS}} "{{SKILL}}/scripts/cli.mjs" ...`
-- 환경 변수 이름이 `CODEX_`로 시작하는 것이 있으면 붙이지 않아도 Codex로 본다.
-- 세션 번호를 알면 `PROGRESS_SESSION_ID`로 넘긴다. 없어도 된다.
+- 명령은 같다. MinsuTerm은 Codex용으로 이 스킬을 `~/.codex/skills/minsuterm-progress`(`CODEX_HOME`이 있으면 그 아래 `skills`)에 따로 설치한다.
+  - 그 판의 cli는 따로 붙이지 않아도 Codex로 기록하고, Codex가 명령에 넘기는 `CODEX_THREAD_ID`를 메인 에이전트의 세션으로 적는다.
+  - 다른 자리의 판을 Codex에서 부를 때는 `PROGRESS_AGENT=codex`를 붙여야 Codex 캐릭터가 나온다.
+    - Bash: `PROGRESS_AGENT=codex {{NODE}} "{{SKILL}}/scripts/cli.mjs" ...`
+    - PowerShell: `$env:PROGRESS_AGENT='codex'; & {{NODE_PS}} "{{SKILL}}/scripts/cli.mjs" ...`
+- Monitor가 없으니 watch-inbox를 지켜보는 대신, 매 턴을 시작할 때와 항목을 시작하거나 끝낼 때 `show`를 본다.
+  - 처리하지 않은 요청, 항목 아래 '사용자의 답', '먼저 해 달라고 함', 자러 가기 계획, 공지의 '했어요'가 거기 보인다.
+  - 다루는 법은 위 '페이지에서 오는 것' 표와 같다.
+- 자러 가기의 수면 단계는 Claude의 기억을 정리하는 스킬이라 Codex에서는 건너뛰고 `sleep now` 뒤 바로 `sleep done`을 한다.
 
 ## 작업을 끝낼 때
 

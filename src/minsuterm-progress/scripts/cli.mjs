@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(process.env.PROGRESS_ROOT ?? process.cwd());
 const REGISTRY = path.join(os.homedir(), '.claude', 'progress', 'projects.json');
@@ -44,13 +45,28 @@ function pause(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-// 이 cli를 부른 메인 에이전트. PROGRESS_AGENT가 있으면 그것, 없으면 환경 변수로 짐작한다
+// MinsuTerm이 이 스킬을 어느 에이전트용으로 설치했는지 (Codex용은 ~/.codex/skills에 따로 설치하고 표시 파일에 적는다)
+function installedFor() {
+  try {
+    const dir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+    return JSON.parse(fs.readFileSync(path.join(dir, '.minsuterm.json'), 'utf8')).agent ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// 이 cli를 부른 메인 에이전트: { agent, sure }. PROGRESS_AGENT, 설치한 자리(Codex용 판), 에이전트가 넘기는 환경 변수 순으로
+// 본다. Claude Code 안에서 Codex를 돌리면 둘의 변수가 다 있으니 설치한 자리가 먼저다. sure가 아니면(CODEX_로
+// 시작하는 변수만 있음) 캐릭터만 정하고 세션 주인은 건드리지 않는다
 function detectAgent() {
   const v = String(process.env.PROGRESS_AGENT ?? '').trim().toLowerCase();
-  if (v === 'claude' || v === 'codex') return v;
-  if (process.env.CLAUDECODE || process.env.CLAUDE_CODE_SESSION_ID) return 'claude';
-  if (Object.keys(process.env).some((k) => k.toUpperCase().startsWith('CODEX_'))) return 'codex';
-  return null;
+  if (v === 'claude' || v === 'codex') return { agent: v, sure: true };
+  const own = installedFor();
+  if (own === 'claude' || own === 'codex') return { agent: own, sure: true };
+  if (process.env.CODEX_THREAD_ID) return { agent: 'codex', sure: true };
+  if (process.env.CLAUDECODE || process.env.CLAUDE_CODE_SESSION_ID) return { agent: 'claude', sure: true };
+  if (Object.keys(process.env).some((k) => k.toUpperCase().startsWith('CODEX_'))) return { agent: 'codex', sure: false };
+  return { agent: null, sure: false };
 }
 
 function fail(msg) {
@@ -394,9 +410,12 @@ for (const r of d.requests) {
   const item = d.items.find((i) => i.id === Number(r.answerTo));
   if (!item || !item.wait) r.status = 'seen';
 }
-const session = process.env.CLAUDE_CODE_SESSION_ID || process.env.PROGRESS_SESSION_ID;
-if (session) d.owner = session;
-const agent = detectAgent();
+const { agent, sure } = detectAgent();
+// 메인 에이전트의 세션: Claude Code는 CLAUDE_CODE_SESSION_ID, Codex는 명령에 CODEX_THREAD_ID를 넘긴다
+const session = process.env.PROGRESS_SESSION_ID
+  || (agent === 'codex' ? process.env.CODEX_THREAD_ID : agent === 'claude' ? process.env.CLAUDE_CODE_SESSION_ID : '');
+if (session) d.owner = String(session).toLowerCase();
+else if (sure && d.agent && agent !== d.agent) delete d.owner; // 다른 에이전트가 이어 받았는데 세션을 모른다: 앞 에이전트의 세션을 남기지 않는다
 if (agent) d.agent = agent; // 페이지가 메인 에이전트 캐릭터(Claude·Codex)를 고른다
 d.updated = stamp();
 writeData(ROOT, d);

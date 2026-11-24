@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
-const FILES = ['src/renderer/app.js', 'src/main.js', 'src/renderer/index.html', 'src/renderer/icons.js', 'src/renderer/themes.js'];
+const FILES = ['src/renderer/app.js', 'src/main.js', 'src/renderer/index.html', 'src/renderer/icons.js', 'src/renderer/themes.js', 'src/renderer/progress-bars.js', 'src/renderer/room-styles.js'];
 const HANGUL = /[가-힣ㄱ-ㆎ]/;
 
 /** String literal / template text pieces of a JS source (comments skipped). */
