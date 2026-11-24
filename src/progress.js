@@ -7,7 +7,7 @@
  * and installs them into ~/.claude/skills when the user asks (구축하기). The page is served from this process on
  * 127.0.0.1 (a port the OS picks), with the same API as the skill's server.mjs, so no Node and no separate server are
  * needed: /data /events /crew /projects and the POSTs (/ack /request /bump /sleep /wake), plus MinsuTerm's own
- * /unrequest (보낸 요청 지우기), /answer (확인 필요 항목에 답하기) and /leave (방에서 내쫓기).
+ * /unrequest (보낸 요청·답 지우기), /answer (확인 필요 항목에 답하기) and /leave (방에서 내쫓기).
  * A skill folder MinsuTerm did not install (the owner's own progress / dreaming) is never written to.
  */
 const http = require('http');
@@ -335,6 +335,7 @@ function crew(proj) {
 }
 
 /* ---------- what the page sends back ---------- */
+const nextRequestId = (d) => d.requests.reduce((m, r) => Math.max(m, Number(r.id) || 0), 0) + 1;
 const posts = {
   '/ack'(d, body) {
     const n = d.notices.find((x) => String(x.id) === String(body.id));
@@ -345,7 +346,7 @@ const posts = {
   '/request'(d, body) {
     const text = String(body.text ?? '').trim().slice(0, 2000);
     if (!text) throw new HttpError(400, '요청 내용이 비어 있어요');
-    const id = d.requests.reduce((m, r) => Math.max(m, Number(r.id) || 0), 0) + 1;
+    const id = nextRequestId(d);
     d.requests.push({ id, text, at: stamp(), status: 'new' });
     return { type: 'request', id, text };
   },
@@ -370,8 +371,9 @@ const posts = {
     return { type: 'wake', id: '-', text: '자러 가기를 취소함' };
   },
   /*
-   * The user's answer to an item waiting on them (확인 필요): kept among the item's notes (by: 'user'), and the agent
-   * is told. The flag stays until the agent has looked at it (cli `wait <id> off`).
+   * The user's answer to an item waiting on them (확인 필요): kept among the item's notes (by: 'user') and in the sent
+   * list (answerTo: the item; status 'new' until the agent turns the flag off — cli marks it 'seen'), and the agent
+   * is told.
    */
   '/answer'(d, body) {
     const item = d.items.find((x) => x.id === Number(body.id));
@@ -379,15 +381,25 @@ const posts = {
     const text = String(body.text ?? '').trim().slice(0, 2000);
     if (!text) throw new HttpError(400, '답이 비어 있어요');
     if (!Array.isArray(item.notes)) item.notes = [];
-    item.notes.push({ at: stamp().slice(11, 16), text, by: 'user' });
+    const at = stamp();
+    item.notes.push({ at: at.slice(11, 16), text, by: 'user' });
+    d.requests.push({ id: nextRequestId(d), text, at, status: 'new', answerTo: item.id, answerTitle: item.title });
     return { type: 'answer', id: item.id, text: `'${item.title}'에 대한 답: ${text}` };
   },
-  /* a sent request taken off the list: one still waiting is called off (the agent is told), a handled one only goes */
+  /*
+   * A sent request taken off the list: one still waiting is called off (the agent is told), a handled one only goes.
+   * An answer not looked at yet is taken back, from its item's notes too.
+   */
   '/unrequest'(d, body) {
     const i = d.requests.findIndex((r) => String(r.id) === String(body.id));
     if (i < 0) throw new HttpError(400, '그 요청을 찾지 못했어요');
     const [r] = d.requests.splice(i, 1);
-    return r.status === 'new' ? { type: 'unrequest', id: r.id, text: r.text } : null;
+    if (r.status !== 'new') return null;
+    if (r.answerTo == null) return { type: 'unrequest', id: r.id, text: r.text };
+    const item = d.items.find((x) => x.id === Number(r.answerTo));
+    const k = item && Array.isArray(item.notes) ? item.notes.findLastIndex((n) => n.by === 'user' && n.text === r.text) : -1;
+    if (k >= 0) item.notes.splice(k, 1);
+    return { type: 'unanswer', id: r.answerTo, text: `'${r.answerTitle ?? item?.title ?? ''}'에 대한 답을 거둠: ${r.text}` };
   },
   /*
    * 방에서 내쫓기, once MinsuTerm ended that session: the main agent leaves (leftAt, until the progress skill is used

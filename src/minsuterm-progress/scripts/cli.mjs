@@ -248,7 +248,7 @@ function show() {
       if (last) out.push(`      ${last.by === 'user' ? '사용자의 답' : '마지막 메모'} ${last.at} ${last.text} (메모 ${i.notes.length}개)`);
     }
   }
-  const fresh = d.requests.filter((r) => r.status === 'new');
+  const fresh = d.requests.filter((r) => r.status === 'new' && r.answerTo == null); // 보낸 답은 항목 아래 '사용자의 답'으로 보인다
   out.push('', `[처리하지 않은 요청] ${fresh.length}개`);
   for (const r of fresh) out.push(`  요청 ${r.id} (${r.at}) ${String(r.text).replace(/\s*\r?\n\s*/g, ' / ')}`);
   if (d.sleep) {
@@ -388,6 +388,12 @@ const message = COMMANDS[cmd]();
 if (!(cmd === 'sleep' && args[0] === 'now')) delete d.asleepAt; // 무엇이든 고치면 깬다
 if (!(cmd === 'sleep' && args[0] === 'done')) delete d.restAt;
 delete d.leftAt; // 방에서 내쫓겼어도 진행 보고를 다시 하면 방으로 돌아온다
+// 확인 필요 항목에 보낸 답은 그 표시가 꺼지면(또는 항목이 끝나거나 지워지면) 보낸 요청 목록에서 '확인함'이 된다
+for (const r of d.requests) {
+  if (r.answerTo == null || r.status !== 'new') continue;
+  const item = d.items.find((i) => i.id === Number(r.answerTo));
+  if (!item || !item.wait) r.status = 'seen';
+}
 const session = process.env.CLAUDE_CODE_SESSION_ID || process.env.PROGRESS_SESSION_ID;
 if (session) d.owner = session;
 const agent = detectAgent();
