@@ -6,7 +6,8 @@
  * sends back). MinsuTerm ships its own fork of that skill, minsuterm-progress (and minsuterm-dreaming for 자러 가기),
  * and installs them into ~/.claude/skills when the user asks (구축하기). The page is served from this process on
  * 127.0.0.1 (a port the OS picks), with the same API as the skill's server.mjs, so no Node and no separate server are
- * needed: /data /events /crew /projects and the POSTs (/ack /request /bump /sleep /wake).
+ * needed: /data /events /crew /projects and the POSTs (/ack /request /bump /sleep /wake), plus MinsuTerm's own
+ * /unrequest (보낸 요청 지우기) and /leave (방에서 내쫓기).
  * A skill folder MinsuTerm did not install (the owner's own progress / dreaming) is never written to.
  */
 const http = require('http');
@@ -265,7 +266,7 @@ function subscribe(proj, req, res) {
 const titleCache = new Map();
 function sessionTitle(file, st) {
   const hit = titleCache.get(file);
-  if (hit && hit.size === st.size && hit.mtimeMs === st.mtimeMs) return hit.title;
+  if (hit && hit.size === st.size && hit.mtimeMs === st.mtimeMs) return hit;
   let custom = '';
   let ai = '';
   try {
@@ -279,9 +280,10 @@ function sessionTitle(file, st) {
       if (m[1] === 'customTitle') custom = v; else ai = v;
     }
   } catch { /* an untitled session */ }
-  const title = custom || ai;
-  titleCache.set(file, { size: st.size, mtimeMs: st.mtimeMs, title });
-  return title;
+  // named: a name someone gave it (/rename, 이름 바꾸기), not one Claude made up
+  const out = { size: st.size, mtimeMs: st.mtimeMs, title: custom || ai, named: Boolean(custom) };
+  titleCache.set(file, out);
+  return out;
 }
 function subagents(dir, nowMs) {
   let names;
@@ -324,7 +326,8 @@ function crew(proj) {
       const ago = (nowMs - st.mtimeMs) / 1000;
       if (ago > 6 * 3600) continue;
       const id = name.slice(0, -'.jsonl'.length);
-      out.push({ id, title: sessionTitle(file, st), ago: Math.max(0, Math.round(ago)), agents: subagents(path.join(dir, id, 'subagents'), nowMs) });
+      const t = sessionTitle(file, st);
+      out.push({ id, title: t.title, named: t.named, ago: Math.max(0, Math.round(ago)), agents: subagents(path.join(dir, id, 'subagents'), nowMs) });
     }
   }
   out.sort((a, b) => a.ago - b.ago);
@@ -365,6 +368,34 @@ const posts = {
   '/wake'(d) {
     delete d.sleep;
     return { type: 'wake', id: '-', text: '자러 가기를 취소함' };
+  },
+  /* a sent request taken off the list: one still waiting is called off (the agent is told), a handled one only goes */
+  '/unrequest'(d, body) {
+    const i = d.requests.findIndex((r) => String(r.id) === String(body.id));
+    if (i < 0) throw new HttpError(400, '그 요청을 찾지 못했어요');
+    const [r] = d.requests.splice(i, 1);
+    return r.status === 'new' ? { type: 'unrequest', id: r.id, text: r.text } : null;
+  },
+  /*
+   * 방에서 내쫓기, once MinsuTerm ended that session: the main agent leaves (leftAt, until the progress skill is used
+   * again), or another session's character leaves the room (away: until its conversation changes again).
+   * Nothing goes to the inbox: the session it was for has ended.
+   */
+  '/leave'(d, body) {
+    if (body.main === true) {
+      delete d.asleepAt;
+      delete d.sleep;
+      delete d.restAt;
+      d.leftAt = stamp();
+    }
+    const sid = String(body.sid ?? '');
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sid)) {
+      const away = d.away && typeof d.away === 'object' && !Array.isArray(d.away) ? d.away : {};
+      const cut = Date.now() - 6 * 3600 * 1000; // the room shows sessions of the last 6 hours only
+      d.away = Object.fromEntries(Object.entries(away).filter(([, t]) => Number(t) > cut));
+      d.away[sid.toLowerCase()] = Date.now();
+    }
+    return null;
   },
 };
 
@@ -437,7 +468,7 @@ async function handle(req, res) {
       for (const k of ['items', 'notices', 'requests']) if (!Array.isArray(d[k])) d[k] = [];
       const entry = posts[url.pathname](d, body);
       writeData(proj.root, d);
-      fs.appendFileSync(inboxFile(proj.root), JSON.stringify({ ...entry, at: stamp() }) + '\n');
+      if (entry) fs.appendFileSync(inboxFile(proj.root), JSON.stringify({ ...entry, at: stamp() }) + '\n');
       return send(res, 204);
     }
     return send(res, 404, '없는 경로예요');

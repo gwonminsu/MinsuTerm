@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld('mt', {
     bgOutput: (sid, task) => ipcRenderer.invoke('agent:bgOutput', sid, task),
     bgScript: (task, script) => ipcRenderer.invoke('agent:bgScript', task, script),
     bgStop: (tabId, sid, command, task) => ipcRenderer.invoke('agent:bgStop', tabId, sid, command, task),
+    end: (tabId) => ipcRenderer.invoke('agent:end', tabId), // the tab's agent process, when its exit command did not end it
+    rename: (cwd, id, name) => ipcRenderer.invoke('agent:rename', cwd, id, name), // a Claude conversation not open in a tab
   },
 
   store: {

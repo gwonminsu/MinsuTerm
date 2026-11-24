@@ -1743,6 +1743,54 @@ function processRows() {
 function parseRows(out) {
   return String(out).split(/\r?\n/).map((l) => l.split('\t')).filter((a) => a.length >= 3 && +a[0]).map((a) => ({ pid: +a[0], ppid: +a[1], name: a[2] || '', cmd: a.slice(3).join('\t') }));
 }
+/**
+ * End the agent running in a tab (its process and everything under it), leaving the tab's shell: for when the agent
+ * did not quit on its own exit command. → true when one was found and ended.
+ */
+async function agentEnd(tabId) {
+  const rec = ptys.get(tabId);
+  const root = rec && (rec.p.pid || rec.pid);
+  if (!root) return false;
+  const rows = await processRows();
+  const kids = new Map(), byId = new Map();
+  for (const r of rows) { byId.set(r.pid, r); if (!kids.has(r.ppid)) kids.set(r.ppid, []); kids.get(r.ppid).push(r.pid); }
+  if (!byId.has(root)) return false;
+  const seen = new Set(), stack = [...(kids.get(root) || [])];
+  while (stack.length) {
+    const id = stack.shift();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const r = byId.get(id);
+    if (r && classify(r.name, r.cmd)) { await endTree(id, kids); scheduleProbe([300, 1200]); return true; }
+    stack.push(...(kids.get(id) || []));
+  }
+  return false;
+}
+ipcMain.handle('agent:end', (_e, tabId) => agentEnd(tabId));
+/**
+ * Name a Claude conversation that is not open in a tab: the same line Claude's own /rename appends to its transcript
+ * (the last one wins: /resume, the session lists and the progress room read it). → true when written.
+ */
+ipcMain.handle('agent:rename', (_e, cwd, id, name) => {
+  const title = String(name || '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (!title || !UUID_RE.test(String(id || ''))) return false;
+  const file = claudeFile(cwd, id);
+  if (!exists(file)) return false;
+  try {
+    const st = fs.statSync(file);
+    let last = 0x0a;
+    if (st.size > 0) {
+      const fd = fs.openSync(file, 'r');
+      try { const b = Buffer.alloc(1); fs.readSync(fd, b, 0, 1, st.size - 1); last = b[0]; } finally { fs.closeSync(fd); }
+    }
+    const lead = last !== 0x0a ? '\n' : ''; // never glue it onto a half-written line
+    fs.appendFileSync(file, `${lead}${JSON.stringify({ type: 'custom-title', customTitle: title, sessionId: String(id).toLowerCase() })}\n`);
+    // a new name is not new activity: the conversation keeps its last-active time (the progress room would show it as
+    // working, the lists would move it to the top); 1 ms later still tells the caches the file changed
+    try { fs.utimesSync(file, st.atime, new Date(st.mtimeMs + 1)); } catch { /* the name is written all the same */ }
+    return true;
+  } catch { return false; }
+});
 ipcMain.handle('agent:bgStop', (_e, tabId, sid, command, task) => bgStop(tabId, sid, command, task));
 ipcMain.handle('agent:subagents', (_e, agent, cwd, id, since) => subagents(agent, cwd, id, since));
 
@@ -2295,6 +2343,36 @@ async function runTestScript() {
           fs.writeFile(path.join(dir, `${String(n++).padStart(5, '0')}_${now - t0}.jpg`), image.toJPEG(95), () => {});
         });
         log.push('rec start');
+        continue;
+      }
+      // the progress page (진행도 보기) is a frame of another origin: "pjs:<code>" runs code in it (its return value goes
+      // to the log), "pclick:<left|right>:<selector>" clicks that element of it with the real mouse
+      const pgFrame = () => win.webContents.mainFrame.framesInSubtree.find((f) => f !== win.webContents.mainFrame && /^http:\/\/127\.0\.0\.1:\d+\//.test(f.url));
+      if (step.startsWith('pjs:') || step.startsWith('pclick:')) {
+        const fr = pgFrame();
+        if (!fr) { log.push(`${step.slice(0, 40)}: NO PROGRESS FRAME`); continue; }
+        if (step.startsWith('pjs:')) {
+          let out;
+          try { out = await fr.executeJavaScript(`(() => { ${step.slice(4)} })()`, true); } catch (e) { out = `ERR ${e.message}`; }
+          log.push(`PJS ${JSON.stringify(out)}`);
+        } else {
+          const [, button, ...sel] = step.split(':');
+          const at = await fr.executeJavaScript(`(() => { const e = document.querySelector(${JSON.stringify(sel.join(':'))}); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`, true);
+          const base = await js(`(() => { const r = document.querySelector('#progress-view .pg-frame').getBoundingClientRect(); return [r.left, r.top]; })()`);
+          if (!at) { log.push(`${step}: NO ELEMENT`); continue; }
+          const x = Math.round(base[0] + at[0]), y = Math.round(base[1] + at[1]);
+          // through the browser's own input path (sendInputEvent does not reach a frame of another origin)
+          const dbg = win.webContents.debugger;
+          try { dbg.attach('1.3'); } catch { /* already */ }
+          const mouse = (type, extra = {}) => dbg.sendCommand('Input.dispatchMouseEvent', { type, x, y, ...extra });
+          await mouse('mouseMoved');
+          await mouse('mousePressed', { button, buttons: button === 'right' ? 2 : 1, clickCount: 1 });
+          await wait(60);
+          await mouse('mouseReleased', { button, buttons: 0, clickCount: 1 });
+          log.push(`${step}: ${button} click at ${x},${y}`);
+        }
+        await wait(700);
+        await shot(`step-${log.length}-${step.startsWith('pjs:') ? 'pjs' : 'pclick'}`);
         continue;
       }
       if (step.startsWith('size:')) { // "size:<w>x<h>": resize the window (a maximised screen behaves differently from the default 1280 x 800)

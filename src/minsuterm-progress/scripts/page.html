@@ -309,6 +309,11 @@
   @keyframes jump { 0% { transform: translateY(0); } 35% { transform: translateY(-13px); } 62% { transform: translateY(0); } 78% { transform: translateY(-3px); } 100% { transform: translateY(0); } }
   .appear.pop { animation: pop .6s ease-out both; }
   @keyframes pop { 0% { opacity: 0; transform: scale(.3); } 70% { opacity: 1; transform: scale(1.08); } 100% { transform: scale(1); } }
+  /* minsuterm: 방에서 내쫓기면 꾸벅 인사하고(bow), 몸을 흔들어 손 흔들듯 인사한(bye) 뒤 걸어 나간다 */
+  .act-bow .lean { animation: bow 1.3s ease-in-out both; }
+  @keyframes bow { 0%, 100% { transform: none; } 32%, 66% { transform: translateY(2.4px) scale(1.06, .76); } }
+  .act-bye .lean { animation: bye .5s ease-in-out 3; }
+  @keyframes bye { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-10deg); } 75% { transform: rotate(10deg); } }
 
   /* 말풍선과 이름표 */
   .bubble-bg { fill: var(--card); stroke: var(--line); stroke-width: .8; }
@@ -636,6 +641,41 @@
     .pct { font-size: 32px; }
     .scope { flex-wrap: wrap; }
   }
+  /* minsuterm: 방 캐릭터를 우클릭하면 뜨는 메뉴. 마지막 항목은 늘 방에서 내쫓기(그것만 붉은 글씨) */
+  .char-menu {
+    position: fixed; z-index: 60; min-width: 176px; max-width: 260px; padding: 5px; margin: 0;
+    background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 11px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
+  }
+  .char-menu[hidden] { display: none; }
+  .cm-label { padding: 5px 9px 6px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cm-item {
+    display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 9px; border: 0; border-radius: 7px;
+    background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+  }
+  .cm-item svg { flex: none; color: var(--muted); }
+  .cm-item:hover, .cm-item:focus-visible { background: var(--hover); outline: none; }
+  .cm-item.danger, .cm-item.danger svg { color: var(--danger); }
+  .cm-item.danger:hover, .cm-item.danger:focus-visible { background: var(--danger-soft); }
+  .cm-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+  /* 방에서 내쫓기 경고 */
+  .kick-what { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+  .kick-list { margin: 0 0 12px; padding-left: 18px; font-size: 14px; word-break: keep-all; }
+  .kick-list li { margin: 3px 0; }
+  .kick-keep { margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--hover); color: var(--muted); font-size: 13px; word-break: keep-all; }
+  .kick-guess { margin: 8px 0 0; color: var(--notice); font-size: 13px; word-break: keep-all; }
+  .name-input {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--text); font: inherit; font-size: 14px;
+  }
+  .name-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  /* 보낸 요청 지우기 */
+  .reqs li { align-items: center; }
+  .r-del {
+    flex: none; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px;
+    background: none; color: var(--faint); cursor: pointer;
+  }
+  .r-del:hover, .r-del:focus-visible { color: var(--danger); background: var(--danger-soft); outline: none; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   }
@@ -926,6 +966,37 @@
   </div>
 </dialog>
 
+<!-- minsuterm: 방 캐릭터 우클릭 메뉴와 그 대화상자 (MinsuTerm 안에서만) -->
+<div id="charMenu" class="char-menu" role="menu" hidden></div>
+
+<dialog id="kickDlg" aria-labelledby="kickTitle">
+  <div class="dlg">
+    <h2 id="kickTitle">방에서 내쫓을까요?</h2>
+    <p id="kickLead"></p>
+    <div id="kickBody"></div>
+    <div class="dlg-foot">
+      <div class="dlg-btns">
+        <button class="btn" type="button" data-act="closeDlg">취소</button>
+        <button id="kickGo" class="btn danger" type="button">내쫓기</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="nameDlg" aria-labelledby="nameTitle">
+  <div class="dlg">
+    <h2 id="nameTitle">이름 바꾸기</h2>
+    <p id="nameLead"></p>
+    <input id="nameInput" class="name-input" type="text" maxlength="80" autocomplete="off" spellcheck="false">
+    <div class="dlg-foot">
+      <div class="dlg-btns">
+        <button class="btn" type="button" data-act="closeDlg">취소</button>
+        <button id="nameSave" class="btn primary" type="button">바꾸기</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -1183,6 +1254,12 @@
       const c = await r.json();
       if (t !== token) return;
       const nextCrew = Array.isArray(c) ? c : [];
+      for (const s of nextCrew) { // minsuterm: 방금 바꾼 이름은 세션 기록에 적힐 때까지(최대 20초) 그대로 보인다
+        const n = renamed.get(s.id);
+        if (!n) continue;
+        if (s.title === n.name || Date.now() > n.until) renamed.delete(s.id);
+        else { s.title = n.name; s.named = true; }
+      }
       if (draw && data) agentEvents(crew, nextCrew);
       crew = nextCrew;
       if (draw && data) renderRoom();
@@ -1361,7 +1438,7 @@
     document.title = `${name} 작업 진행`;
     $('updated').textContent = data.updated ? `갱신 ${rel(data.updated)}` : '';
     const b = $('sleepBtn');
-    b.hidden = false;
+    b.hidden = Boolean(data.leftAt); // minsuterm: 방이 비었으면 재울 에이전트가 없다
     b.querySelector('span').textContent = data.sleep ? '자러 가기 고치기' : `${agentName()} 자러 가기`;
     renderScope();
   }
@@ -1421,9 +1498,15 @@
     const list = data.requests.slice(-5).reverse();
     if (!list.length) { sec.hidden = true; return; }
     sec.hidden = false;
-    sec.innerHTML = `<h2>보낸 요청</h2><ul class="reqs">${list.map((r) => `<li>
+    // minsuterm: 하나씩 지울 수 있다. 아직 확인 기다리는 요청은 지우면 취소로 Claude에게 알린다
+    sec.innerHTML = `<h2>보낸 요청</h2><ul class="reqs">${list.map((r) => {
+      const added = r.status === 'added';
+      const del = added ? '목록에서 지우기' : '요청 취소하고 지우기';
+      return `<li>
         <span class="when">${esc(when(r.at))}</span><span class="r-text">${esc(r.text)}</span>
-        <span class="r-status ${r.status === 'added' ? 'added' : ''}">${r.status === 'added' ? '할 일에 넣음' : '확인 기다림'}</span></li>`).join('')}</ul>`;
+        <span class="r-status ${added ? 'added' : ''}">${added ? '할 일에 넣음' : '확인 기다림'}</span>
+        <button class="r-del" type="button" data-act="unrequest" data-id="${esc(r.id)}" title="${del}" aria-label="${del}">${ICON_X}</button></li>`;
+    }).join('')}</ul>`;
   }
 
   const has = (s) => Boolean(s) && String(s).toLowerCase().includes(query);
@@ -1517,11 +1600,13 @@
     plant: { x: 62, y: 102 },     // 책상 화분 옆: 물 주기
     bedside: { x: 300, y: 104 },  // 침대 옆: 자러 가는 중
     bed: { x: 362, y: 99 },       // 침대: 자는 중
+    front: { x: 334, y: 142 },    // minsuterm: 침대 앞 바닥: 내쫓기면 여기서 인사한다
+    out: { x: 452, y: 142 },      // minsuterm: 방 오른쪽 밖: 나간 뒤
   };
   const OTHER_Y = 150;
   const AGENT_Y = [202, 210];
   const AGENT_GAP = 22;
-  const ACTS = ['work', 'sip', 'tobed', 'sleep', 'doze', 'busy', 'call', 'talk', 'watch', 'read', 'plant', 'stretch', 'yawn'];
+  const ACTS = ['work', 'sip', 'tobed', 'sleep', 'doze', 'busy', 'call', 'talk', 'watch', 'read', 'plant', 'stretch', 'yawn', 'bow', 'bye'];
   const ACT_CLASSES = ACTS.map((a) => `act-${a}`);
   const chars = new Map();
   const agentName = () => (data?.agent === 'codex' ? 'Codex' : 'Claude');
@@ -1686,6 +1771,18 @@
     const now = items.filter((i) => i.group === 'now');
     const next = items.filter((i) => i.group === 'next');
     const S = (o) => ({ cap: false, props: {}, mark: false, ...o, spot: SPOTS[o.spot] });
+    // minsuterm: 방에서 내쫓기는 중이면 인사하고 나간다. 나간 뒤에는 방이 빈다(진행 보고를 다시 하면 돌아온다)
+    if (leave) {
+      const go = { key: 'leaving', name: '방을 나가는 중', desc: '인사하고 방을 나가요', cap: leave.cap };
+      if (leave.step === 'up') return S({ ...go, spot: 'front', face: 'open', act: '', say: '네, 나갈게요' });
+      if (leave.step === 'bow') return S({ ...go, spot: 'front', face: 'smile', act: 'bow', say: '그동안 고마웠어요' });
+      if (leave.step === 'bye') return S({ ...go, spot: 'front', face: 'smile', act: 'bye', say: '안녕히 계세요!' });
+      if (leave.step === 'out') return S({ ...go, spot: 'out', face: 'open', act: '', say: '' });
+      return S({ ...go, gone: true, spot: 'out', face: 'open', act: '', say: '' });
+    }
+    if (data.leftAt) {
+      return S({ key: 'left', gone: true, name: '방이 비었어요', desc: `${hm(data.leftAt)}에 방을 나갔어요. 진행 보고를 다시 시작하면 돌아와요`, spot: 'out', face: 'open', act: '', say: '' });
+    }
     if (data.asleepAt) {
       return S({ key: 'sleep', name: '자는 중', desc: `${hm(data.asleepAt)}에 잠들었어요. 깨우면 이어서 해요`, spot: 'bed', face: 'closed', cap: true, act: 'sleep', say: '' });
     }
@@ -1740,6 +1837,20 @@
     return S({ key: idle.key, name: '쉬는 중', desc: '할 일이 없어 쉬고 있어요', spot: idle.spot, face: idle.face, act: idle.act, say: idle.say, props: idle.props, mark: freshReq });
   }
 
+  // minsuterm: 방에서 내쫓기는 중. 메인 에이전트는 leave({ step: up→bow→bye→out→gone, cap }), 다른 세션은
+  // leavingOthers(id → bye|out). 나간 다른 세션은 기록(away)에 적힐 때까지 goneOthers에 둔다
+  let leave = null;
+  let leaveTimers = [];
+  const leavingOthers = new Map();
+  const goneOthers = new Set();
+  const renamed = new Map(); // 방금 바꾼 이름: 세션 기록에 적히기 전에 crew를 다시 읽어도 옛 이름으로 돌아가지 않게
+  // 기록의 away: 내쫓긴 다른 세션. 그 뒤로 대화가 다시 바뀌면(다시 일하면) 돌아온다
+  const awayNow = (s) => {
+    if (goneOthers.has(s.id)) return true;
+    const t = Number(data?.away?.[s.id]);
+    return Boolean(t) && Date.now() - s.ago * 1000 <= t + 4000;
+  };
+
   // ---------- 일어난 일에 반응하기 (화면이 데이터 변화를 보고 잠깐 말한다) ----------
   let roomEvent = null;
   let roomEventT = 0;
@@ -1764,6 +1875,7 @@
   }
 
   function roomEvents(prev, next) {
+    if (next.leftAt && !prev.leftAt) return; // 방에서 내쫓겼다: 자러 가기가 지워진 것에 대답하지 않는다
     const total = (d) => d.log.reduce((n, day) => n + day.items.length, 0);
     if (total(next) > total(prev)) {
       sayFor(`끝냈어요! ${next.log[0]?.items[0]?.title ?? ''}`.trim(), 4500, true);
@@ -1771,6 +1883,8 @@
     }
     const seen = new Set(prev.requests.map((r) => r.id));
     if (next.requests.some((r) => !seen.has(r.id))) { sayFor('요청 받았어요! 곧 볼게요', 3500); return; }
+    const kept = new Set(next.requests.map((r) => r.id));
+    if (prev.requests.some((r) => r.status === 'new' && !kept.has(r.id))) { sayFor('알겠어요, 그 요청은 안 할게요', 3000); return; }
     const bumped = next.items.find((i) => i.bumpedAt && i.bumpedAt !== prev.items.find((p) => p.id === i.id)?.bumpedAt);
     if (bumped) { sayFor(`네, '${bumped.title}' 먼저 할게요`, 3500); return; }
     const acked = next.notices.find((n) => n.ackedAt && !prev.notices.find((p) => String(p.id) === String(n.id))?.ackedAt);
@@ -1832,24 +1946,30 @@
 
     const want = new Map();
     const skin = data.agent === 'codex' ? 'codex' : 'claude';
-    want.set(`main:${skin}`, {
-      kind: 'claude', skin, main: true, x: st.spot.x, y: st.spot.y, face: st.face, cap: st.cap, act: st.act, props: st.props,
-      mark: st.mark, awake: st.key !== 'sleep', shadow: st.key !== 'sleep', say: ev ? ev.text : st.say, label: `${agentName()} · ${st.name}`,
-    });
     const owner = data.owner ? crew.find((s) => s.id === data.owner) : null;
-    const ownAgents = (owner?.agents || []).slice(-5);
-    const others = crew.filter((s) => s.id !== data.owner).slice(0, 3);
+    if (!st.gone) { // minsuterm: 방에서 나갔으면 메인 에이전트는 없다
+      const named = owner?.named ? owner.title : ''; // minsuterm: 이름을 붙여 줬으면 이름표를 단다
+      want.set(`main:${skin}`, {
+        kind: 'claude', skin, main: true, x: st.spot.x, y: st.spot.y, face: st.face, cap: st.cap, act: st.act, props: st.props,
+        mark: st.mark, awake: st.key !== 'sleep', shadow: st.key !== 'sleep', say: ev && !leave ? ev.text : st.say, tag: named,
+        label: `${named || agentName()} · ${st.name}`,
+      });
+    }
+    const ownAgents = st.gone ? [] : (owner?.agents || []).slice(-5);
+    const others = crew.filter((s) => s.id !== data.owner && !awayNow(s)).slice(0, 3);
     const row = [];
     ownAgents.forEach((a, i) => row.push({ a, sid: 'me', want: st.spot.x + (i - (ownAgents.length - 1) / 2) * AGENT_GAP }));
     others.forEach((s, i) => {
-      const x = Math.round((ROOM_W * (i + 1)) / (others.length + 1));
+      let x = Math.round((ROOM_W * (i + 1)) / (others.length + 1));
       const ss = sessState(s.ago);
       const name = s.title || '이름 없는 세션';
+      const going = leavingOthers.get(s.id); // minsuterm: 내쫓기면 몸을 흔들어 인사하고 가까운 쪽 밖으로 걸어 나간다
+      if (going === 'out') x = x < ROOM_W / 2 ? -50 : ROOM_W + 50;
       want.set(`s:${s.id}`, {
-        kind: 'claude', skin: 'claude', x, y: OTHER_Y, face: ss.face, cap: false, act: ss.act, props: ss.props,
-        awake: ss.key !== 'sleep', shadow: false, cushion: true, tag: name, label: `${name} · ${ss.label}`,
+        kind: 'claude', skin: 'claude', x, y: OTHER_Y, face: going ? 'smile' : ss.face, cap: false, act: going ? (going === 'bye' ? 'bye' : '') : ss.act,
+        props: going ? {} : ss.props, awake: Boolean(going) || ss.key !== 'sleep', shadow: false, cushion: !going, tag: name, label: `${name} · ${going ? '방을 나가는 중' : ss.label}`,
       });
-      const ag = (s.agents || []).slice(-3);
+      const ag = going ? [] : (s.agents || []).slice(-3);
       ag.forEach((a, j) => row.push({ a, sid: s.id, want: x + (j - (ag.length - 1) / 2) * AGENT_GAP }));
     });
     spread(row, AGENT_GAP, 12, ROOM_W - 12);
@@ -1969,6 +2089,13 @@
               renderRoom();
             }
           });
+          // minsuterm: 우클릭하면 이름 바꾸기·방에서 내쫓기 메뉴 (세션을 다루는 일은 MinsuTerm이 하므로 그 안에서만)
+          g.addEventListener('contextmenu', (ev) => {
+            if (!HOST || !data) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            openCharMenu(ent, ev);
+          });
           g.querySelector('.sipper').style.animationDelay = `${(-Math.random() * 6).toFixed(2)}s`;
           startBlink(ent);
         }
@@ -2001,7 +2128,7 @@
         show(e.g.querySelector('.mark'), w.mark);
         e.awake = w.awake;
         if (w.main) setBubble(e, w.say, w.x);
-        else setTag(e, w.tag, w.x, false);
+        setTag(e, w.tag, w.x, false); // minsuterm: 메인 에이전트도 이름을 붙여 주면 이름표를 단다
       } else {
         show(e.g.querySelector('.check'), w.agent.finished);
         setTag(e, w.tag, w.x, true);
@@ -2079,6 +2206,214 @@
     ul.innerHTML = rows.join('');
     ul.hidden = !rows.length;
   }
+
+  // ---------- minsuterm: 방 캐릭터 메뉴: 이름 바꾸기, 방에서 내쫓기 ----------
+  // 세션 캐릭터(메인 에이전트와 다른 세션)를 우클릭하면 뜬다. 세션을 끝내고 이름을 바꾸는 일은 부모 창(MinsuTerm)이
+  // 한다: 페이지는 세션 id만 보내고, MinsuTerm이 그 세션이 열린 탭을 직접 찾는다
+  const HOST = EMBED && window.parent !== window;
+  let hostSeq = 0;
+  const hostWaits = new Map();
+  function askHost(msg, ms = 2500) {
+    if (!HOST) return Promise.resolve(null);
+    const req = ++hostSeq;
+    return new Promise((resolve) => {
+      const t = setTimeout(() => { hostWaits.delete(req); resolve(null); }, ms);
+      hostWaits.set(req, (v) => { clearTimeout(t); hostWaits.delete(req); resolve(v); });
+      try { window.parent.postMessage({ type: 'minsuterm-room', req, ...msg }, '*'); } catch { hostWaits.get(req)?.(null); }
+    });
+  }
+  window.addEventListener('message', (e) => {
+    if (!HOST || e.source !== window.parent) return;
+    const d = e.data;
+    if (d && typeof d === 'object' && d.type === 'minsuterm-room') hostWaits.get(d.req)?.(d);
+  });
+
+  const ICON_DOOR = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M13 4.5H7a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 7 19.5h6M10.5 12h9M16.5 8.5 20 12l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const ICON_X = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
+
+  // 캐릭터가 나타내는 세션: 메인 에이전트는 기록의 owner, 다른 세션은 그 세션
+  function charTarget(key) {
+    if (key.startsWith('main')) {
+      const me = data.owner ? crew.find((s) => s.id === data.owner) : null;
+      return { main: true, sid: data.owner || '', agent: data.agent === 'codex' ? 'codex' : 'claude', title: me?.title || '', named: Boolean(me?.named) };
+    }
+    const s = crew.find((x) => `s:${x.id}` === key);
+    return s ? { main: false, sid: s.id, agent: 'claude', title: s.title || '', named: Boolean(s.named) } : null;
+  }
+
+  let menuFor = null;
+  function openCharMenu(ent, ev) {
+    if (ent.key.startsWith('main') ? leave : leavingOthers.has(ent.key.slice(2))) return; // 나가는 중
+    const t = charTarget(ent.key);
+    if (!t) return;
+    menuFor = t;
+    const who = t.main ? (t.named ? t.title : `${agentName()} · 메인 에이전트`) : t.title || '이름 없는 세션';
+    const m = $('charMenu');
+    m.innerHTML = `<div class="cm-label" title="${esc(who)}">${esc(who)}</div>
+      <button class="cm-item" type="button" role="menuitem" data-act="charName">${ICON_EDIT}<span>이름 바꾸기</span></button>
+      <div class="cm-sep" role="separator"></div>
+      <button class="cm-item danger" type="button" role="menuitem" data-act="charKick">${ICON_DOOR}<span>방에서 내쫓기</span></button>`;
+    m.style.left = '0px';
+    m.style.top = '0px';
+    m.hidden = false;
+    const r = m.getBoundingClientRect();
+    m.style.left = `${Math.round(clamp(ev.clientX + 2, 6, innerWidth - r.width - 6))}px`;
+    m.style.top = `${Math.round(clamp(ev.clientY + 2, 6, innerHeight - r.height - 6))}px`;
+    m.querySelector('.cm-item')?.focus({ preventScroll: true });
+  }
+  function closeCharMenu() {
+    const m = $('charMenu');
+    if (m.hidden) return;
+    m.hidden = true;
+    m.innerHTML = '';
+  }
+  document.addEventListener('pointerdown', (ev) => { if (!ev.target.closest?.('#charMenu')) closeCharMenu(); }, true);
+  addEventListener('blur', closeCharMenu);
+  addEventListener('resize', closeCharMenu);
+  addEventListener('scroll', closeCharMenu, true);
+  $('charMenu').addEventListener('keydown', (ev) => {
+    const items = [...$('charMenu').querySelectorAll('.cm-item')];
+    const i = items.indexOf(document.activeElement);
+    if (ev.key === 'Escape') { ev.preventDefault(); closeCharMenu(); }
+    else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      items[(i + (ev.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
+    }
+  });
+
+  // 방에서 내쫓기: 무엇이 사라지는지 MinsuTerm에 물어 알린 뒤, 확인하면 인사하고 나가며 MinsuTerm이 그 세션을 끝낸다
+  let kickTarget = null;
+  async function openKick(t) {
+    const info = await askHost({ op: 'kickInfo', owner: t.sid, agent: t.agent, main: t.main });
+    if (!info) { toast('MinsuTerm이 답하지 않아요. 잠시 뒤 다시 해 주세요', true); return; }
+    kickTarget = { ...t, info };
+    const kind = (info.found ? info.agent : t.agent) === 'codex' ? 'Codex' : 'Claude';
+    const quit = kind === 'Codex' ? '/quit' : '/exit';
+    $('kickTitle').textContent = t.main ? `${agentName()}를 방에서 내쫓을까요?` : `'${fit(t.title || '이름 없는 세션', 17, 250)}' 세션을 방에서 내쫓을까요?`;
+    if (info.found) {
+      $('kickLead').textContent = `'${info.label}' 탭의 ${kind} 세션이 종료돼요(${quit}). 탭은 셸로 남아요.`;
+      const asleep = t.main && Boolean(data.asleepAt);
+      const lost = [
+        info.working && (asleep ? '지금 하던 기억 정리(수면)가 중간에 멈춰요' : '지금 하던 작업이 중간에 멈춰요'),
+        info.subs && '돌고 있는 서브 에이전트도 함께 멈춰요',
+        info.bg && '백그라운드에서 돌던 명령도 함께 멈춰요',
+        info.draft && '입력창에 써 두고 보내지 않은 글이 지워져요',
+        '세션 안에서만 돌던 감시와 예약(진행도 알림 받기 같은)이 꺼져요',
+      ].filter(Boolean);
+      $('kickBody').innerHTML = `<p class="kick-what">사라지는 것</p><ul class="kick-list">${lost.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+        <p class="kick-keep">대화 기록과 진행 기록(할 일·끝낸 일·요청)은 그대로 남아요. 대화는 나중에 이어서 열 수 있어요.</p>
+        ${t.main && !info.sure ? `<p class="kick-guess">이 폴더에 열린 ${kind} 탭이 '${esc(info.label)}' 하나라서 그 탭으로 골랐어요.</p>` : ''}`;
+      $('kickGo').textContent = '내쫓기';
+    } else {
+      $('kickLead').textContent = '이 세션이 열린 MinsuTerm 탭을 찾지 못했어요. 세션은 건드리지 않고 캐릭터만 방에서 내보내요.';
+      $('kickBody').innerHTML = '<p class="kick-keep">세션이 이미 끝났거나 MinsuTerm 밖에서 열려 있을 수 있어요. 진행 기록은 그대로 남아요.</p>';
+      $('kickGo').textContent = '내보내기';
+    }
+    $('kickGo').disabled = false;
+    $('kickDlg').showModal();
+  }
+
+  async function doKick() {
+    const t = kickTarget;
+    if (!t) return;
+    kickTarget = null;
+    $('kickGo').disabled = true;
+    $('kickDlg').close();
+    if (t.main) startLeave(); else startLeaveOther(t.sid);
+    const res = await askHost({ op: 'kick', owner: t.sid, agent: t.agent, main: t.main }, 30000);
+    await new Promise((r) => { // 인사하고 나가는 것까지 마저 보여 준다
+      const tick = () => ((t.main ? !leave || leave.step === 'gone' : !leavingOthers.has(t.sid)) ? r() : setTimeout(tick, 120));
+      tick();
+    });
+    if (!res || !res.ok) { // 세션이 그대로면 캐릭터도 방으로 돌아온다
+      if (t.main) stopLeave();
+      else { goneOthers.delete(t.sid); renderRoom(); }
+      toast(res ? '세션을 끝내지 못해서 방에 그대로 있어요' : 'MinsuTerm이 답하지 않아 세션을 끝내지 못했어요', true);
+      return;
+    }
+    try {
+      await post('/leave', t.main ? { main: true, sid: t.sid } : { sid: t.sid });
+      await load(false);
+    } catch (e) { toast(`방을 비운 것을 기록하지 못했어요: ${e.message}`, true); }
+    goneOthers.delete(t.sid); // 이제 기록의 away가 가린다
+    if (t.main) stopLeave(); else renderRoom();
+  }
+
+  function startLeave() {
+    leaveTimers.forEach(clearTimeout);
+    leaveTimers = [];
+    leave = { step: reduce ? 'gone' : 'up', cap: roomState().cap };
+    closeCharMenu();
+    renderRoom();
+    if (reduce) return;
+    const main = [...chars.values()].find((e) => e.key.startsWith('main'));
+    if (main) hop(main); // 깨서 폴짝 일어난다
+    const at = (ms, step) => leaveTimers.push(setTimeout(() => { if (leave) { leave.step = step; renderRoom(); } }, ms));
+    at(2000, 'bow');  // 침대 앞까지 걸어 나와(1.8초) 꾸벅 인사하고
+    at(3400, 'bye');  // 몸을 흔들어 손 흔들듯 인사한 뒤
+    at(5000, 'out');  // 오른쪽으로 걸어 나간다(1.8초)
+    at(6900, 'gone');
+  }
+  function stopLeave() {
+    leaveTimers.forEach(clearTimeout);
+    leaveTimers = [];
+    leave = null;
+    renderRoom();
+  }
+  function startLeaveOther(sid) {
+    const done = () => { leavingOthers.delete(sid); goneOthers.add(sid); renderRoom(); };
+    if (reduce) { done(); return; }
+    leavingOthers.set(sid, 'bye');
+    renderRoom();
+    const e = chars.get(`s:${sid}`);
+    if (e) hop(e);
+    setTimeout(() => { if (leavingOthers.get(sid) === 'bye') { leavingOthers.set(sid, 'out'); renderRoom(); } }, 1700);
+    setTimeout(() => { if (leavingOthers.get(sid) === 'out') done(); }, 3600);
+  }
+
+  // 이름 바꾸기: 세션의 실제 이름(Claude·Codex의 /rename)을 바꾼다. 이어서 열기 목록과 MinsuTerm 대화 목록에도 보인다
+  let nameTarget = null;
+  function openName(t) {
+    nameTarget = t;
+    const kind = t.agent === 'codex' ? 'Codex' : 'Claude';
+    $('nameTitle').textContent = t.main ? `${agentName()} 이름 바꾸기` : '세션 이름 바꾸기';
+    $('nameLead').textContent = `${kind} 세션의 이름이 바뀌어요(/rename). 이어서 열기 목록과 MinsuTerm 대화 목록에도 이 이름으로 보여요.`;
+    const inp = $('nameInput');
+    inp.value = t.title || '';
+    inp.placeholder = '새 이름';
+    $('nameSave').disabled = false;
+    $('nameDlg').showModal();
+    inp.focus();
+    inp.select();
+  }
+  async function saveName() {
+    const t = nameTarget;
+    if (!t) return;
+    const name = $('nameInput').value.replace(/\s+/g, ' ').trim();
+    if (!name) { toast('이름을 적어 주세요', true); return; }
+    if (t.named && name === t.title) { $('nameDlg').close(); return; }
+    const btn = $('nameSave');
+    btn.disabled = true;
+    const r = await askHost({ op: 'rename', owner: t.sid, agent: t.agent, main: t.main, name }, 8000);
+    btn.disabled = false;
+    if (!r || !r.ok) { toast(r?.error || 'MinsuTerm이 답하지 않아 바꾸지 못했어요', true); return; }
+    $('nameDlg').close();
+    nameTarget = null;
+    const sid = t.sid || data.owner;
+    if (sid) {
+      renamed.set(sid, { name: r.name || name, until: Date.now() + 20000 });
+      const s = crew.find((x) => x.id === sid);
+      if (s) { s.title = r.name || name; s.named = true; }
+    }
+    renderRoom();
+    toast('이름을 바꿨어요');
+    setTimeout(() => pollCrew(true), 2000);
+  }
+  $('kickGo').addEventListener('click', doKick);
+  $('nameSave').addEventListener('click', saveName);
+  $('nameInput').addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' && !ev.isComposing) { ev.preventDefault(); saveName(); }
+  });
 
   // ---------- 대화상자 ----------
   async function openProjects() {
@@ -2409,6 +2744,20 @@
         await purgeTrash(t.dataset.id);
       } else if (a === 'closeDlg') {
         t.closest('dialog')?.close();
+      } else if (a === 'charName') { // minsuterm: 방 캐릭터 메뉴
+        const target = menuFor;
+        closeCharMenu();
+        if (target) openName(target);
+      } else if (a === 'charKick') {
+        const target = menuFor;
+        closeCharMenu();
+        if (target) await openKick(target);
+      } else if (a === 'unrequest') { // minsuterm: 보낸 요청 지우기 (기다리던 것은 취소로 알린다)
+        const r = data.requests.find((x) => String(x.id) === t.dataset.id);
+        t.disabled = true;
+        await post('/unrequest', { id: t.dataset.id });
+        toast(r && r.status !== 'added' ? '요청을 취소하고 지웠어요' : '목록에서 지웠어요');
+        load(false);
       } else if (a === 'retry') { // minsuterm: 불러오기 카드의 다시 시도
         location.reload();
       } else if (a === 'roomToggle') {

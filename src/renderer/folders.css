@@ -1,7 +1,9 @@
 /* Folder boxes (accordion): head → tabs → one list. No toggles inside toggles. */
 
-/* background layers (image, animation, effects) must never spill over the sidebar or status bar */
-#stage { overflow: hidden; isolation: isolate; }
+/* background layers (image, animation, effects) must never spill over the sidebar or status bar. clip, not hidden:
+   a hidden box can still be scrolled, and a working pane's border effect reaching past it gave it room to scroll — a
+   scrollIntoView or focus inside the progress page (or anywhere) then moved the whole terminal area up for good */
+#stage { overflow: clip; isolation: isolate; }
 
 #projects { gap: 8px; padding: 2px 2px 8px 0; }
 

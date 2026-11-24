@@ -9456,6 +9456,104 @@ window.addEventListener('message', (e) => {
   progressHint(!!d.ok && !!d.empty);
 });
 
+/*
+ * 방에서 내쫓기: the page's room asks which tab holds the main agent's session (for its warning), then asks to end it.
+ * The tab is looked up again here each time from the record's session id; the page never names a tab itself.
+ */
+function roomTab(owner, agent, guess) {
+  const live = S.tabs.filter((t) => t.alive && !t.closed && t.agent);
+  const own = owner && live.find((t) => t.sessionId === owner);
+  if (own || !guess) return own || null;
+  // the main agent, its session id not known yet: the folder's one tab of that agent whose session is not known either
+  const same = live.filter((t) => !t.sessionId && (!agent || t.agent === agent) && samePath(t.cwd, S.progress.path));
+  return same.length === 1 ? same[0] : null;
+}
+
+/** Rename a room character's session: its own /rename while it is open and idle, its transcript when it is not open. */
+async function renameRoomSession(owner, agent, guess, raw) {
+  const name = String(raw ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (!name) return { ok: false, error: '이름이 비어 있어요' };
+  const t = roomTab(owner, agent, guess);
+  if (t) {
+    const A = AGENTS[t.agent].name;
+    if (roomTabBusy(t) || t.kicking) return { ok: false, error: `${A}가 일하는 중이라 지금은 바꿀 수 없어요. 일이 끝난 뒤에 다시 해 주세요` };
+    if (promptText(t)) return { ok: false, error: `'${tabLabel(t)}' 탭 입력창에 쓰던 글이 있어서 바꾸지 않았어요` };
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    if (t.agent === 'codex') { // Codex asks for the name in a box of its own
+      window.mt.pty.write(t.id, '/rename');
+      await wait(250);
+      window.mt.pty.write(t.id, '\r');
+      await wait(700);
+      window.mt.pty.write(t.id, name);
+    } else window.mt.pty.write(t.id, `/rename ${name}`);
+    await wait(250);
+    window.mt.pty.write(t.id, '\r');
+    return { ok: true, how: 'command', name };
+  }
+  if (agent === 'codex') return { ok: false, error: 'Codex 세션은 탭에 열려 있을 때만 이름을 바꿀 수 있어요' };
+  let ok = false;
+  try { ok = await window.mt.agent.rename(S.progress.path, owner, name); } catch { /* reported below */ }
+  if (!ok) return { ok: false, error: '그 세션의 대화 기록을 찾지 못했어요' };
+  S.sessionCache.delete(normP(S.progress.path)); // the sidebar's list of its conversations shows the new name
+  renderProjects();
+  return { ok: true, how: 'file', name };
+}
+
+/** A turn running or a question waiting, by its status or by what its screen shows right now. */
+const roomTabBusy = (t) => t.status === 'working' || t.status === 'attention' || !!t.awaitChoice || screenSaysWorking(t);
+
+/** End the agent in a tab the way a person would (its exit command), its process only if that did not work. */
+async function endAgentSession(tab) {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const gone = () => tab.closed || !tab.alive || !tab.agent;
+  const quit = tab.agent === 'codex' ? '/quit' : '/exit';
+  // a turn running or a question on screen: Esc stops it first, so the command is not queued behind it
+  if (roomTabBusy(tab)) { window.mt.pty.write(tab.id, '\x1b'); await wait(900); }
+  if (gone()) return 'exit';
+  if (promptText(tab)) { window.mt.pty.write(tab.id, '\x03'); await wait(300); } // a draft in the input box: cleared, not sent
+  window.mt.pty.write(tab.id, quit);
+  await wait(250);
+  window.mt.pty.write(tab.id, '\r');
+  window.mt.agent.probe([700, 1500, 2500, 4000, 6000]);
+  for (let i = 0; i < 32 && !gone(); i++) await wait(250);
+  if (gone()) return 'exit';
+  let ended = false;
+  try { ended = await window.mt.agent.end(tab.id); } catch { /* reported below */ }
+  for (let i = 0; ended && i < 20 && !gone(); i++) await wait(250);
+  return gone() ? 'killed' : '';
+}
+
+window.addEventListener('message', async (e) => {
+  const d = e.data;
+  if (!S.progress.open || e.source !== PG.frame.contentWindow || e.origin !== S.progress.origin || !d || d.type !== 'minsuterm-room') return;
+  const reply = (msg) => { try { PG.frame.contentWindow.postMessage({ type: 'minsuterm-room', req: d.req, ...msg }, S.progress.origin); } catch { /* the page went away */ } };
+  const owner = typeof d.owner === 'string' ? d.owner.toLowerCase() : '';
+  const agent = d.agent === 'codex' ? 'codex' : d.agent === 'claude' ? 'claude' : '';
+  const guess = d.main === true; // only the main agent may be found by its folder when its session id is not known
+  if (d.op === 'rename') return reply({ op: 'renamed', ...(await renameRoomSession(owner, agent, guess, d.name)) });
+  const t = roomTab(owner, agent, guess);
+  if (d.op === 'kickInfo') {
+    if (!t) return reply({ op: 'kickInfo', found: false });
+    const working = roomTabBusy(t);
+    return reply({
+      op: 'kickInfo', found: true, label: tabLabel(t), agent: t.agent, sure: !!owner && t.sessionId === owner,
+      working, draft: !working && !!promptText(t), // while it works the cursor's line is its spinner, not a draft
+      subs: hasRunningSubs(t), bg: hasRunningBg(t),
+    });
+  }
+  if (d.op !== 'kick') return;
+  if (!t) return reply({ op: 'kicked', ok: true, how: 'none' });
+  if (t.kicking) return;
+  t.kicking = true;
+  const name = AGENTS[t.agent].name;
+  const label = tabLabel(t);
+  let how = '';
+  try { how = await endAgentSession(t); } finally { t.kicking = false; }
+  reply({ op: 'kicked', ok: !!how, how });
+  if (how) toast(`'${label}' 탭의 ${name} 세션을 끝냈어요`, { icon: 'stop' });
+  else toast(`'${label}' 탭의 ${name} 세션을 끝내지 못했어요. 탭에서 직접 ${name === 'Codex' ? '/quit' : '/exit'} 해 주세요`, { icon: 'info', ms: 6000 });
+});
+
 /** While the record is still empty: say so, and offer to start the skill in the folder's Claude tab. */
 function progressHint(empty) {
   clearInterval(S.progress.poll);

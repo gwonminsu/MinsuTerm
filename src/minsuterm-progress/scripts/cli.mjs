@@ -236,6 +236,7 @@ function show() {
   out.push(`${d.project} · 작업 묶음: ${d.batch || '(이름 없음)'} · 갱신 ${d.updated ?? '-'}`);
   if (d.asleepAt) out.push(`상태: ${d.asleepAt}에 잠듦 (무엇이든 고치면 깸)`);
   if (d.restAt) out.push(`상태: ${d.restAt}에 수면을 마침`);
+  if (d.leftAt) out.push(`상태: ${d.leftAt}에 방에서 나감 (무엇이든 고치면 돌아옴)`);
   for (const [g, label] of Object.entries(GROUPS)) {
     const list = d.items.filter((i) => i.group === g);
     out.push('', `[${label}] ${list.length}개`);
@@ -386,6 +387,7 @@ const message = COMMANDS[cmd]();
 // 고치는 명령의 끝에 공통으로 할 일
 if (!(cmd === 'sleep' && args[0] === 'now')) delete d.asleepAt; // 무엇이든 고치면 깬다
 if (!(cmd === 'sleep' && args[0] === 'done')) delete d.restAt;
+delete d.leftAt; // 방에서 내쫓겼어도 진행 보고를 다시 하면 방으로 돌아온다
 const session = process.env.CLAUDE_CODE_SESSION_ID || process.env.PROGRESS_SESSION_ID;
 if (session) d.owner = session;
 const agent = detectAgent();
