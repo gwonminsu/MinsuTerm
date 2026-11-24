@@ -36,13 +36,13 @@
 
 ### 프롬프트 작성기
 
-긴 프롬프트는 작성기에서 편하게 쓰고 Ctrl+Enter로 보내세요. 커서와 타이핑 효과도 그대로 나옵니다.
+상태 줄의 프롬프트 작성기 버튼이나 Ctrl+Shift+E로 작성기를 열어 긴 프롬프트를 편하게 쓰고 Ctrl+Enter로 보내세요. Claude나 Codex가 입력을 기다릴 때는 입력 줄 끝에 흐리게 뜨는 작성기 안내를 눌러도 열립니다. 커서와 타이핑 효과도 그대로 나옵니다.
 
 <img src="docs/media/composer.gif" width="880" alt="작성기에서 여러 줄 프롬프트를 써서 Claude에게 보내면 계주 테두리가 돌다가 완료 문구가 뜨는 화면">
 
 ### 진행도 보기
 
-사이드바 폴더의 진행도 보기를 누르면 그 폴더에서 에이전트가 적는 할 일과 진행 상황이 터미널 자리에 실시간으로 뜹니다. 요청을 남기거나 먼저 할 일을 고를 수도 있습니다. 처음 한 번 **구축하기**를 누르면 필요한 스킬이 설치되고, Node가 없는 컴퓨터에서도 동작합니다.
+사이드바 폴더 머리의 진행도 버튼(Ctrl+Shift+J)을 누르고 추가한 프로젝트 폴더를 고르면, 그 폴더에서 에이전트가 적는 할 일과 진행 상황이 터미널 자리에 실시간으로 뜹니다. 확인할 일이 생기면 버튼에 그 수가 표시됩니다. 요청을 남기거나 먼저 할 일을 고를 수도 있습니다. 처음 한 번 **구축하기**를 누르면 필요한 스킬이 설치되고, Node가 없는 컴퓨터에서도 동작합니다.
 
 <img src="docs/media/progress.png" width="880" alt="my-app 폴더의 진행도: 진행률, 해 주셔야 할 일, 지금 하는 것과 다음에 할 것, 일하는 Claude의 방, 요청 남기기">
 
@@ -108,8 +108,8 @@ Run `claude` or `codex` in your usual shell (cmd, PowerShell, zsh) and the tab s
 - **Notifications.** Get notified when an agent finishes or asks you to pick an option, even while you're in another app.
 - **Session restore.** Close the app and your tabs and Claude / Codex conversations come back next time.
 - **Split panes.** Drag a tab onto the terminal to split it.
-- **Prompt composer.** Write long, multi-line prompts in a separate editor and send them in one go.
-- **Progress view.** Open a folder's progress from the sidebar: what the agent is doing, what's next, what's done and what it needs from you, live in the terminal area. One click sets up the skills it needs (`minsuterm-progress`, `minsuterm-dreaming`); it works without Node, and the page is served on 127.0.0.1 only.
+- **Prompt composer.** Write long, multi-line prompts in a separate editor and send them in one go. Open it from the status bar, with Ctrl+Shift+E, or from the hint at the end of the agent's input row.
+- **Progress view.** Open a folder's progress from the progress button in the sidebar's folder header (Ctrl+Shift+J), which also counts what needs your attention: what the agent is doing, what's next, what's done and what it needs from you, live in the terminal area. One click sets up the skills it needs (`minsuterm-progress`, `minsuterm-dreaming`); it works without Node, and the page is served on 127.0.0.1 only.
 - **Decorations.** Working borders (a relay race, Santa's sleigh...), celebrations when a task is done, animated backgrounds, typing effects and sounds, animated cursors, dark and light themes.
 - **Languages.** Korean, English, Japanese, Chinese.
 
