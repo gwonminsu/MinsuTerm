@@ -2038,7 +2038,7 @@ ipcMain.handle('progress:open', (_e, dir) => {
   if (!isFolder(dir) || !fs.existsSync(dir)) throw new Error('폴더를 찾지 못했어요');
   return progress.open(dir);
 });
-ipcMain.handle('progress:summary', (_e, dir) => (isFolder(dir) ? progress.summary(dir) : null));
+ipcMain.handle('progress:summary', (_e, dirs) => (Array.isArray(dirs) ? dirs.slice(0, 60) : [dirs]).map((d) => (isFolder(d) ? progress.summary(d) : null)));
 ipcMain.on('open:userdata', () => shell.openPath(app.getPath('userData')));
 
 /*

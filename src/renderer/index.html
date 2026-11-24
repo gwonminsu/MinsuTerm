@@ -65,6 +65,7 @@
         <section class="sb-section grow projects-section">
           <div class="sb-head">
             <span>폴더</span>
+            <button class="sb-progress" id="sb-progress" title="진행도 보기 (Ctrl+Shift+J)"><span data-icon="progressRing"></span><span class="sbp-label">진행도</span><span class="sbp-badge" hidden></span></button>
             <span class="sb-head-actions">
               <button class="icon-btn" data-action="history" title="대화 기록 (Ctrl+Shift+O)" data-icon="history"></button>
               <button class="icon-btn" data-action="recycle" title="휴지통 (삭제한 대화 복원 · 영구 삭제)" data-icon="trash"></button>
@@ -163,7 +164,7 @@
       <div class="st-right">
         <span id="st-status" class="st-item"></span>
         <button id="st-session" class="st-item st-btn mono" hidden></button>
-        <button id="st-composer" class="st-item st-btn" title="프롬프트 작성기 (Ctrl+Shift+E)" hidden><span data-icon="edit"></span>작성기</button>
+        <button id="st-composer" class="st-item st-btn st-composer" title="프롬프트 작성기 (Ctrl+Shift+E)"><span data-icon="edit"></span><span class="stc-label">프롬프트 작성기</span><kbd class="stc-key no-i18n"></kbd></button>
         <button id="st-palette" class="st-item st-btn" title="명령 팔레트 (Ctrl+Shift+P)"><span data-icon="command"></span></button>
       </div>
     </footer>

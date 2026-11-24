@@ -1,5 +1,45 @@
 /* 진행도 보기: a folder's progress page laid over the terminal area (app.js openProgress) */
 
+/* 진행도 in the 폴더 header: its own mark and a label, with a count of what waits for the user */
+.sb-head .sb-progress {
+  margin: 0 auto 0 8px; /* right after "폴더", the head's actions stay at the right */
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px 0 5px;
+  border-radius: 999px;
+  font: 600 11.5px/1 var(--ui-font);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-2);
+  background: color-mix(in srgb, var(--violet) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--violet) 26%, transparent);
+  transition: background .15s, color .15s, box-shadow .15s;
+}
+.sb-head .sb-progress .ico { width: 15px; height: 15px; color: var(--violet); }
+.sb-head .sb-progress .ico .pr-arc { transition: stroke-dashoffset .6s cubic-bezier(.2, .8, .2, 1); }
+.sb-head .sb-progress:hover { color: var(--text); background: color-mix(in srgb, var(--violet) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--violet) 45%, transparent); }
+.sb-head .sb-progress:hover .ico .pr-arc { stroke-dashoffset: 6; }
+.sb-head .sb-progress:focus-visible { outline: 2px solid var(--violet); outline-offset: 1px; }
+.sb-head .sb-progress.on { color: var(--text); background: color-mix(in srgb, var(--violet) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--violet) 60%, transparent); }
+.sb-head .sbp-badge {
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; display: inline-grid; place-items: center;
+  font-size: 10px; font-weight: 700; color: #3a2600; background: #f0b44c;
+}
+.sb-head .sbp-badge[hidden] { display: none; }
+
+/* the folder picker for 진행도 */
+.menu.pg-menu { min-width: 300px; max-width: min(440px, calc(100vw - 24px)); max-height: min(70vh, 560px); overflow: auto; }
+.pg-menu .menu-item { align-items: center; }
+.pg-menu .pgm-text { display: grid; min-width: 0; flex: 1 1 auto; text-align: left; }
+.pg-menu .pgm-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pg-menu .pgm-here { margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: 10.5px; font-weight: 600; color: var(--violet); background: color-mix(in srgb, var(--violet) 14%, transparent); }
+.pg-menu .pgm-path { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pg-menu .pgm-stat { flex: none; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.pg-menu .pgm-stat.none { color: var(--dim); }
+.pg-menu .pgm-stat .w { color: #e0a23c; font-weight: 600; }
+
 .progress-view {
   position: absolute;
   inset: 10px;
@@ -150,3 +190,16 @@
 .pg-card-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .pg-card-actions .btn { height: 34px; }
 .pg-card-note { margin-right: auto; font-size: 11.5px; color: var(--dim); }
+.pg-menu .pgm-hint { display: flex; align-items: center; gap: 6px; margin: 2px 4px 2px; padding: 6px 8px 4px; border-top: 1px solid var(--border); font-size: 11px; color: var(--dim); }
+.pg-menu .pgm-hint .ico { flex: none; width: 12px; height: 12px; color: var(--dim); }
+
+/* the folder rows are two lines (name, path) and a summary: give them room (a plain menu row is 30px high) */
+.menu.pg-menu { padding: 6px; }
+.pg-menu .menu-item { height: auto; min-height: 50px; padding: 8px 10px; gap: 11px; border-radius: 9px; }
+.pg-menu .menu-item + .menu-item { margin-top: 3px; }
+.pg-menu .pgm-text { gap: 3px; }
+.pg-menu .pgm-name { display: flex; align-items: center; font-size: 13px; font-weight: 600; color: var(--text); }
+.pg-menu .fb-ico { flex: none; width: 30px; height: 30px; }
+.pg-menu .menu-label { padding: 6px 10px 4px; }
+.pg-menu .pgm-stat { padding-left: 10px; }
+.pg-menu .menu-item.on { background: color-mix(in srgb, var(--violet) 14%, transparent); }

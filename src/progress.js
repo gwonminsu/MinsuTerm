@@ -624,8 +624,16 @@ async function open(folder) {
 function summary(folder) {
   try {
     const d = readData(path.resolve(folder));
-    return { items: Array.isArray(d.items) ? d.items.length : 0, log: Array.isArray(d.log) ? d.log.length : 0, updated: d.updated || '' };
-  } catch { return { items: 0, log: 0, updated: '' }; }
+    const items = Array.isArray(d.items) ? d.items : [];
+    return {
+      exists: true,
+      remaining: items.filter((i) => i.group !== 'hold').length,
+      done: doneCount(d),
+      waiting: items.filter((i) => i.wait).length + (Array.isArray(d.notices) ? d.notices.filter((n) => !n.ackedAt).length : 0),
+      updated: d.updated || '',
+      asleep: Boolean(d.asleepAt),
+    };
+  } catch { return { exists: false, remaining: 0, done: 0, waiting: 0, updated: '', asleep: false }; }
 }
 
 module.exports = { status, setup, refreshInstalled, open, summary, stopServer, origin: () => (serverPort ? `http://${HOST}:${serverPort}` : '') };

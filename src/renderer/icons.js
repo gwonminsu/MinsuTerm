@@ -18,6 +18,8 @@ window.ICONS = {
   history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
   progress: '<path d="m3.5 6 1.5 1.5 3-3"/><path d="M11 6h9.5"/><path d="m3.5 12.5 1.5 1.5 3-3"/><path d="M11 12.5h9.5"/><path d="M4 19h3.5"/><path d="M11 19h5"/>', // a checklist under way: two ticked, one still open
+  // 진행도: a progress ring three-quarters round, its open end a little dot, a check inside (the arc gets class pr-arc)
+  progressRing: '<circle cx="12" cy="12" r="8.5" opacity=".16" stroke-width="2.2"/><path class="pr-arc" d="M12 3.5a8.5 8.5 0 1 1-8.5 8.5" stroke-width="2.2" stroke-dasharray="40" stroke-dashoffset="0"/><path d="m8.7 12.3 2.2 2.2 4.4-4.6" stroke-width="2"/>',
   openExternal: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
   more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',

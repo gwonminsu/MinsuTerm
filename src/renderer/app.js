@@ -2549,6 +2549,7 @@ function paneReach(t, geo) {
   s.clipPath = tiled ? `inset(${(r.top + b - y).toFixed(1)}px ${(geo.cw - pr).toFixed(1)}px ${(geo.ch - pb).toFixed(1)}px ${-pl}px round 9px)` : '';
 }
 function updateCursor() {
+  composerHint();
   if (!cursorEl) { cursorEl = h('div', 'mt-cursor off'); $('#stage').appendChild(cursorEl); }
   // hidden = invisible and held still, not display:none: shown again, the cursor's animations go on where they were
   const off = () => { cursorEl.classList.add('off'); };
@@ -2594,6 +2595,59 @@ function updateCursor() {
     clearTimeout(cursorMoveTimer);
     cursorMoveTimer = setTimeout(() => cursorEl.classList.remove('moving'), 260);
   }
+}
+
+/*
+ * 프롬프트 작성기, found where people type: while the agent waits for input, a faint "Ctrl+Shift+E 작성기" at the right
+ * end of its input row (it steps aside once the typed text comes close), and the status bar button lights up the
+ * first time a prompt grows a second line (once per session, a small bubble says what it is for).
+ */
+const COMPOSER_KEY = IS_MAC ? '⌘⇧E' : 'Ctrl+Shift+E';
+$('#st-composer .stc-key').textContent = IS_MAC ? '⌘⇧E' : 'Ctrl⇧E';
+let composerHintEl = null;
+function composerHint() {
+  if (!composerHintEl) {
+    composerHintEl = h('button', 'composer-hint', `<span class="ch-key no-i18n">${COMPOSER_KEY}</span><span>작성기</span>`);
+    composerHintEl.title = '프롬프트 작성기 열기';
+    composerHintEl.addEventListener('mousedown', (e) => e.preventDefault()); // keep the terminal's focus
+    composerHintEl.addEventListener('click', () => openComposer());
+    $('#stage').appendChild(composerHintEl);
+  }
+  const t = activeTab();
+  const hide = () => composerHintEl.classList.remove('show');
+  if (!t || !t.agent || !t.alive || S.overlay || (S.progress && S.progress.open) || !['ready', 'done'].includes(t.status)) return hide();
+  const b = t.term.buffer.active;
+  if (b.viewportY !== b.baseY) return hide();
+  const screen = t.host.querySelector('.xterm-screen');
+  const geo = cursorGeometry(t);
+  if (!screen || !geo) return hide();
+  const c = stableCaret(t);
+  const room = t.term.cols - c.x; // cells left of the typed text on the input row
+  if (room < 30 || c.y >= t.term.rows) return hide();
+  const sr = $('#stage').getBoundingClientRect();
+  const r = screen.getBoundingClientRect();
+  const s = composerHintEl.style;
+  s.height = `${geo.ch}px`;
+  s.fontSize = `${Math.max(10, Math.min(12, geo.ch * 0.62)).toFixed(1)}px`;
+  s.transform = `translate(${(r.right - sr.left - 10).toFixed(1)}px, ${geo.top.toFixed(1)}px) translateX(-100%)`;
+  composerHintEl.classList.add('show');
+}
+let composerNudged = false;
+function nudgeComposer() {
+  const btn = $('#st-composer');
+  btn.classList.remove('nudge');
+  void btn.offsetWidth; // restart the glow
+  btn.classList.add('nudge');
+  if (composerNudged) return;
+  composerNudged = true;
+  const tip = h('div', 'composer-tip', `<b>긴 프롬프트는 작성기에서 편하게</b><span class="no-i18n">${COMPOSER_KEY}</span>`);
+  document.body.appendChild(tip);
+  const r = btn.getBoundingClientRect();
+  tip.style.left = `${Math.max(8, Math.min(r.left + r.width / 2 - tip.offsetWidth / 2, innerWidth - tip.offsetWidth - 8))}px`;
+  tip.style.top = `${r.top - tip.offsetHeight - 10}px`;
+  tip.addEventListener('click', () => { tip.remove(); openComposer(); });
+  setTimeout(() => tip.classList.add('out'), 4200);
+  setTimeout(() => tip.remove(), 4600);
 }
 
 /* ---------- animated backgrounds ---------- */
@@ -8592,10 +8646,14 @@ function renderSessions() {
 
 function renderStatus() {
   const t = activeTab();
+  if (typeof syncTitleActions === 'function' && S.progress) syncTitleActions();
+  if (typeof composerHint === 'function') requestAnimationFrame(composerHint); // the input hint follows the status (shown only while the agent waits)
   const kind = $('#st-kind');
   const cwd = $('#st-cwd');
   const st = $('#st-status');
-  $('#st-composer').hidden = !(t && t.agent);
+  const stc = $('#st-composer'); // always there, so it can be found; quiet outside a Claude / Codex tab
+  stc.classList.toggle('idle', !(t && t.agent));
+  stc.title = t && t.agent ? '프롬프트 작성기 (Ctrl+Shift+E)' : '프롬프트 작성기 · Claude 또는 Codex 탭에서 쓸 수 있어요';
   $('#st-session').hidden = !(t && t.agent && t.sessionId);
   document.getElementById('app').dataset.agent = t && t.agent ? t.agent : '';
   window.mt.setTitle(t ? `${tabLabel(t)} — MinsuTerm` : 'MinsuTerm');
@@ -9364,6 +9422,7 @@ async function openProgress(dir, name) {
   document.activeElement?.blur?.();
   $('#pg-close').focus({ preventScroll: true });
   renderProjects();
+  syncTitleActions();
   pgChip('loading', '준비 중');
   pgShow('loading');
   let st;
@@ -9485,10 +9544,96 @@ function closeProgress() {
     PG.frame.hidden = true;
   }, 140);
   renderProjects();
+  syncTitleActions();
   const t = activeTab();
   if (t && t.term) requestAnimationFrame(() => t.term.focus());
 }
 
+/* ---------- the title bar's 진행도: pick one of the folders, then its page ---------- */
+
+/** The registered folders (프로젝트), the active tab's one marked; nothing else is offered. */
+function progressFolders() {
+  const t = activeTab();
+  const own = t && t.cwd ? ownerProject(t.cwd) : null;
+  return sortedProjects().map((p) => ({ path: p.path, name: p.name, project: p, here: !!own && own.id === p.id }));
+}
+
+async function openProgressPicker(anchor, fromKeyboard = !anchor) {
+  const folders = progressFolders();
+  let sums = [];
+  try { sums = await window.mt.progress.summary(folders.map((f) => f.path)); } catch { sums = []; }
+  folders.forEach((f, i) => { f.sum = sums[i] || null; });
+  // the active tab's folder first, then folders that have a record (most recently updated), then the rest
+  const here = folders.filter((f) => f.here);
+  // then what waits for the user, then folders with a record (most recently updated), then the rest
+  const rest = folders.filter((f) => !f.here).sort((a, b) => (b.sum?.waiting || 0) - (a.sum?.waiting || 0) || (b.sum?.exists ? 1 : 0) - (a.sum?.exists ? 1 : 0) || String(b.sum?.updated || '').localeCompare(String(a.sum?.updated || '')));
+  const r = (anchor || $('#sb-progress')).getBoundingClientRect();
+  closeOverlay();
+  const scrim = h('div');
+  scrim.style.cssText = 'position:fixed;inset:0;z-index:99';
+  const menu = h('div', 'menu pg-menu');
+  const label = (txt) => menu.appendChild(h('div', 'menu-label', esc(txt)));
+  const row = (f) => {
+    const s = f.sum;
+    const stat = !s || !s.exists
+      ? '<span class="pgm-stat none">기록 없음</span>'
+      : `<span class="pgm-stat">${s.waiting ? `<span class="w">확인 ${s.waiting}</span> · ` : ''}<span>남은 ${s.remaining}</span> · <span>끝낸 ${s.done}</span></span>`;
+    const ic = f.project ? projectIconHtml(f.project) : icon('folder');
+    const on = S.progress.open && samePath(S.progress.path, f.path);
+    const b = h('button', 'menu-item' + (on ? ' on' : ''), `${ic}<span class="pgm-text"><span class="pgm-name"><span class="no-i18n">${esc(f.name)}</span>${f.here ? '<span class="pgm-here">지금 탭</span>' : ''}</span><span class="pgm-path no-i18n">${esc(prettyPath(f.path))}</span></span>${stat}`);
+    b.addEventListener('click', () => { closeOverlay(); openProgress(f.path, f.name); });
+    menu.appendChild(b);
+  };
+  if (S.progress.open) {
+    const c = h('button', 'menu-item', `${icon('x')}<span>진행도 닫기</span><span class="hint">Esc</span>`);
+    c.addEventListener('click', () => { closeOverlay(); closeProgress(); });
+    menu.appendChild(c);
+    menu.appendChild(h('div', 'menu-sep'));
+  }
+  if (folders.length) { label('등록된 폴더'); here.forEach(row); rest.forEach(row); }
+  else { // nothing registered yet: say so, and offer the one way to register a folder
+    menu.appendChild(h('div', 'menu-label', esc('아직 등록된 폴더가 없어요')));
+    const add = h('button', 'menu-item', `${icon('folderPlus')}<span>프로젝트 폴더 추가…</span>`);
+    add.addEventListener('click', async () => { closeOverlay(); const p = await addProject(); if (p) openProgress(p.path, p.name); });
+    menu.appendChild(add);
+  }
+  // which folders these are, and how another one gets here
+  menu.appendChild(h('div', 'pgm-hint', `${icon('info')}<span>추가한 프로젝트 폴더만 보여요</span>`));
+  scrim.addEventListener('pointerdown', () => closeOverlay());
+  overlayRoot.append(scrim, menu);
+  const mr = menu.getBoundingClientRect();
+  const sideOpen = !!$('#sb-progress').offsetParent; // a hidden sidebar: open the list from the top left instead
+  menu.style.left = `${Math.max(6, Math.min(sideOpen ? r.left : 12, innerWidth - mr.width - 6))}px`;
+  menu.style.top = `${Math.min(sideOpen ? r.bottom + 6 : 52, innerHeight - mr.height - 6)}px`;
+  const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeOverlay(); } };
+  window.addEventListener('keydown', onKey, true);
+  S.overlay = { nodes: [scrim, menu], cleanup: () => window.removeEventListener('keydown', onKey, true) };
+  if (fromKeyboard) menu.querySelector('.menu-item')?.focus(); // from the keyboard: the list takes the arrows / Enter at once
+  refreshProgressBadge(true);
+}
+
+/** The 진행도 button in the 폴더 header: lit while the view is open, a badge with what waits for the user. */
+function syncTitleActions() {
+  $('#sb-progress').classList.toggle('on', !!S.progress.open);
+}
+let progressBadgeAt = 0;
+/** Every half minute (and on demand): how many items across the folders wait for the user (확인 필요, unanswered notices). */
+async function refreshProgressBadge(force) {
+  if (!force && Date.now() - progressBadgeAt < 30000) return;
+  progressBadgeAt = Date.now();
+  const folders = progressFolders();
+  let sums = [];
+  try { sums = await window.mt.progress.summary(folders.map((f) => f.path)); } catch { return; }
+  const waiting = sums.reduce((n, s) => n + (s && s.exists ? s.waiting : 0), 0);
+  const b = $('#sb-progress .sbp-badge');
+  b.hidden = !waiting;
+  b.textContent = waiting > 99 ? '99+' : String(waiting);
+  $('#sb-progress').title = waiting ? `진행도 보기 · 확인이 필요한 일 ${waiting}개 (Ctrl+Shift+J)` : '진행도 보기 (Ctrl+Shift+J)';
+}
+setInterval(() => { if (!document.hidden) refreshProgressBadge(); }, 30000);
+setTimeout(() => refreshProgressBadge(true), 4000);
+
+$('#sb-progress').addEventListener('click', (e) => { e.stopPropagation(); openProgressPicker(e.currentTarget); });
 $('#pg-close').addEventListener('click', closeProgress);
 $('#pg-reload').addEventListener('click', () => { if (S.progress.open) loadProgressPage(S.progress.seq); });
 $('#pg-retry').addEventListener('click', () => { if (S.progress.open) openProgress(S.progress.path, S.progress.name); });
@@ -9627,6 +9772,7 @@ function openCommandPalette() {
     { group: '보기', icon: 'x', text: '글꼴 작게', hint: 'Ctrl+-', run: () => setFontSize(S.settings.fontSize - 1) },
     { group: '보기', icon: 'type', text: '글꼴 크기 초기화', hint: 'Ctrl+0', run: () => setFontSize(14) },
     { group: '앱', icon: 'folderPlus', text: '프로젝트 추가', run: () => addProject() },
+    { group: '앱', icon: 'progress', text: '진행도 보기', hint: 'Ctrl+Shift+J', keywords: 'progress todo board', run: () => openProgressPicker() },
     { group: '앱', icon: 'settings', text: '설정', hint: 'Ctrl+,', run: openSettings },
     { group: '앱', icon: 'folderOpen', text: '설정 폴더 열기', run: () => window.mt.openUserData() },
     { group: '앱', icon: 'bolt', text: '성능 기록 (30초)', sub: '느릴 때 실행: 무엇이 CPU를 쓰는지 파일로 저장', keywords: 'performance profile cpu diagnostics lag', run: () => recordPerformance(30000) },
@@ -10566,6 +10712,7 @@ window.addEventListener('keydown', (e) => {
   else if (cs && code === 'KeyB') toggleSidebar();
   else if (cs && code === 'KeyF') openSearch();
   else if (cs && code === 'KeyE') openComposer();
+  else if (cs && code === 'KeyJ') openProgressPicker();
   else if (cs && code === 'KeyO') openHistory();
   else if (cs && code === 'KeyC') { if (t) copySelection(t); }
   else if (cs && code === 'KeyV') { if (t) smartPaste(t); }
@@ -10600,6 +10747,7 @@ window.addEventListener('keydown', (e) => {
  * would land on the new line.
  */
 function sendNewline(t) {
+  nudgeComposer(); // a second line in the agent's input: the moment the composer helps most
   const nl = AGENTS[t.agent].newline;
   // Nothing being typed in Korean: the newline goes straight out.
   if (!t.composing && !t.compFinal) { window.mt.pty.write(t.id, nl); return; }
