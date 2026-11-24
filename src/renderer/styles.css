@@ -900,15 +900,15 @@ body.grabbing, body.grabbing * { cursor: grabbing !important; }
 }
 
 /* the faint hint at the right end of the agent's input row */
-.composer-hint {
+.composer-cue {
   position: absolute; left: 0; top: 0; z-index: 6;
   display: inline-flex; align-items: center; gap: 6px; padding: 0 2px;
   font-family: var(--ui-font); color: var(--dim); white-space: nowrap;
   opacity: 0; pointer-events: none; transition: opacity .2s, color .15s;
 }
-.composer-hint.show { opacity: .7; pointer-events: auto; }
-.composer-hint:hover { opacity: 1; color: var(--text-2); }
-.composer-hint .ch-key { font-family: 'Cascadia Mono', Consolas, monospace; font-size: .9em; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border); line-height: 1.5; }
+.composer-cue.show { opacity: .7; pointer-events: auto; }
+.composer-cue:hover { opacity: 1; color: var(--text-2); }
+.composer-cue .ch-key { font-family: 'Cascadia Mono', Consolas, monospace; font-size: .9em; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border); line-height: 1.5; }
 
 /* the once-per-session bubble over the status bar button */
 .composer-tip {

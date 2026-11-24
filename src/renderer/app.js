@@ -2607,7 +2607,7 @@ $('#st-composer .stc-key').textContent = IS_MAC ? '⌘⇧E' : 'Ctrl⇧E';
 let composerHintEl = null;
 function composerHint() {
   if (!composerHintEl) {
-    composerHintEl = h('button', 'composer-hint', `<span class="ch-key no-i18n">${COMPOSER_KEY}</span><span>작성기</span>`);
+    composerHintEl = h('button', 'composer-cue', `<span class="ch-key no-i18n">${COMPOSER_KEY}</span><span>작성기</span>`);
     composerHintEl.title = '프롬프트 작성기 열기';
     composerHintEl.addEventListener('mousedown', (e) => e.preventDefault()); // keep the terminal's focus
     composerHintEl.addEventListener('click', () => openComposer());

@@ -1276,7 +1276,17 @@
     main.prepend(top);
     main.append(empty, cols);
     $('q').placeholder = '찾기: 항목·메모·커밋';
-    setRoomFolded(store.get(ROOM_KEY, null) ?? (innerHeight < 600));
+    // No saved choice: fold on a short frame. The frame can still be hidden (height 0) while the page loads,
+    // so decide once it has a real height instead of folding the room for every first open.
+    const savedFold = store.get(ROOM_KEY, null);
+    setRoomFolded(savedFold ?? (innerHeight > 0 && innerHeight < 600));
+    if (savedFold === null && !innerHeight) {
+      addEventListener('resize', function sized() {
+        if (!innerHeight) return;
+        removeEventListener('resize', sized);
+        if (store.get(ROOM_KEY, null) === null) setRoomFolded(innerHeight < 600);
+      });
+    }
     if ('ResizeObserver' in window) {
       new ResizeObserver(() => {
         const before = roomScale;
