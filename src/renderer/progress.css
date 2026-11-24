@@ -85,7 +85,7 @@
 .pg-mark .ico { width: 17px; height: 17px; }
 .pg-titles { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .pg-label { flex: 0 0 auto; font-size: 11.5px; font-weight: 600; letter-spacing: .02em; color: var(--violet); }
-.pg-title { flex: 0 1 auto; font-size: 14px; font-weight: 650; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pg-title { flex: 0 0 auto; max-width: 260px; font-size: 14px; font-weight: 650; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pg-path { flex: 0 1 auto; min-width: 0; font-size: 11.5px; color: var(--dim); font-family: 'Cascadia Mono', Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pg-spacer { flex: 1 1 auto; }
 
@@ -109,10 +109,22 @@
 .pg-chip[data-state="error"] i { background: #ef6a6a; }
 @keyframes pg-pulse { 50% { opacity: .35; } }
 
-.pg-bar .icon-btn { width: 32px; height: 32px; }
+.pg-bar .icon-btn { flex: none; width: 32px; height: 32px; }
 .pg-bar .icon-btn .ico { width: 16px; height: 16px; }
-.pg-close { height: 34px; padding: 0 14px 0 11px; gap: 6px; font-weight: 650; }
+.pg-close { flex: none; height: 34px; padding: 0 14px 0 11px; gap: 6px; font-weight: 650; white-space: nowrap; }
 .pg-close .ico { width: 15px; height: 15px; }
+/* a narrow pane: the path goes first, then the chip's words, then the close button keeps only its × (never a wrapped label) */
+#progress-view { container-type: inline-size; }
+@container (max-width: 620px) {
+  .pg-path { display: none; }
+  .pg-title { max-width: 160px; }
+}
+@container (max-width: 470px) {
+  .pg-chip { padding: 0 7px; }
+  .pg-chip-text { display: none; }
+  .pg-close { width: 34px; padding: 0; justify-content: center; }
+  .pg-close-label { display: none; }
+}
 
 /* a slim line under the bar while the record is still empty */
 .pg-hint {
@@ -163,7 +175,7 @@
   box-shadow: 0 12px 36px rgba(0, 0, 0, .18);
 }
 .pg-card h2 { margin: 0 0 6px; font-size: 17px; font-weight: 700; color: var(--text); }
-.pg-card > p { margin: 0 0 16px; font-size: 13px; line-height: 1.65; color: var(--muted); }
+.pg-card > p { margin: 0 0 16px; font-size: 13px; line-height: 1.65; color: var(--muted); word-break: keep-all; text-wrap: pretty; }
 .pg-steps { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 8px; }
 .pg-steps li {
   display: grid;
@@ -185,11 +197,14 @@
 .pg-steps li.done .pg-step-dot { color: #fff; background: #3ccf8e; }
 .pg-steps li.skip .pg-step-dot { color: var(--muted); background: var(--surface-3); }
 .pg-step-title { font-size: 13px; font-weight: 600; color: var(--text); }
-.pg-step-sub { margin-top: 2px; font-size: 11.5px; line-height: 1.5; color: var(--dim); overflow-wrap: anywhere; }
+.pg-step-sub { margin-top: 2px; font-size: 11.5px; line-height: 1.5; color: var(--dim); word-break: keep-all; overflow-wrap: anywhere; } /* Korean breaks between words; a long path still breaks anywhere */
 .pg-step-sub code { font-family: 'Cascadia Mono', Consolas, monospace; font-size: 11px; color: var(--text-2); }
-.pg-card-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
-.pg-card-actions .btn { height: 34px; }
-.pg-card-note { margin-right: auto; font-size: 11.5px; color: var(--dim); }
+/* the note takes what the buttons leave and wraps; the buttons never do (on a narrow card the note moves above them) */
+.pg-card-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 8px; }
+.pg-card-btns { flex: none; display: flex; gap: 8px; margin-left: auto; } /* the two buttons move as one */
+.pg-card-actions .btn { flex: none; height: 34px; white-space: nowrap; }
+.pg-card-note { flex: 1 1 180px; min-width: 0; margin-right: 6px; font-size: 11.5px; line-height: 1.5; color: var(--dim); word-break: keep-all; text-wrap: pretty; }
+.pg-card-note:empty { flex-basis: 0; }
 .pg-menu .pgm-hint { display: flex; align-items: center; gap: 6px; margin: 2px 4px 2px; padding: 6px 8px 4px; border-top: 1px solid var(--border); font-size: 11px; color: var(--dim); }
 .pg-menu .pgm-hint .ico { flex: none; width: 12px; height: 12px; color: var(--dim); }
 

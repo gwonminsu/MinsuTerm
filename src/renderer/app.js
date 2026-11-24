@@ -8358,10 +8358,9 @@ function folderHtml(p, agents, ownerOf = ownerProject) {
     ? `<span class="fb-stat st-${top}" title="${esc(tip)}"><i></i>${sessions.length > 1 ? `<b>${sessions.length}</b>` : ''}</span>`
     : '';
 
-  const progressBtn = `<button class="icon-btn${S.progress && S.progress.open && samePath(S.progress.path, p.path) ? ' on' : ''}" data-a="progress" title="진행도 보기">${icon('progress')}</button>`;
   const actions = p.temp
-    ? `${progressBtn}<button class="icon-btn" data-a="add" title="프로젝트로 추가">${icon('folderPlus')}</button>`
-    : `${progressBtn}${openTabs.length >= 2 ? `<button class="icon-btn${gridOn ? ' on' : ''}" data-a="grid" title="이 폴더의 탭을 한 화면에 보기 (Ctrl+Shift+G)">${icon('grid')}</button>` : ''}
+    ? `<button class="icon-btn" data-a="add" title="프로젝트로 추가">${icon('folderPlus')}</button>`
+    : `${openTabs.length >= 2 ? `<button class="icon-btn${gridOn ? ' on' : ''}" data-a="grid" title="이 폴더의 탭을 한 화면에 보기 (Ctrl+Shift+G)">${icon('grid')}</button>` : ''}
        <button class="icon-btn" data-a="shell" title="이 폴더에서 터미널 열기">${icon('terminal')}</button>
        <button class="icon-btn" data-a="more" title="더보기">${icon('more')}</button>`;
 
@@ -8515,7 +8514,6 @@ function openProjectIconPicker(p) {
     if (!head) return;
     const a = e.target.closest('[data-a]')?.dataset.a;
     if (a === 'add') return addProject(head.dataset.path);
-    if (a === 'progress') return toggleProgress(projectOf(head)?.path || head.dataset.path, head.querySelector('.fb-name')?.textContent || '');
     const p = projectOf(head);
     if (a === 'grid' && p) return toggleGrid(p.path);
     if (a === 'shell' && p) return newShell(null, p.path);
@@ -9404,11 +9402,6 @@ function postProgressTheme() {
   try { PG.frame.contentWindow.postMessage(progressTheme(), S.progress.origin); } catch { /* not loaded yet: the hash carried the theme */ }
 }
 
-function toggleProgress(dir, name) {
-  if (S.progress.open && samePath(S.progress.path, dir)) return closeProgress();
-  openProgress(dir, name);
-}
-
 async function openProgress(dir, name) {
   if (!dir) return;
   const seq = ++S.progress.seq;
@@ -9505,8 +9498,8 @@ function showProgressSetup(st, seq) {
     </ul>
     <div class="pg-card-actions">
       <span class="pg-card-note">${st.ownProgress ? '쓰고 계신 progress 스킬은 그대로 두고, 같은 기록을 함께 씁니다' : ''}</span>
-      <button class="btn small" data-pg="view">지금은 보기만</button>
-      <button class="btn small primary" data-pg="build">${icon('progress')}구축하기</button>
+      <span class="pg-card-btns"><button class="btn small" data-pg="view">지금은 보기만</button>
+      <button class="btn small primary" data-pg="build">${icon('progress')}구축하기</button></span>
     </div>
   </div>`;
   pgShow('setup');
