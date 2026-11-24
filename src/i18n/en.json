@@ -328,7 +328,7 @@
  "거꾸로 차오르는 피아노": "Reverse piano swell",
  "거꾸로 차오르는 피아노 · Space=심장 박동 · ⌫=쇠 긁는 소리 · ⇧⏎=귓가의 속삭임 · Enter=비명 현악": "Reverse piano swell · Space = heartbeat · ⌫ = metal scraping · ⇧⏎ = whisper in your ear · Enter = screeching strings",
  "거미줄": "Spider Web",
- "걸린 벌레는 실로 감아 허브에서 먹음": "a caught insect is wrapped in silk and eaten at the hub",
+ "걸린 벌레는 감아 먹고, 찢기면 그 자리에서 고침": "caught insects are wrapped and eaten, and a torn web is mended on the spot",
  "검기": "Sword Trail",
  "검붉은 불길에 휩싸인 막대": "A bar wrapped in dark red flame",
  "검붉은 불길이 솟고 불씨가 흩날림": "Dark red flames leap and embers scatter",
@@ -935,7 +935,7 @@
  "새벽 구름 바다를 천천히 유영하는 거대한 고래": "A giant whale glides slowly through a sea of clouds at dawn",
  "새벽 구름 바다를 천천히 유영하는 거대한 고래 · 가끔 새끼와 함께": "A giant whale glides slowly through a sea of clouds at dawn · Sometimes with a calf",
  "새벽 숲, 바람에 띄운 첫 실부터 거미가 거미줄을 짓고 이슬이 맺힘": "A dawn forest: from a first thread floated on the breeze, a spider builds its web and dew forms",
- "새벽 숲, 바람에 띄운 첫 실부터 거미가 거미줄을 짓고 이슬이 맺힘 · 걸린 벌레는 실로 감아 허브에서 먹음": "A dawn forest: from a first thread floated on the breeze, a spider builds its web and dew forms · a caught insect is wrapped in silk and eaten at the hub",
+ "새벽 숲, 바람에 띄운 첫 실부터 거미가 거미줄을 짓고 이슬이 맺힘 · 걸린 벌레는 감아 먹고, 찢기면 그 자리에서 고침": "A dawn forest: from a first thread floated on the breeze, a spider builds its web and dew forms · caught insects are wrapped and eaten, and a torn web is mended on the spot",
  "새벽의 장밋빛": "Rosy dawn",
  "색": "Color",
  "색이 계속 바뀌는 막대": "Color-shifting bar",
@@ -1747,6 +1747,8 @@
  "칠 때마다 아·오·우·에 합창 · Space=따뜻한 화음 · Enter=\"아—멘\"": "An ah·oh·oo·eh choir with every keystroke · Space = a warm chord · Enter = \"Ah—men\"",
  "글자=부드러운 우 화음 진행": "Letters = a soft \"ooh\" chord progression",
  "바다로 해가 지며 구름이 물들고, 개밥바라기와 첫 별이 뜸": "The sun sets into the sea, the clouds take its colours, then the evening star and the first stars come out",
+ "걸린 벌레는 실로 감아 허브에서 먹음": "a caught insect is wrapped in silk and eaten at the hub",
  "곡선·갈림길·계단·나선을 따라 촤라락 쓰러지며 그림이 드러나고 종이 울림": "clattering down curves, forks, steps and spirals, revealing pictures and ringing a bell",
+ "새벽 숲, 바람에 띄운 첫 실부터 거미가 거미줄을 짓고 이슬이 맺힘 · 걸린 벌레는 실로 감아 허브에서 먹음": "A dawn forest: from a first thread floated on the breeze, a spider builds its web and dew forms · a caught insect is wrapped in silk and eaten at the hub",
  "탁자 위 끝없는 도미노 코스 · 곡선·갈림길·계단·나선을 따라 촤라락 쓰러지며 그림이 드러나고 종이 울림": "An endless domino course on a table · clattering down curves, forks, steps and spirals, revealing pictures and ringing a bell"
 }

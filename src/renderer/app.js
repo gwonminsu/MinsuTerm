@@ -265,6 +265,7 @@ function setAppearanceMode(mode) {
 }
 /** A one-column wiggle makes Claude / Codex repaint their whole screen (with the new colour rules applied). */
 function redrawAgents() {
+  redrawAgents.at = performance.now();
   for (const t of S.tabs) {
     if (!t.agent || !t.alive) continue;
     const { cols, rows } = t.term;
@@ -510,7 +511,7 @@ const BG_KINDS = [
   ['balloonsky', '풍선 하늘', '알록달록 풍선이 줄을 늘어뜨리고 둥실 떠오름'],
   ['skywhale', '하늘 고래', '새벽 구름 바다를 천천히 유영하는 거대한 고래 · 가끔 새끼와 함께'],
   ['domino', '도미노', '탁자 위 끝없는 도미노 코스 · 곡선·갈림길·계단·나선·다리를 따라 촤라락 쓰러지며 그림이 드러나고 종이 울림'],
-  ['spiderweb', '거미줄', '새벽 숲, 바람에 띄운 첫 실부터 거미가 거미줄을 짓고 이슬이 맺힘 · 걸린 벌레는 실로 감아 허브에서 먹음'],
+  ['spiderweb', '거미줄', '새벽 숲, 바람에 띄운 첫 실부터 거미가 거미줄을 짓고 이슬이 맺힘 · 걸린 벌레는 감아 먹고, 찢기면 그 자리에서 고침'],
   ['worker', '작업하는 일꾼', '미니어처 공방 · 에이전트가 일하면 등불 아래 뚝딱뚝딱, 기다리면 꾸벅꾸벅, 끝나면 완성품을 선반에'],
 ];
 
@@ -8746,6 +8747,24 @@ function applySettings() {
   applyAppearance();
   for (const t of S.tabs) fitTab(t);
   renderStatus();
+  promptLookCheck();
+}
+
+/*
+ * Prompt colours are rewritten as output arrives (filterOutput), so prompts already on screen keep the look of the
+ * settings they were drawn with. When that look changes (내 프롬프트 표시, colour theme, accent, light / dark), ask the
+ * agents to repaint, as a light / dark switch already does. Debounced: a picker can change it several times a second.
+ */
+let promptLook = '';
+let promptLookTimer = 0;
+function promptLookCheck() {
+  const look = `${promptReplacement(S.settings.promptStyle || 'default')}|${isLight()}|${rgbCss(BASE_STAGE)}`;
+  if (look === promptLook) return;
+  const first = !promptLook;
+  promptLook = look;
+  if (first) return;
+  clearTimeout(promptLookTimer);
+  promptLookTimer = setTimeout(() => { if (performance.now() - (redrawAgents.at || 0) > 600) redrawAgents(); }, 350);
 }
 
 function setSidebarWidth(w, save) {

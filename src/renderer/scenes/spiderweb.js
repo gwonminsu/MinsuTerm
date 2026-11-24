@@ -15,9 +15,15 @@
  *   Now and then an insect flies into it and struggles: the spider feels it, turns and plucks the radius, runs out and
  *   bites, then turns round and brings its abdomen down onto the prey, rolling it while the hind legs comb bands of
  *   silk over it until it is a pale mummy; it cuts it free and carries it to the hub on a short thread, or leaves it
- *   hanging in the web. In the end the web is torn (a gust, a beetle crashing through, a falling leaf) and falls into
- *   dangling strands; the spider drops away on a line, and the view moves on through the undergrowth to another twig,
- *   where a spider is about to begin.
+ *   hanging in the web; it feeds at the hub, fetches stored prey later, and drops the empty husks.
+ * - Damage is mended where it is, as an orb-weaver does. A hole (an insect fighting free, a beetle punching through),
+ *   a slit from a falling leaf or one side ripped by a gust: the spider goes out to it, cuts the broken strands away
+ *   and eats them, re-strings a broken frame thread, lays new radii across the gap from the hub, and re-lays the
+ *   sticky spiral back and forth across it, tied on to the old one (a little irregular; no dew there until it forms
+ *   again). A wreck (a gust bringing most of it down, a beetle through the hub) is taken down and eaten, all but the
+ *   bridge line and the frame threads that held, and the web is built again on the same twigs from the Y. Only after
+ *   a few rebuilds does the spider give the place up, and the view move on through the undergrowth to another twig.
+ *   The morning light swells and fades slowly over half an hour.
  * Everything is ink (twigs, the spider) and light (silk, dew, haze) over the theme's own background. On a light page
  * it has its own palette: grey silk, drops like little lenses (a dark rim, a white highlight), brown-grey twigs.
  */
@@ -463,7 +469,7 @@
     }
     radii.sort((a, b) => a.ang - b.ang);
     radii.forEach((r, i) => { r.i = i; });
-    site.radii = radii;
+    site.radii = radii; site.radii0 = radii.slice();
     site.Rm = radii.reduce((m, r) => m + r.L, 0) / radii.length;
     return pl;
   }
@@ -511,7 +517,7 @@
   }
   /** A thread's fastening on a twig: two or three short strands splayed along the bark. */
   function anchorFan(site, n, twig, s0) {
-    if (site.c.pv) return;
+    if (site.c.pv || site.segs.some((s) => s.k === ANCHOR && s.a === n)) return;
     const pl = twig.pl;
     for (const off of [-1, 1]) {
       if (RND() < 0.25) continue;
@@ -1203,21 +1209,7 @@
   function* spirals(st, site) {
     const pl = spiralPlans(site), sp = site.sp;
     site.spi = pl;
-    const run = function* (seq, kind, speed, onNode) {
-      const pts = seq.map((q) => P(site.hubN.x + q.r.ux * q.d, site.hubN.y + q.r.uy * q.d));
-      // start from where the spider stands
-      const all = [P(sp.x - Math.cos(sp.hd) * SPIN * sp.k, sp.y - Math.sin(sp.hd) * SPIN * sp.k)].concat(pts);
-      const cum = poly(all).cum;
-      let prev = null;
-      site.live = null;
-      yield* walk(site, all, { speed, mode: 'mesh', tail: true, noStop: false, marks: cum.slice(1), mark: (i) => {
-        const q = seq[i], n = onRadius(site, q.r, q.d);
-        if (prev && prev !== n) { const sg = addSeg(site, prev, n, kind); if (kind === TEMP) { (prev.tmp = prev.tmp || []).push(sg); (n.tmp = n.tmp || []).push(sg); } }
-        prev = n; site.live = { n, kind };
-        if (onNode) onNode(q, n);
-      } });
-      site.live = null;
-    };
+    const run = (seq, kind, speed, onNode) => laySeq(site, seq, kind, speed, onNode);
     yield* run(pl.hub, HUB, 110);
     yield* run(pl.temp, TEMP, 260);
     // the sticky spiral, stroke by stroke: as it passes a radius, the scaffold outside it is cut away
@@ -1233,6 +1225,26 @@
       yield* run(stroke, CAP, 235, cutOut);
     }
     for (const sg of site.segs) if (sg.k === TEMP && !sg.cut) sg.cut = site.T; // what is left of it, near the hub
+  }
+
+  /**
+   * Laying a run of spiral: the spider walks it, the thread coming from its spinnerets, fastened at each radius it
+   * crosses (a point given as {r, d} on a radius, or an existing node {n}).
+   */
+  function* laySeq(site, seq, kind, speed, onNode) {
+    const sp = site.sp, H = site.hubN;
+    const pts = seq.map((q) => (q.n ? P(q.n.x, q.n.y) : P(H.x + q.r.ux * q.d, H.y + q.r.uy * q.d)));
+    const all = [P(sp.x - Math.cos(sp.hd + sp.bend) * SPIN * sp.k, sp.y - Math.sin(sp.hd + sp.bend) * SPIN * sp.k)].concat(pts);
+    const cum = poly(all).cum;
+    let prev = null;
+    site.live = null;
+    yield* walk(site, all, { speed, mode: 'mesh', tail: true, noStop: false, marks: cum.slice(1), mark: (i) => {
+      const q = seq[i], n = q.n || onRadius(site, q.r, q.d);
+      if (prev && prev !== n) { const sg = addSeg(site, prev, n, kind); if (kind === TEMP) { (prev.tmp = prev.tmp || []).push(sg); (n.tmp = n.tmp || []).push(sg); } }
+      prev = n; site.live = { n, kind };
+      if (onNode) onNode(q, n);
+    } });
+    site.live = null;
   }
 
   /* 7. the spider settles at the hub, head down; the dew begins to form */
@@ -1299,6 +1311,8 @@
         continue;
       }
       quiet += DT;
+      // a hole an insect tore fighting free: mended once things are quiet
+      if (quiet > 6 && site.pending && site.pending.length) { yield* repair(st, site, site.pending.shift()); quiet = 0; continue; }
       // the larder: a bundle stored in the web, fetched once the spider has sat idle for a while
       if (quiet > fetchIn) {
         const b = site.insects.find((i) => i.state === 'left');
@@ -1427,7 +1441,7 @@
       ins.state = 'free'; ins.vx = (RND() - 0.5) * 3; ins.vy = -2;
       shake(site, tgt.x, tgt.y, 2 * k, 0, 1, 26 * k, 14, 3);
       shedDrops(site, tgt, 14 * k, 1);
-      breakNear(site, tgt, 9 * k);
+      (site.pending = site.pending || []).push(breakNear(site, tgt, 9 * k));
       yield* wait(site, 0.8);
       yield* walk(site, [P(sp.x, sp.y), H], { speed: 160 });
       sp.hdT = Math.PI / 2;
@@ -1509,23 +1523,22 @@
       }
     }
   }
-  /** A small tear where an insect fought free: the nearest capture threads part and hang. */
+  /** A small tear where an insect fought free: the nearest capture threads part and hang. Mended later. */
   function breakNear(site, p, rad) {
-    for (const sg of site.segs) {
-      if (sg.dead || sg.k !== CAP) continue;
-      const mx = (sg.a.x + sg.b.x) / 2, my = (sg.a.y + sg.b.y) / 2;
-      if (Math.hypot(mx - p.x, my - p.y) < rad) { sg.dead = site.T; addDangle(site, sg.a, sg.b); addDangle(site, sg.b, sg.a); }
-    }
+    return damage(site, (sg) => sg.k === CAP && Math.hypot((sg.a.x + sg.b.x) / 2 - p.x, (sg.a.y + sg.b.y) / 2 - p.y) < rad);
   }
   function addDangle(site, n, toward) {
-    const len = dist(n, toward) * (0.3 + RND() * 0.2);
+    const len = Math.min(26 * site.k, dist(n, toward) * (0.3 + RND() * 0.2));
     site.dangles = site.dangles || [];
-    site.dangles.push({ n, len, a: Math.atan2(toward.y - n.y, toward.x - n.x), va: 0, ph: RND() * TAU });
+    const d = { n, len, a: Math.atan2(toward.y - n.y, toward.x - n.x), va: 0, ph: RND() * TAU, cut: 0 };
+    site.dangles.push(d);
+    return d;
   }
 
-  /* the end of the web: torn, the strands falling; the spider drops away */
-  function* tear(st, site) {
-    const H = site.plan.H, k = site.k, sp = site.sp, c = site.c, kind = st.forceTear || ['gust', 'beetle', 'leaf'][(RND() * 3) | 0];
+  /* a wreck: most of the web torn down, the strands falling; the spider drops away */
+  function* tear(st, site, kind) {
+    const H = site.plan.H, k = site.k, sp = site.sp, c = site.c;
+    parkMeal(site);
     site.tearKind = kind;
     if (kind === 'gust') {
       // the breeze rises; the web bellies and strains, a frame thread gives, the rest falls slack
@@ -1546,7 +1559,7 @@
     } else if (kind === 'beetle') {
       // a heavy beetle blunders straight through, too strong to hold
       const a0 = (RND() - 0.5) * 0.7 + (RND() < 0.5 ? 0 : Math.PI), from = P(H.x - Math.cos(a0) * c.W, H.y - Math.sin(a0) * c.W * 0.5 + (RND() - 0.5) * 40 * k);
-      const thru = P(H.x + (RND() - 0.5) * site.Rm * 0.6, H.y + (RND() - 0.2) * site.Rm * 0.6);
+      const thru = P(H.x + (RND() - 0.5) * site.Rm * 0.2, H.y + (RND() - 0.5) * site.Rm * 0.2);
       const dir = P(thru.x - from.x, thru.y - from.y), dl = Math.hypot(dir.x, dir.y);
       const b = { x: from.x, y: from.y, ang: Math.atan2(dir.y, dir.x), sz: 1.25 * k, vx: (dir.x / dl) * 230 * k * DT, vy: (dir.y / dl) * 230 * k * DT, ph: RND() * TAU };
       site.beetle = b;
@@ -1559,8 +1572,8 @@
           startSim(site);
           const nx = b.vx / Math.hypot(b.vx, b.vy), ny = b.vy / Math.hypot(b.vx, b.vy);
           const back = P(thru.x - nx * 400, thru.y - ny * 400), fwd = P(thru.x + nx * 400, thru.y + ny * 400);
-          for (const sg of site.segs.slice()) if (!sg.dead && !sg.strand && segNear(sg, back, fwd, 11 * k) && sg.k !== ANCHOR && RND() < 0.9) breakSeg(site, sg, -1, nx, ny);
-          unpin(site, thru, 70 * k, H, P(back.x, back.y), P(fwd.x, fwd.y));
+          for (const sg of site.segs.slice()) if (!sg.dead && !sg.strand && segNear(sg, back, fwd, 13 * k) && sg.k !== ANCHOR && sg.k !== BRIDGE && RND() < 0.92) breakSeg(site, sg, -1, nx, ny);
+          unpin(site, thru, 110 * k, H, P(back.x, back.y), P(fwd.x, fwd.y));
           shedDrops(site, thru, 60 * k, 0.8);
           hitSound(st, site, thru.x, 1.4);
           b.vx *= 0.8; b.vy *= 0.8;
@@ -1598,7 +1611,7 @@
         }
         if (entered && stuck === 1) {
           const top = P(lf.x, lf.y - 10 * k), bot = P(lf.x + (RND() - 0.5) * 30 * k, c.H + 40);
-          for (const sg of site.segs.slice()) if (!sg.dead && !sg.strand && sg.k !== ANCHOR && segNear(sg, top, bot, 10 * k) && RND() < 0.92) breakSeg(site, sg, -1, 0, 1);
+          for (const sg of site.segs.slice()) if (!sg.dead && !sg.strand && sg.k !== ANCHOR && sg.k !== BRIDGE && segNear(sg, top, bot, 10 * k) && RND() < 0.92) breakSeg(site, sg, -1, 0, 1);
           unpin(site, lf, 60 * k, H, top, bot);
           shedDrops(site, P(lf.x, lf.y + 60 * k), 80 * k, 0.7);
         }
@@ -1633,6 +1646,341 @@
     for (let i = 0; i <= 16; i++) pts.push(P(top.x + Math.sin(i * 0.4) * 2 * k, top.y + (70 + 30 * RND()) * k * (i / 16)));
     yield* walk(site, pts, { speed: 90, mode: 'hang', hd: Math.PI / 2, acc: 3 });
     site.hangAt = P(sp.x, sp.y);
+  }
+
+  /* ---------- damage the spider can mend, and mending it ---------- */
+
+  /** The live threads at each node. */
+  function nodeSegs(site) {
+    const m = new Map();
+    for (const sg of site.segs) {
+      if (sg.dead) continue;
+      for (const n of [sg.a, sg.b]) { let l = m.get(n); if (!l) m.set(n, l = []); l.push(sg); }
+    }
+    return m;
+  }
+  /** A thread parts where it is (no slackening of the rest): its dew falls. */
+  function killSeg(site, sg) {
+    if (sg.dead) return;
+    sg.dead = site.T;
+    if (sg.drops) for (const d of sg.drops) {
+      if (d.fall) continue;
+      d.fall = 1;
+      const g = dewGrow(site, d);
+      if (g > 0.1 && site.falls.length < 220) site.falls.push({ x: lerp(sg.a.X, sg.b.X, d.u), y: lerp(sg.a.Y, sg.b.Y, d.u), vx: (RND() - 0.5) * 0.5, vy: RND() * 0.5, r: d.r * g });
+    }
+  }
+  /**
+   * Threads break where something tore through, the web staying taut round the hole: each broken end curls back and
+   * hangs as a short strand, whatever no longer hangs from a twig falls away, and prey stored there drops out.
+   */
+  function damage(site, pred) {
+    const dmg = { segs: [], dangles: [], t: site.T };
+    for (const sg of site.segs) if (!sg.dead && sg.k !== BRIDGE && sg.k !== ANCHOR && pred(sg)) dmg.segs.push(sg);
+    for (const sg of dmg.segs) killSeg(site, sg);
+    const ns = nodeSegs(site), seen = new Set(), q = [];
+    for (const n of site.nodes) if (n.f === 0 && ns.has(n)) { seen.add(n); q.push(n); }
+    while (q.length) { const n = q.pop(); for (const sg of ns.get(n) || []) { const o = sg.a === n ? sg.b : sg.a; if (!seen.has(o)) { seen.add(o); q.push(o); } } }
+    for (const sg of site.segs) if (!sg.dead && !seen.has(sg.a)) { killSeg(site, sg); dmg.segs.push(sg); }
+    const alive = nodeSegs(site);
+    for (const sg of dmg.segs) for (const [n, o] of [[sg.a, sg.b], [sg.b, sg.a]]) if (alive.has(n) && RND() < 0.85) dmg.dangles.push(addDangle(site, n, o));
+    for (const ins of site.insects) {
+      if (ins.state !== 'left') continue;
+      if (dmg.segs.some((sg) => Math.hypot((sg.a.x + sg.b.x) / 2 - ins.tgt.x, (sg.a.y + sg.b.y) / 2 - ins.tgt.y) < 10 * site.k)) { ins.bx = ins.pbx = ins.tgt.x; ins.by = ins.pby = ins.tgt.y; letFall(ins, 0.2); }
+    }
+    return dmg;
+  }
+  /** A thread being taken in and eaten: it fades from the web over a moment (after a delay, if given). */
+  function eatSeg(site, sg, delay = 0) {
+    if (sg.dead || sg.eaten) return;
+    sg.eaten = 1; sg.cut = site.T + delay;
+    if (sg.drops) for (const d of sg.drops) d.fall = 1;
+  }
+  /** A meal in progress is hung aside at the hub while the spider sees to something else. */
+  function parkMeal(site) {
+    const m = site.meal, H = site.plan.H, k = site.k;
+    if (!m) return;
+    site.meal = null; site.parked = m; site.sp.chew = 0; site.sp.handle = 0;
+    hangAt(site, m, P(H.x + (RND() < 0.5 ? -1 : 1) * 9 * k, H.y + 4 * k), 5 * k, m.anc);
+  }
+  /** A radius not in the plan: laid in a repair, from the hub to wherever its line meets the frame. */
+  function newRadius(site, ang) {
+    const H = site.hubN, hit = rayPoly(site.plan.H, ang, site.pg);
+    const r = { ang: Math.atan2(Math.sin(ang), Math.cos(ang)), ux: Math.cos(ang), uy: Math.sin(ang), L: hit.d, edge: hit.edge, eu: hit.u, end: null, proto: -1, ns: [H], segs: [], built: false, patch: true };
+    r.ex = H.x + r.ux * r.L; r.ey = H.y + r.uy * r.L;
+    return r;
+  }
+  /** The broken capture threads as runs along the spiral (each run a list of the old nodes in order). */
+  function capChains(caps) {
+    const adj = new Map(), add = (n, s) => { let l = adj.get(n); if (!l) adj.set(n, l = []); l.push(s); };
+    for (const s of caps) { add(s.a, s); add(s.b, s); }
+    const used = new Set(), out = [];
+    const from = (n0) => { const path = [n0]; let n = n0; for (;;) { const s = adj.get(n).find((x) => !used.has(x)); if (!s) break; used.add(s); n = s.a === n ? s.b : s.a; path.push(n); } return path; };
+    for (const n of adj.keys()) if (adj.get(n).length === 1 && adj.get(n).some((s) => !used.has(s))) out.push(from(n));
+    for (const s of caps) if (!used.has(s)) out.push(from(s.a));
+    return out.filter((c) => c.length > 1);
+  }
+  /** New beads of dew on new threads: they form slowly, later than the rest. */
+  function dropsFor(site, segs, t0) {
+    const k = site.k, pv = site.c.pv;
+    site.drops = site.drops || []; site.glints = site.glints || [];
+    for (const sg of segs) {
+      if (sg.dead || sg.cut || sg.k === TEMP || sg.k === ANCHOR || sg.drops) continue;
+      const len = dist(sg.a, sg.b), cap = sg.k === CAP || sg.k === HUB, gap = (pv ? 4.2 : cap ? 6.2 * k : 15 * k) * (0.85 + RND() * 0.3), n = Math.floor(len / gap + RND() * 0.6);
+      if (n <= 0) continue;
+      sg.drops = [];
+      for (let j = 0; j < n; j++) {
+        const big = RND() < (cap ? 0.07 : 0.2);
+        let r = cap ? (0.65 + RND() * 0.75) * k : (0.9 + RND() * 0.9) * k;
+        if (big) r *= 1.7 + RND() * 0.6;
+        if (pv) r = (cap ? 0.85 + RND() * 0.45 : 1.1 + RND() * 0.5) * (big ? 1.4 : 1);
+        const d = { u: (j + 0.5 + (RND() - 0.5) * 0.7) / n, r, dl: RND() * 0.65, ph: RND() * TAU, big, fall: 0, t0 };
+        sg.drops.push(d);
+        if (big || RND() < 0.03) site.glints.push({ sg, d, ph: RND() * TAU, f: 0.4 + RND() * 0.9 });
+      }
+      site.drops.push(sg);
+    }
+  }
+  /** After a repair: what is gone is forgotten (keeps the lists short over a long session). */
+  function compact(site) {
+    site.segs = site.segs.filter((s) => !s.dead);
+    if (site.drops) site.drops = site.drops.filter((s) => !s.dead);
+    if (site.glints) site.glints = site.glints.filter((g) => !g.sg.dead);
+    site.dangles = (site.dangles || []).filter((d) => !d.cut);
+    const used = new Set([site.hubN, ...site.corners]);
+    for (const s of site.segs) { used.add(s.a); used.add(s.b); }
+    site.nodes = site.nodes.filter((n) => used.has(n));
+  }
+
+  /**
+   * A tear it can mend: a beetle punching a hole away from the hub, a falling leaf slitting one side, a gust ripping
+   * the outer part of one sector. The spider holds on at the hub.
+   */
+  function* tearMedium(st, site, kind) {
+    const H = site.plan.H, k = site.k, c = site.c, Rm = site.Rm, Lat = (a) => rayPoly(H, a, site.pg).d;
+    parkMeal(site);
+    site.tearKind = kind;
+    let dmg = null;
+    const mid = (sg) => P((sg.a.x + sg.b.x) / 2, (sg.a.y + sg.b.y) / 2);
+    if (kind === 'beetle') {
+      const ang = RND() * TAU, hit = P(H.x + Math.cos(ang) * Lat(ang) * (0.45 + RND() * 0.28), H.y + Math.sin(ang) * Lat(ang) * (0.45 + RND() * 0.28)), hr = (24 + RND() * 14) * k;
+      const fa = ang + (RND() < 0.5 ? 1 : -1) * (1.1 + RND() * 0.6), from = P(hit.x - Math.cos(fa) * c.W, hit.y - Math.sin(fa) * c.W);
+      const b = { x: from.x, y: from.y, ang: fa, sz: 1.25 * k, vx: Math.cos(fa) * 230 * k * DT, vy: Math.sin(fa) * 230 * k * DT, ph: RND() * TAU };
+      site.beetle = b;
+      for (let f = 0; f < 400; f++) {
+        b.x += b.vx; b.y += b.vy + Math.sin(f * 0.25) * 0.4;
+        if (!dmg && Math.hypot(b.x - hit.x, b.y - hit.y) < 8 * k) {
+          dmg = damage(site, (sg) => { const d = dist(mid(sg), hit); return sg.k === CAP ? d < hr && RND() < 0.92 : sg.k === RADIUS ? d < hr * 0.7 && RND() < 0.8 : false; });
+          shake(site, hit.x, hit.y, 4.5 * k, b.vx, b.vy, hr * 1.7, 12, 2);
+          shedDrops(site, hit, hr * 1.8, 0.7);
+          hitSound(st, site, hit.x, 1.3);
+          b.vx *= 0.8; b.vy *= 0.8;
+        }
+        yield;
+        if (dmg && (b.x < -60 || b.x > c.W + 60 || b.y < -60 || b.y > c.H + 60)) break;
+      }
+      site.beetle = null;
+    } else if (kind === 'leaf') {
+      const side = RND() < 0.5 ? 1 : -1, x0 = H.x + side * Rm * (0.38 + RND() * 0.3);
+      const lf = { x: x0, y: -30, ang: RND() * TAU, sz: (1.3 + RND() * 0.6) * k, flip: 0, vr: (RND() - 0.5) * 0.12 };
+      site.leaf = lf;
+      let entered = false, stuck = 0;
+      for (let f = 0; f < 900; f++) {
+        lf.y += (stuck > 0 ? 0.2 : 1.6 + Math.sin(f * 0.07) * 0.5) * k;
+        lf.x += Math.sin(f * 0.05 + 1) * 0.6 * k + (st.wind - 0.5) * 0.4;
+        lf.ang += lf.vr; lf.flip += 0.06;
+        if (stuck > 0) stuck--;
+        if (!entered && site.pg && pointIn(site.pg, lf)) { entered = true; stuck = 40; shake(site, lf.x, lf.y, 3 * k, 0, 1, 40 * k); hitSound(st, site, lf.x, 0.6); }
+        if (entered && stuck === 1) { // the threads give under it: a slit down from where it lay
+          const top = P(lf.x, lf.y - 8 * k), bot = P(lf.x + (st.wind - 0.5) * 20 * k, c.H + 40);
+          dmg = damage(site, (sg) => sg.k !== FRAME && segNear(sg, top, bot, 9 * k) && RND() < 0.92);
+          shedDrops(site, P(lf.x, lf.y + 50 * k), 70 * k, 0.6);
+        }
+        yield;
+        if (lf.y > c.H + 40) break;
+      }
+      site.leaf = null;
+    } else {
+      // a gust: the web bellies and strains, and the outer part of one side rips
+      const ac = Math.PI / 2 + (RND() - 0.5) * 2.6, hw = 0.4 + RND() * 0.3;
+      yield* wait(site, 3.2, (q) => { st.gust = 1.5 * sm(0, 1, q); if (RND() < 0.2) shedDrops(site, P(H.x + Math.cos(ac) * Rm * 0.7, H.y + Math.sin(ac) * Rm * 0.7), 40 * k, 0.3 * q); });
+      dmg = damage(site, (sg) => {
+        const m = mid(sg), a = Math.atan2(m.y - H.y, m.x - H.x);
+        if (Math.abs(angDiff(a, ac)) > hw) return false;
+        const fr = Math.hypot(m.x - H.x, m.y - H.y) / Lat(a);
+        return sg.k === CAP ? fr > 0.45 && RND() < 0.8 : sg.k === RADIUS ? fr > 0.55 && RND() < 0.45 : sg.k === FRAME ? RND() < 0.35 : false;
+      });
+      shedDrops(site, P(H.x + Math.cos(ac) * Rm * 0.8, H.y + Math.sin(ac) * Rm * 0.8), Rm * 0.6, 0.6);
+      hitSound(st, site, H.x + Math.cos(ac) * Rm, 0.5);
+      yield* wait(site, 3, (q) => { st.gust = 1.5 * (1 - sm(0, 1, q)); });
+      st.gust = 0;
+    }
+    if (!dmg) dmg = { segs: [], dangles: [], t: site.T };
+    yield* wait(site, 1.5);
+    return dmg;
+  }
+
+  /**
+   * Mending a hole, as an orb-weaver does: out to it along a radius that still holds; the broken strands cut away,
+   * gathered in with the legs and eaten; a broken frame thread re-strung; new radii laid across the gap from the hub
+   * out to the frame; and the sticky spiral re-laid back and forth across the gap, joined to the old one at its
+   * edges, a little irregular. The new threads have no dew until it forms on them again.
+   */
+  function* repair(st, site, dmg) {
+    const sp = site.sp, H = site.plan.H, k = site.k;
+    if (!dmg || !dmg.segs.length) return;
+    site.repairing = dmg;
+    const seg0 = site.segs.length;
+    const segR = new Map(), segE = new Map();
+    site.radii.forEach((r) => r.segs.forEach((s) => segR.set(s, r)));
+    site.edges.forEach((e, i) => e.segs.forEach((s) => segE.set(s, i)));
+    const brokenR = new Set(), brokenE = new Set();
+    for (const sg of dmg.segs) { const r = segR.get(sg); if (r && !r.dead) brokenR.add(r); const e = segE.get(sg); if (e > 0) brokenE.add(e); }
+    const caps = dmg.segs.filter((sg) => sg.k === CAP && sg.a.r && sg.b.r);
+    let cx = 0, cy = 0;
+    for (const sg of dmg.segs) { cx += (sg.a.x + sg.b.x) / 2; cy += (sg.a.y + sg.b.y) / 2; }
+    cx /= dmg.segs.length; cy /= dmg.segs.length;
+    const holds = (r) => r.built && !r.dead && !brokenR.has(r);
+    const nearestHolding = (ang) => { let best = null; for (const r of site.radii) if (holds(r) && (!best || Math.abs(angDiff(r.ang, ang)) < Math.abs(angDiff(best.ang, ang)))) best = r; return best; };
+    // 1. out to the damage along a radius that still holds
+    const toHub = function* (speed = 170) { if (Math.hypot(sp.x - H.x, sp.y - H.y) > 1) yield* walk(site, [P(sp.x, sp.y), H], { speed }); };
+    yield* toHub();
+    const aC = Math.atan2(cy - H.y, cx - H.x), rC = nearestHolding(aC);
+    if (rC) {
+      const d = Math.min(Math.hypot(cx - H.x, cy - H.y), rC.L - 10 * k);
+      sp.hdT = Math.atan2(rC.uy, rC.ux);
+      yield* wait(site, 0.5);
+      yield* walk(site, [H, P(H.x + rC.ux * d, H.y + rC.uy * d)], { speed: 150 });
+    }
+    // 2. the broken ends: cut away, gathered in, eaten
+    let left = dmg.dangles.filter((d) => !d.cut);
+    while (left.length) {
+      let best = left[0];
+      for (const d of left) if (Math.hypot(d.n.x - sp.x, d.n.y - sp.y) < Math.hypot(best.n.x - sp.x, best.n.y - sp.y)) best = d;
+      const grp = left.filter((d) => Math.hypot(d.n.x - best.n.x, d.n.y - best.n.y) < 26 * k);
+      let gx = 0, gy = 0;
+      for (const d of grp) { gx += d.n.x; gy += d.n.y; }
+      gx /= grp.length; gy /= grp.length;
+      yield* walk(site, [P(sp.x, sp.y), P(gx, gy)], { speed: 120, mode: 'mesh' });
+      sp.chew = 1; sp.feedP = P(gx, gy); sp.handle = 0.9;
+      for (const d of grp) d.cut = site.T + RND() * 0.35;
+      yield* wait(site, 0.95);
+      sp.chew = 0; sp.handle = 0;
+      left = left.filter((d) => !grp.includes(d));
+    }
+    // 3. a frame thread that broke is strung again, corner to corner
+    for (const ei of brokenE) {
+      const E = site.edges[ei];
+      yield* toHub(200);
+      const ra = nearestHolding(Math.atan2(E.a.y - H.y, E.a.x - H.x));
+      const route = ra ? [H, P(ra.ex, ra.ey), P(E.a.x, E.a.y)] : [H, P(E.a.x, E.a.y)];
+      yield* walk(site, route, { speed: 200 });
+      startFree(site, E.a, 0.2);
+      yield* walk(site, [P(sp.x, sp.y), H, P(E.b.x, E.b.y)], { speed: 190, each: () => trail(site) });
+      yield* fasten(site, () => { E.segs = [addSeg(site, E.a, E.b, FRAME)]; E.ns = [E.a, E.b]; E.us = [0, 1]; E.built = true; });
+    }
+    // 4. new radii across the gap, from the hub out to the frame, one by one
+    const repl = new Map();
+    for (const r of [...brokenR].sort((a, b) => a.ang - b.ang)) {
+      const nr = newRadius(site, r.ang + (RND() - 0.5) * 0.07);
+      yield* toHub(220);
+      const nb = nearestHolding(nr.ang);
+      const out = nb ? [P(H.x, H.y), P(nb.ex, nb.ey)].concat(framePath(site, radiusPerim(site, nb), radiusPerim(site, nr)).slice(1)) : [P(H.x, H.y), P(nr.ex, nr.ey)];
+      startFree(site, H, 0.015);
+      yield* walk(site, out, { speed: 260, acc: 7, each: () => trail(site) });
+      yield* fasten(site, () => buildRadius(site, nr));
+      r.dead = true; repl.set(r, nr);
+      site.radii = site.radii.filter((q) => q !== r).concat([nr]).sort((a, b) => a.ang - b.ang);
+      yield* walk(site, [P(sp.x, sp.y), H], { speed: 280, acc: 7 });
+    }
+    // 5. the sticky spiral re-laid across the gap: run after run, the outer ones first, joined to the old spiral where it holds
+    const alive = nodeSegs(site), pC = site.spi ? site.spi.pC : 9 * k;
+    const target = (n) => {
+      if (alive.has(n)) return { n }; // where the old spiral still holds, the new run is tied on to it
+      const r = repl.get(n.r) || n.r;
+      return { r, d: Math.min(r.L * 0.94, n.d * (0.97 + RND() * 0.06) + (RND() - 0.5) * pC * 0.3) };
+    };
+    const runs = capChains(caps).map((ch) => ({ ch, d: ch.reduce((m, n) => m + n.d, 0) / ch.length })).sort((a, b) => b.d - a.d);
+    for (const run of runs) {
+      const ptOf = (n) => P(n.x, n.y), a = ptOf(run.ch[0]), b = ptOf(run.ch[run.ch.length - 1]);
+      if (Math.hypot(b.x - sp.x, b.y - sp.y) < Math.hypot(a.x - sp.x, a.y - sp.y)) run.ch.reverse();
+      const seq = run.ch.map(target);
+      const s0 = seq[0], p0 = s0.n ? P(s0.n.x, s0.n.y) : P(H.x + s0.r.ux * s0.d, H.y + s0.r.uy * s0.d);
+      yield* walk(site, [P(sp.x, sp.y), p0], { speed: 150, mode: 'mesh' });
+      yield* laySeq(site, seq, CAP, 190);
+    }
+    // 6. dew will form on the new threads, later; back to the hub
+    dropsFor(site, site.segs.slice(seg0), site.T + 4);
+    yield* walk(site, [P(sp.x, sp.y), H], { speed: 160, mode: 'mesh' });
+    sp.hdT = Math.PI / 2;
+    yield* wait(site, 1.2);
+    compact(site);
+    site.repairing = null;
+    if (site.parked) yield* resumeMeal(site, site.parked);
+  }
+
+  /**
+   * After a wreck: the spider climbs back, goes over what is left round and round, gathering the old silk in and
+   * eating it, keeping only the bridge line and the frame threads that held; it finishes at the far end of the bridge.
+   */
+  function* takeDown(st, site) {
+    const sp = site.sp, H = site.plan.H, p = site.plan, k = site.k;
+    yield* wait(site, 2.5);
+    site.hangAt = null;
+    yield* walk(site, [P(sp.x, sp.y), H], { speed: 45, mode: 'hang', hd: -Math.PI / 2, acc: 2 });
+    site.drag = null;
+    const keep = new Set([0]);
+    site.edges.forEach((e, i) => { if (i && e.built && e.segs.length && e.segs.every((s) => !s.dead)) keep.add(i); });
+    const keepSeg = new Set();
+    for (const i of keep) for (const s of site.edges[i].segs) keepSeg.add(s);
+    const tour = [P(H.x, H.y)], n = 64, turns = 2.2;
+    for (let i = 1; i <= n; i++) { const q = i / n, a = q * turns * TAU, rr = site.Rm * (0.12 + 0.82 * q); tour.push(P(H.x + Math.cos(a) * rr, H.y + Math.sin(a) * rr)); }
+    tour.push(P(p.B.x, p.B.y));
+    const eat = () => {
+      for (const sg of site.segs) {
+        if (sg.dead || sg.eaten || keepSeg.has(sg) || sg.k === ANCHOR || sg.k === BRIDGE) continue;
+        const mx = (sg.a.x + sg.b.x) / 2, my = (sg.a.y + sg.b.y) / 2, Mx = (sg.a.X + sg.b.X) / 2, My = (sg.a.Y + sg.b.Y) / 2;
+        if (Math.min(Math.hypot(mx - sp.x, my - sp.y), Math.hypot(Mx - sp.x, My - sp.y)) < 34 * k) eatSeg(site, sg, RND() * 0.3);
+      }
+      for (const d of site.dangles || []) if (!d.cut && Math.hypot(d.n.x - sp.x, d.n.y - sp.y) < 34 * k) d.cut = site.T;
+    };
+    sp.chew = 1;
+    yield* walk(site, tour, { speed: 150, mode: 'mesh', each: eat });
+    for (const sg of site.segs) if (!sg.dead && !keepSeg.has(sg) && sg.k !== ANCHOR && sg.k !== BRIDGE) eatSeg(site, sg, RND() * 1.2);
+    for (const d of site.dangles || []) if (!d.cut) d.cut = site.T + RND();
+    yield* wait(site, 1.8);
+    sp.chew = 0;
+    for (const ins of site.insects) if (ins.state === 'left') { ins.bx = ins.pbx = ins.tgt.x; ins.by = ins.pby = ins.tgt.y; letFall(ins, 0.2); }
+    resetWeb(site, keep);
+  }
+  /** The web as it was after the bridge: the bridge line, the hub's place, the frame threads kept; nothing else. */
+  function resetWeb(site, keep) {
+    const H = site.hubN, anchors = site.segs.filter((s) => s.k === ANCHOR && !s.dead);
+    site.segs = anchors.slice();
+    const nodes = new Set([H, ...site.corners]);
+    for (const s of anchors) { nodes.add(s.a); nodes.add(s.b); }
+    for (const n of nodes) { n.X = n.PX = n.x; n.Y = n.PY = n.y; n.pin = 0; }
+    site.nodes = [...nodes];
+    site.edges.forEach((e, i) => {
+      e.ns = [e.a, e.b]; e.us = [0, 1]; e.segs = []; e.built = false;
+      if (keep.has(i)) { e.segs = [addSeg(site, e.a, e.b, i === 0 ? BRIDGE : FRAME)]; e.built = true; }
+    });
+    H.d = 0;
+    site.radii = site.radii0.map((r) => Object.assign(r, { dead: false, built: false, ns: [H], segs: [], end: r.proto >= 0 ? r.end : null }));
+    Object.assign(site, { sim: null, dangles: [], drops: null, glints: null, dewT: -1, events: [], spi: null, live: null, free: null, loose: null, drag: null, hangAt: null, pending: [], meal: null, parked: null, repairing: null });
+    site.insects = site.insects.filter((i) => i.state === 'drop' || i.state === 'fly' || i.state === 'free');
+  }
+  /** Building again on the same place, from the Y: the loose thread, the drop, the frame (what is missing), radii, spirals. */
+  function* rebuild(st, site) {
+    const p = site.plan, sp = site.sp;
+    site.dip = { seg: site.edges[0].segs[0], a: p.A, b: p.B, double: 1 };
+    site.phase = 'y'; yield* yForm(st, site);
+    site.phase = 'frame';
+    if (site.edges.some((e) => !e.built)) yield* frame(st, site);
+    else yield* walk(site, [P(sp.x, sp.y), p.H], { speed: 200 });
+    site.phase = 'radii'; yield* radii(st, site);
+    site.phase = 'spirals'; yield* spirals(st, site);
+    site.phase = 'settle'; yield* settle(st, site);
   }
 
   /* ---------- the torn web as strings under gravity ---------- */
@@ -1691,7 +2039,7 @@
     }
     for (let it = 0; it < 6; it++) {
       for (const sg of site.segs) {
-        if (sg.dead || !sg.rest) continue;
+        if (sg.dead || !sg.rest || (sg.cut && T >= sg.cut)) continue;
         const a = sg.a, b = sg.b, dx = b.X - a.X, dy = b.Y - a.Y, d = Math.hypot(dx, dy) || 1e-6;
         if (d <= sg.rest) continue; // silk goes slack, it doesn't push
         const m = (d - sg.rest) / d, wa = a.fixed ? 0 : 1, wb = b.fixed ? 0 : 1, sw = wa + wb;
@@ -1776,9 +2124,26 @@
     site.phase = 'radii'; yield* radii(st, site);
     site.phase = 'spirals'; yield* spirals(st, site);
     site.phase = 'settle'; yield* settle(st, site);
-    site.phase = 'idle'; yield* idle(st, site, false);
-    site.phase = 'tear'; yield* tear(st, site);
-    site.phase = 'gone';
+    // then, again and again: a quiet spell, and damage. A hole or a torn side is mended where it is; a wreck is taken
+    // down and the web built again on the same twigs. Only after a few rebuilds does the spider give the place up,
+    // and the view move on through the undergrowth.
+    const leaveAfter = 2 + ((RND() * 3) | 0);
+    site.rebuilds = 0;
+    for (;;) {
+      site.phase = 'idle'; yield* idle(st, site, false);
+      const heavy = st.forceHeavy != null ? st.forceHeavy : RND() < 0.3;
+      if (!heavy) {
+        site.phase = 'tear';
+        const dmg = yield* tearMedium(st, site, st.forceTear || ['beetle', 'leaf', 'gust'][(RND() * 3) | 0]);
+        site.phase = 'repair'; yield* repair(st, site, dmg);
+        continue;
+      }
+      site.phase = 'wreck'; yield* tear(st, site, st.forceTear === 'beetle' || st.forceTear === 'gust' ? st.forceTear : RND() < 0.5 ? 'gust' : 'beetle');
+      if (site.rebuilds >= leaveAfter && !st.noLeave) { site.phase = 'gone'; return; }
+      site.phase = 'takedown'; yield* takeDown(st, site);
+      yield* rebuild(st, site);
+      site.rebuilds++;
+    }
   }
   function* master(st) {
     for (let n = 0; ; n++) {
@@ -1865,7 +2230,7 @@
 
   /* ---------- drawing ---------- */
 
-  const dewGrow = (site, d) => { if (site.dewT < 0) return 0; const q = (site.T - site.dewT) / 24 - d.dl * 0.6; return q <= 0 ? 0 : Math.min(1, q / 0.4) ** 0.6; };
+  const dewGrow = (site, d) => { if (site.dewT < 0) return 0; const q = d.t0 != null ? (site.T - d.t0) / 45 - d.dl * 0.6 : (site.T - site.dewT) / 24 - d.dl * 0.6; return q <= 0 ? 0 : Math.min(1, q / 0.4) ** 0.6; };
 
   /** All the threads, by brightness: a thread lit across its length by the low sun glows, one along the light is dim. */
   function drawThreads(ctx, st, site, L) {
@@ -1875,9 +2240,9 @@
     const dew = site.dewT >= 0 ? Math.min(1, (site.T - site.dewT) / 20) : 0, sim = !!site.sim;
     for (const sg of site.segs) {
       if (sg.dead) continue;
-      if (sg.cut && T - sg.cut > 0.35) continue;
+      if (sg.cut && T - sg.cut > 0.35) { if (sg.eaten) sg.dead = T; continue; }
       const ax = sg.a.X, ay = sg.a.Y, bx = sg.b.X, by = sg.b.Y, dx = bx - ax, dy = by - ay, l = Math.hypot(dx, dy) || 1e-6;
-      if (sg.cut) { st.cutList.push(sg); continue; }
+      if (sg.cut && T >= sg.cut) { st.cutList.push(sg); continue; }
       const al = Math.abs((dx * lx + dy * ly) / l), lit = (1 - al) ** 3;
       const cls = sg.k <= ANCHOR ? 0 : sg.k === CAP ? 2 : sg.k === TEMP ? 3 : 1;
       const lv = lit > 0.72 ? 3 : lit > 0.4 ? 2 : lit > 0.15 ? 1 : 0;
@@ -1934,9 +2299,11 @@
     ctx.beginPath();
     if (site.tail) { const t = site.tail.pts; ctx.moveTo(t[0].x, t[0].y); for (let i = 1; i < t.length; i++) ctx.lineTo(t[i].x, t[i].y); }
     if (site.dangles) for (const d of site.dangles) {
-      const sw = Math.sin(site.T * 1.6 + d.ph) * 0.25 + (st.wind - 0.5) * 0.4, a = lerp(d.a, Math.PI / 2, 0.55) + sw;
-      const ex = d.n.X + Math.cos(a) * d.len, ey = d.n.Y + Math.sin(a) * d.len;
-      ctx.moveTo(d.n.X, d.n.Y); ctx.quadraticCurveTo(d.n.X + Math.cos(d.a) * d.len * 0.4, d.n.Y + Math.sin(d.a) * d.len * 0.4 + d.len * 0.2, ex, ey);
+      const g = d.cut && site.T > d.cut ? 1 - (site.T - d.cut) / 0.6 : 1; // being gathered in
+      if (g <= 0) continue;
+      const len = d.len * g, sw = Math.sin(site.T * 1.6 + d.ph) * 0.25 + (st.wind - 0.5) * (0.4 + st.gust * 0.5), a = lerp(d.a, Math.PI / 2, 0.55 * g) + sw;
+      const ex = d.n.X + Math.cos(a) * len, ey = d.n.Y + Math.sin(a) * len;
+      ctx.moveTo(d.n.X, d.n.Y); ctx.quadraticCurveTo(d.n.X + Math.cos(d.a) * len * 0.4, d.n.Y + Math.sin(d.a) * len * 0.4 + len * 0.2, ex, ey);
     }
     ctx.stroke();
   }
@@ -2083,11 +2450,11 @@
     const W = st.W, H = st.H, T = st.T, beam = st.spr.beam, ang = Math.atan2(LY, LX), shift = -st.camX * 0.18;
     ctx.globalCompositeOperation = L ? 'source-over' : 'lighter';
     // the low sun itself, behind the leaves at the upper left (too far off to move when the view does)
-    const sr = Math.max(W, H) * 0.95;
-    ctx.globalAlpha = 0.9 + 0.1 * Math.sin(T * 0.11);
+    const sr = Math.max(W, H) * 0.95, day = 0.84 + 0.16 * Math.sin((T * TAU) / 1500 + 0.6); // the morning goes on: the light swells and fades over half an hour
+    ctx.globalAlpha = (0.9 + 0.1 * Math.sin(T * 0.11)) * day;
     ctx.drawImage(st.spr.sun, W * 0.08 - sr, -H * 0.1 - sr, sr * 2, sr * 2);
     for (const b of st.beams) {
-      const a = b.a * (0.55 + 0.45 * Math.sin(T * b.f + b.ph)) * (0.8 + 0.2 * Math.sin(T * 0.13 + b.ph * 2));
+      const a = b.a * (0.55 + 0.45 * Math.sin(T * b.f + b.ph)) * (0.8 + 0.2 * Math.sin(T * 0.13 + b.ph * 2)) * day;
       if (a < 0.003) continue;
       let ox = (((b.x + shift) % (W * 1.6)) + W * 1.6) % (W * 1.6) - W * 0.3;
       ctx.save(); ctx.translate(ox, -H * 0.12); ctx.rotate(ang); ctx.globalAlpha = a;
