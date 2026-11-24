@@ -245,7 +245,7 @@ function show() {
       out.push(`  #${i.id} ${i.title}${tags.length ? ` (${tags.join(', ')})` : ''}`);
       if (i.detail) out.push(`      ${i.detail}`);
       const last = Array.isArray(i.notes) ? i.notes.at(-1) : null;
-      if (last) out.push(`      마지막 메모 ${last.at} ${last.text} (메모 ${i.notes.length}개)`);
+      if (last) out.push(`      ${last.by === 'user' ? '사용자의 답' : '마지막 메모'} ${last.at} ${last.text} (메모 ${i.notes.length}개)`);
     }
   }
   const fresh = d.requests.filter((r) => r.status === 'new');

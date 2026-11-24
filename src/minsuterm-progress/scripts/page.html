@@ -404,6 +404,12 @@
   .notes li { padding: 2px 0 2px 12px; font-size: 13.5px; display: flex; gap: 10px; }
   .notes time { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
   .notes p { margin: 0; font-size: 13.5px; }
+  /* minsuterm: 확인 필요 항목에 답하기 (보낸 답은 메모에 '내 답'으로 쌓인다) */
+  .by-me { flex: none; align-self: center; font-size: 11px; font-weight: 600; color: var(--notice); background: var(--notice-bg); border-radius: 999px; padding: 0 7px; }
+  .answer { display: flex; gap: 8px; align-items: flex-end; padding: 0 6px 10px 28px; }
+  .answer textarea { flex: 1; min-width: 0; min-height: 32px; font-size: 13.5px; padding: 5px 9px; }
+  .item-row ~ .notes, .item-row ~ .answer { padding-left: 4px; } /* 펼침 꺾쇠가 없는 칸: 제목 줄에 맞춘다 */
+  :root[data-embed] .answer textarea { font-size: 12.5px; }
   .hold .item-title { font-weight: 500; color: var(--muted); }
   .empty { color: var(--muted); text-align: center; }
 
@@ -1518,6 +1524,15 @@
     return (i.wait ? '<span class="tag wait">확인 필요</span>' : '') + (i.bumpedAt ? '<span class="tag first">먼저</span>' : '');
   }
 
+  const noteHTML = (n) => `<li><time>${esc(n.at)}</time>${n.by === 'user' ? '<b class="by-me">내 답</b>' : ''}<span>${esc(n.text)}</span></li>`;
+  // minsuterm: '확인 필요' 항목에는 그 자리에서 답을 적어 보낼 수 있다 (쓰던 답은 목록을 다시 그려도 남는다)
+  const answerDrafts = new Map();
+  function answerHTML(i) {
+    if (!i.wait) return '';
+    return `<div class="answer"><textarea class="ans-text" data-id="${i.id}" rows="1" maxlength="2000" placeholder="이 항목에 답하기 · Ctrl+Enter로 보내기" aria-label="#${i.id}에 답하기">${esc(answerDrafts.get(i.id) ?? '')}</textarea>
+      <button class="btn small" type="button" data-act="answer" data-id="${i.id}">답하기</button></div>`;
+  }
+
   function itemHTML(i, g) {
     const flash = flashIds.has(i.id) ? ' flash' : '';
     const title = `<span class="num">#${i.id}</span><span class="item-title">${esc(i.title)}</span>${tagsHTML(i)}`;
@@ -1525,24 +1540,78 @@
     if (g === 'now' || g === 'agent') {
       const open = openItems.has(i.id) || notesMatch(i);
       const notes = i.notes.length
-        ? `<ol>${i.notes.slice().reverse().map((n) => `<li><time>${esc(n.at)}</time><span>${esc(n.text)}</span></li>`).join('')}</ol>`
+        ? `<ol>${i.notes.slice().reverse().map(noteHTML).join('')}</ol>`
         : '<p class="muted">아직 진행 메모가 없습니다</p>';
       return `<li class="item${open ? ' open' : ''}${flash}" data-id="${i.id}">
         <button class="item-head" type="button" data-act="toggle" data-id="${i.id}" aria-expanded="${open}">
           <span class="chev" aria-hidden="true">›</span><span class="item-main">${title}${detail}</span>
           ${i.notes.length ? `<span class="prog">진행 ${i.notes.length}</span>` : ''}
         </button>
-        <div class="notes"${open ? '' : ' hidden'}>${notes}</div></li>`;
+        <div class="notes"${open ? '' : ' hidden'}>${notes}</div>${answerHTML(i)}</li>`;
     }
+    // 다른 칸은 메모를 보이지 않으니, 확인을 기다리는 항목에 보낸 답만 보인다
+    const mine = i.wait ? i.notes.filter((n) => n.by === 'user') : [];
+    const sent = mine.length ? `<div class="notes"><ol>${mine.slice().reverse().map(noteHTML).join('')}</ol></div>` : '';
     if (g === 'next') {
       return `<li class="item${flash}" data-id="${i.id}"><div class="item-row">
         <span class="item-main">${title}${detail}</span>
-        <button class="btn small" type="button" data-act="bump" data-id="${i.id}">먼저 해 주세요</button></div></li>`;
+        <button class="btn small" type="button" data-act="bump" data-id="${i.id}">먼저 해 주세요</button></div>${sent}${answerHTML(i)}</li>`;
     }
-    return `<li class="item hold${flash}" data-id="${i.id}"><div class="item-row"><span class="item-main"><span class="num">#${i.id}</span><span class="item-title">${esc(i.title)}</span></span></div></li>`;
+    return `<li class="item hold${flash}" data-id="${i.id}"><div class="item-row"><span class="item-main"><span class="num">#${i.id}</span><span class="item-title">${esc(i.title)}</span>${tagsHTML(i)}</span></div>${sent}${answerHTML(i)}</li>`;
   }
 
+  // 답을 쓰는 동안에는 목록을 다시 그리지 않는다 (쓰던 글의 커서와 한글 조합이 끊긴다). 칸을 떠나면 그린다
+  let groupsShown = 0;
+  let groupsStale = false;
   function renderGroups() {
+    const typing = document.activeElement;
+    if (typing && typing.classList.contains('ans-text') && $('groups').contains(typing)) { groupsStale = true; return groupsShown; }
+    groupsStale = false;
+    groupsShown = renderGroupsNow();
+    for (const ta of document.querySelectorAll('.ans-text')) if (ta.value) growAnswer(ta);
+    return groupsShown;
+  }
+  function growAnswer(ta) {
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.min(ta.scrollHeight + 2, 160)}px`;
+  }
+  async function sendAnswer(id, btn) {
+    const ta = document.querySelector(`.ans-text[data-id="${id}"]`);
+    const text = (ta?.value ?? '').trim();
+    if (!text) { toast('답을 적어 주세요', true); ta?.focus(); return; }
+    if (btn) btn.disabled = true;
+    try {
+      await post('/answer', { id, text });
+      answerDrafts.delete(id);
+      if (ta) { ta.value = ''; ta.blur(); }
+      toast('답을 보냈어요');
+      load(false);
+    } catch (e) {
+      toast(`보내기 실패: ${e.message}`, true);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+  document.addEventListener('input', (ev) => {
+    const ta = ev.target;
+    if (!ta.classList?.contains('ans-text')) return;
+    answerDrafts.set(Number(ta.dataset.id), ta.value);
+    growAnswer(ta);
+  });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.target.classList?.contains('ans-text') && ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey) && !ev.isComposing) {
+      ev.preventDefault();
+      sendAnswer(Number(ev.target.dataset.id), ev.target.parentElement.querySelector('[data-act="answer"]'));
+    }
+  });
+  // 답하기 단추를 눌러도 글칸이 포커스를 잃지 않게 한다 (잃으면 목록이 그 사이에 다시 그려져 단추가 바뀐다)
+  document.addEventListener('mousedown', (ev) => { if (ev.target.closest?.('[data-act="answer"]')) ev.preventDefault(); });
+  document.addEventListener('focusout', (ev) => {
+    if (!ev.target.classList?.contains('ans-text')) return;
+    setTimeout(() => { if (groupsStale && !document.activeElement?.classList?.contains('ans-text')) renderLists(); }, 0);
+  });
+
+  function renderGroupsNow() {
     let shown = 0;
     $('groups').innerHTML = ORDER.map((g) => {
       let list = data.items.filter((i) => i.group === g);
@@ -1885,6 +1954,8 @@
     if (next.requests.some((r) => !seen.has(r.id))) { sayFor('요청 받았어요! 곧 볼게요', 3500); return; }
     const kept = new Set(next.requests.map((r) => r.id));
     if (prev.requests.some((r) => r.status === 'new' && !kept.has(r.id))) { sayFor('알겠어요, 그 요청은 안 할게요', 3000); return; }
+    const answers = (i) => (i?.notes || []).filter((n) => n.by === 'user').length;
+    if (next.items.some((i) => answers(i) > answers(prev.items.find((p) => p.id === i.id)))) { sayFor('답 고마워요! 확인해 볼게요', 3500); return; }
     const bumped = next.items.find((i) => i.bumpedAt && i.bumpedAt !== prev.items.find((p) => p.id === i.id)?.bumpedAt);
     if (bumped) { sayFor(`네, '${bumped.title}' 먼저 할게요`, 3500); return; }
     const acked = next.notices.find((n) => n.ackedAt && !prev.notices.find((p) => String(p.id) === String(n.id))?.ackedAt);
@@ -2685,6 +2756,8 @@
         await post('/ack', { id: t.dataset.id });
         toast('알렸어요');
         load(false);
+      } else if (a === 'answer') { // minsuterm: 확인 필요 항목에 답하기
+        await sendAnswer(Number(t.dataset.id), t);
       } else if (a === 'bump') {
         await post('/bump', { id: Number(t.dataset.id) });
         toast('먼저 하도록 부탁했어요');

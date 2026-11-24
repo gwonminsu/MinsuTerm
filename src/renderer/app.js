@@ -7732,8 +7732,30 @@ async function quietEnd(tab, now) {
     let state = 'unknown';
     try { ({ state } = await window.mt.agent.turn(tab.agent, tab.cwd, tab.sessionId)); } catch { /* ignore */ } finally { tab.quietBusy = false; }
     if (state === 'working' || tab.status !== 'working') return;
+    if (state === 'local') { endLocalCommand(tab); return; }
   }
   finishWork(tab, tab.lastOut - tab.workStart);
+}
+
+/**
+ * The transcript ends on a command Claude Code ran itself (/mcp, /model …): no turn of the model ran, so nothing was
+ * done — back to 입력 대기, without a celebration or a 완료 notice. (Read as a prompt waiting for the model, it kept
+ * the tab in 실행 중 for good.)
+ */
+function endLocalCommand(tab) {
+  if (tab.closed || stillWorking(tab)) return;
+  if (screenSaysChoice(tab)) { awaitChoice(tab); return; }
+  tab.armed = false;
+  tab.bannerHold = Date.now() + 3000;
+  const task = tab.taskId && taskById(tab.taskId);
+  if (task && String(task.text || '').trim().startsWith('/') && (task.status === 'working' || task.status === 'attention')) {
+    S.tasks = S.tasks.filter((k) => k !== task); // the command itself: not a task (one that got as far as a question was kept as 완료)
+    tab.taskId = '';
+    saveTasks();
+  }
+  setStatus(tab, 'ready');
+  renderSessions();
+  renderProjects();
 }
 
 /** The agent's working timer is on screen and still ticking (a frozen, stale line doesn't count). */
@@ -7797,7 +7819,7 @@ async function checkTurn(tab, now) {
     // compare with the moment the prompt was sent (output may only start later)
     if (state === 'done' && mtime >= (tab.armedAt || tab.workStart) && tab.status === 'working') {
       finishWork(tab, Math.max(tab.lastOut, mtime) - tab.workStart);
-    }
+    } else if (state === 'local' && mtime >= (tab.armedAt || tab.workStart) && tab.status === 'working') endLocalCommand(tab);
   } catch { /* ignore */ } finally {
     tab.turnBusy = false;
   }
@@ -8177,13 +8199,17 @@ function psEncoded(script) {
   for (let i = 0; i < script.length; i++) { const c = script.charCodeAt(i); bin += String.fromCharCode(c & 255, c >> 8); }
   return btoa(bin);
 }
-/** End a background command: its row goes at once; it comes back if the command could not be found. */
+/**
+ * End a background command: its row goes at once; it comes back if the command could not be found, unless it was
+ * found to have ended already ('gone': nothing of it runs any more).
+ */
 async function stopBgTask(tab, a) {
   tab.bgStopped = tab.bgStopped || new Set();
   tab.bgStopped.add(a.id);
   renderProjects();
   let ok = false;
   try { ok = await window.mt.agent.bgStop(tab.id, tab.sessionId, a.cmd || '', a.task || ''); } catch { /* ignore */ }
+  if (ok === 'gone') { toast('이미 끝난 작업이라 목록에서 뺐습니다', { icon: 'info' }); return; }
   if (ok) { toast(`백그라운드 작업을 종료했습니다: ${a.name || a.task}`, { icon: 'stop' }); return; }
   tab.bgStopped.delete(a.id);
   renderProjects();

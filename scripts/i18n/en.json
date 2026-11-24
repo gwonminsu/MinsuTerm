@@ -1818,5 +1818,6 @@
  "세션을 끝내지 못했어요. 탭에서 직접": "session could not be ended. In that tab, type",
  "세션을 끝냈어요": "session ended",
  "이름이 비어 있어요": "The name is empty",
- "해 주세요": "yourself"
+ "해 주세요": "yourself",
+ "이미 끝난 작업이라 목록에서 뺐습니다": "It had already ended, so it was taken off the list"
 }

@@ -1108,7 +1108,9 @@ ipcMain.handle('agent:lastPrompt', (_e, agent, cwd, id) => lastPrompt(agent, cwd
 
 /**
  * Has the agent finished its current turn? Read from the transcript tail, so it works even when the
- * agent keeps redrawing its UI after finishing. → 'done' | 'working' | 'unknown'
+ * agent keeps redrawing its UI after finishing. → 'done' | 'working' | 'unknown', or 'local': the last thing was a
+ * command Claude Code ran itself (/mcp, /model, /effort …: `<local-command-stdout>` as a user entry, or a system
+ * local_command), not a turn of the model. A skill's slash command is not one: its text goes to the model.
  */
 function turnState(agent, cwd, id) {
   if (!UUID_RE.test(String(id || ''))) return 'unknown';
@@ -1131,9 +1133,12 @@ function turnState(agent, cwd, id) {
       if (agent === 'claude') {
         if (o.isSidechain) continue;
         if (o.type === 'system' && o.subtype === 'turn_duration') return 'done';
+        if (o.type === 'system' && o.subtype === 'local_command') return 'local';
         if (o.type === 'assistant') return o.message && o.message.stop_reason === 'end_turn' ? 'done' : 'working';
         if (o.type === 'user') { // a prompt or tool result waiting for the model — unless it is the note of an Esc
           const m = o.message && o.message.content, txt = typeof m === 'string' ? m : Array.isArray(m) ? m.map((q) => (q && typeof q.text === 'string' ? q.text : '')).join(' ') : '';
+          if (o.isMeta && /^\s*<local-command-caveat>/.test(txt)) continue;
+          if (/^\s*<local-command-(?:stdout|stderr)>/.test(txt)) return 'local';
           return /^\s*\[Request interrupted by user/.test(txt) ? 'done' : 'working';
         }
       } else if (o.type === 'event_msg' && o.payload) {
@@ -1204,7 +1209,9 @@ function subagentLine(agent, c, line) {
   // only two kinds of entry matter: a launch, and the result of a launch we know (lines can be megabytes long). A
   // launch is a sub-agent, a message that may set a finished sub-agent to work again, or a command left running in
   // the background: each goes on after the agent's own turn ends, which must not count as done before they are.
-  const launch = line.includes('"tool_use"') && (line.includes('"Agent"') || line.includes('"Task"') || line.includes('"SendMessage"') || /"run_in_background":\s*true/.test(line));
+  // A stop (TaskStop, earlier KillShell) ends the command it names: no notice of that end ever follows.
+  const launch = line.includes('"tool_use"') && (line.includes('"Agent"') || line.includes('"Task"') || line.includes('"SendMessage"') || /"run_in_background":\s*true/.test(line)
+    || (map.size > 0 && /"name":\s*"(?:TaskStop|KillShell|KillBash)"/.test(line)));
   let result = false;
   if (!launch && map.size && line.includes('"tool_use_id"')) {
     const re = /"tool_use_id":\s*"([^"]+)"/g;
@@ -1229,7 +1236,10 @@ function subagentLine(agent, c, line) {
         const to = String(inp.to), was = [...map.values()].reverse().find((x) => x.agentId && (x.agentId === to || x.agentId.startsWith(to)));
         map.set(q.id, { id: q.id, kind: was ? was.kind : 'agent', name: was ? was.name : '', status: 'running', start, end: 0, msg, resume: to });
       } else if (inp.run_in_background === true) { // a shell command left running in the background
-        map.set(q.id, { id: q.id, kind: 'shell', name: String(inp.description || inp.command || '').replace(/\s+/g, ' ').slice(0, 60), status: 'running', start, end: 0, msg, bg: true, shell: true, cmd: String(inp.command || '') });
+        map.set(q.id, { id: q.id, kind: 'shell', name: String(inp.description || inp.command || '').replace(/\s+/g, ' ').slice(0, 60), status: 'running', start, end: 0, msg, bg: true, shell: true, cmd: String(inp.command || ''), tool: String(q.name || '') });
+      } else if (q.name === 'TaskStop' || q.name === 'KillShell' || q.name === 'KillBash') {
+        const tid = String(inp.task_id || inp.shell_id || '');
+        if (tid) for (const x of map.values()) if (x.shell && x.status === 'running' && x.taskId === tid) { x.status = 'done'; x.end = c.live ? Date.now() : 0; }
       }
     }
   } else if (o.type === 'user') {
@@ -1466,14 +1476,24 @@ ipcMain.handle('agent:bgScript', (_e, task, script) => {
  * macOS) under its own process: find that shell — under the tab's process tree, or under the Claude process
  * that names the session on its command line (a background session the tab is attached to) — by the exact
  * command, and end its whole tree. Nothing else is touched: no match, nothing stopped. Codex: codexBgStop.
+ * A Bash command found nowhere under a live Claude, not even loosely, is no longer running (ended some way the
+ * transcript never told): it is marked ended and 'gone' comes back, so its row can leave the list.
  */
 async function bgStop(tabId, sid, command, task) {
   const cx = /^cx-(\d{1,12})$/.exec(String(task || ''));
   if (cx) return codexBgStop(tabId, sid, cx[1], String(command || ''));
   const cmd = String(command || '');
   if (!cmd || cmd.length > 20000) return false;
-  const Q = String.fromCharCode(39); // a single quote, escaped the shell's way inside one: '\''
-  const needle = `eval ${Q}${cmd.split(Q).join(Q + '\\' + Q + Q)}${Q}`;
+  const Q = String.fromCharCode(39), DQ = String.fromCharCode(34);
+  // inside the eval's single quotes a single quote is written '"'"' (Claude Code now) or '\'' (earlier); on Windows the
+  // whole `bash -c` argument is quoted again for the command line: " becomes \" and backslashes before one double
+  const needles = [];
+  for (const sq of [Q + DQ + Q + DQ + Q, Q + '\\' + Q + Q]) {
+    const n = `eval ${Q}${cmd.split(Q).join(sq)}${Q}`;
+    needles.push(n);
+    if (IS_WIN) needles.push(n.replace(/(\\*)"/g, (_m, b) => `${b}${b}\\"`));
+  }
+  const loose = (s) => s.replace(/[\\'"]/g, ''), looseNeedle = loose(`eval ${Q}${cmd}${Q}`);
   const rows = await processRows();
   if (!rows.length) return false;
   const kids = new Map(), byId = new Map();
@@ -1484,18 +1504,25 @@ async function bgStop(tabId, sid, command, task) {
   if (tabRoot) roots.push(tabRoot);
   if (UUID_RE.test(String(sid || ''))) for (const r of rows) if (/claude/i.test(r.name) && r.cmd.includes(sid)) roots.push(r.pid);
   const seen = new Set(), stack = [...roots];
-  let hit = 0;
+  let hit = 0, near = false, agent = false;
   while (stack.length && !hit) {
     const id = stack.shift();
     if (seen.has(id)) continue;
     seen.add(id);
     const r = byId.get(id);
-    if (r && id !== tabRoot && /(?:^|[\\/])(?:bash|zsh|sh)(?:\.exe)?$/i.test(r.name.replace(/\s.*$/, '')) && r.cmd.includes(needle)) { hit = id; break; }
+    if (r && classify(r.name, r.cmd) === 'claude') agent = true;
+    if (r && id !== tabRoot && /(?:^|[\\/])(?:bash|zsh|sh)(?:\.exe)?$/i.test(r.name.replace(/\s.*$/, ''))) {
+      if (needles.some((n) => r.cmd.includes(n))) { hit = id; break; }
+      if (loose(r.cmd).includes(looseNeedle)) near = true; // quoted some other way: maybe it, so not "gone"
+    }
     stack.push(...(kids.get(id) || []));
   }
-  if (!hit) return false;
-  await endTree(hit, kids);
-  return true;
+  if (hit) { await endTree(hit, kids); return true; }
+  const c = UUID_RE.test(String(sid || '')) ? subCache.get(sid) : null;
+  const x = c && task ? [...c.map.values()].find((y) => y.shell && y.taskId === task && y.status === 'running') : null;
+  if (!agent || near || !x || x.tool !== 'Bash') return false; // (a PowerShell tool command never shows on a command line)
+  x.status = 'done'; x.end = Date.now();
+  return 'gone';
 }
 /** End a process and everything under it (kids: pid → [child pids]). */
 async function endTree(hit, kids) {

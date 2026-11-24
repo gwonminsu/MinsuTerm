@@ -7,7 +7,7 @@
  * and installs them into ~/.claude/skills when the user asks (구축하기). The page is served from this process on
  * 127.0.0.1 (a port the OS picks), with the same API as the skill's server.mjs, so no Node and no separate server are
  * needed: /data /events /crew /projects and the POSTs (/ack /request /bump /sleep /wake), plus MinsuTerm's own
- * /unrequest (보낸 요청 지우기) and /leave (방에서 내쫓기).
+ * /unrequest (보낸 요청 지우기), /answer (확인 필요 항목에 답하기) and /leave (방에서 내쫓기).
  * A skill folder MinsuTerm did not install (the owner's own progress / dreaming) is never written to.
  */
 const http = require('http');
@@ -368,6 +368,19 @@ const posts = {
   '/wake'(d) {
     delete d.sleep;
     return { type: 'wake', id: '-', text: '자러 가기를 취소함' };
+  },
+  /*
+   * The user's answer to an item waiting on them (확인 필요): kept among the item's notes (by: 'user'), and the agent
+   * is told. The flag stays until the agent has looked at it (cli `wait <id> off`).
+   */
+  '/answer'(d, body) {
+    const item = d.items.find((x) => x.id === Number(body.id));
+    if (!item) throw new HttpError(400, '그 항목을 찾지 못했어요');
+    const text = String(body.text ?? '').trim().slice(0, 2000);
+    if (!text) throw new HttpError(400, '답이 비어 있어요');
+    if (!Array.isArray(item.notes)) item.notes = [];
+    item.notes.push({ at: stamp().slice(11, 16), text, by: 'user' });
+    return { type: 'answer', id: item.id, text: `'${item.title}'에 대한 답: ${text}` };
   },
   /* a sent request taken off the list: one still waiting is called off (the agent is told), a handled one only goes */
   '/unrequest'(d, body) {

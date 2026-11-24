@@ -9,7 +9,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve(process.env.PROGRESS_ROOT ?? process.cwd());
 const FILE = path.join(ROOT, 'progress', 'inbox.jsonl');
-const NAMES = { ack: '했어요', request: '요청', bump: '먼저 해 주세요', sleep: '자러 가기', wake: '자러 가기 취소', unrequest: '요청 취소' };
+const NAMES = { ack: '했어요', request: '요청', bump: '먼저 해 주세요', sleep: '자러 가기', wake: '자러 가기 취소', unrequest: '요청 취소', answer: '확인 답변' };
 
 const sizeOf = () => {
   try {
