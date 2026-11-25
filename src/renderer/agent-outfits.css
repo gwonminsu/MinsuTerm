@@ -1,0 +1,23 @@
+/* 에이전트 캐릭터 outfits (agent-outfits.js): their small motions, shared by the app's picker and 진행도's room */
+.ao-blink { animation: ao-blink 1.6s steps(1) infinite; }
+@keyframes ao-blink { 50% { opacity: .25; } }
+.ao-float { animation: ao-float 2.6s ease-in-out infinite; }
+@keyframes ao-float { 50% { transform: translateY(-1.2px); } }
+.ao-sway { transform-box: fill-box; transform-origin: 50% 100%; animation: ao-sway 3s ease-in-out infinite; }
+@keyframes ao-sway { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+.ao-flapL { transform-box: fill-box; transform-origin: 100% 40%; animation: ao-flapL 1.8s ease-in-out infinite; }
+@keyframes ao-flapL { 50% { transform: rotate(-12deg); } }
+.ao-flapR { transform-box: fill-box; transform-origin: 0% 40%; animation: ao-flapR 1.8s ease-in-out infinite; }
+@keyframes ao-flapR { 50% { transform: rotate(12deg); } }
+.ao-tent { transform-box: fill-box; transform-origin: 50% 0; animation: ao-tent 2.4s ease-in-out infinite; }
+@keyframes ao-tent { 50% { transform: skewX(8deg); } }
+.ao-neon { filter: drop-shadow(0 0 1.2px #ff4fd8) drop-shadow(0 0 2.4px #ff4fd8); }
+.ao-neonc { filter: drop-shadow(0 0 1.2px #5ff0ff) drop-shadow(0 0 2.4px #5ff0ff); }
+.ao-halo { filter: drop-shadow(0 0 1.5px #ffe48a); }
+/* the picker's preview box */
+.pv-agent { display: block; width: 100%; height: 100%; }
+/* still in the picker, and for anyone who asked for less motion */
+.pk-pop .pv-agent *, .pk-pv .pv-agent * { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .ao-blink, .ao-float, .ao-sway, .ao-flapL, .ao-flapR, .ao-tent { animation: none; }
+}

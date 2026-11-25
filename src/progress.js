@@ -487,10 +487,10 @@ async function handle(req, res) {
         case '/crew': return send(res, 200, JSON.stringify(crew(projectFor(url))), JSON_TYPE);
         case '/favicon.ico': return send(res, 204);
         // shared with the app window (one source for both): the sidebar's minions, which the room draws its sub-agents
-        // as, and the progress bar styles picked in 꾸미기 → 진행도
-        case '/minions.js': case '/progress-bars.js':
+        // as, and the progress bar styles and the agent characters' outfits picked in 꾸미기 → 진행도
+        case '/minions.js': case '/progress-bars.js': case '/agent-outfits.js':
           return send(res, 200, fs.readFileSync(path.join(__dirname, 'renderer', url.pathname.slice(1))), 'text/javascript; charset=utf-8');
-        case '/minions.css': case '/progress-bars.css':
+        case '/minions.css': case '/progress-bars.css': case '/agent-outfits.css':
           return send(res, 200, fs.readFileSync(path.join(__dirname, 'renderer', url.pathname.slice(1))), 'text/css; charset=utf-8');
         default: {
           // a room style (꾸미기 → 진행도 → 방 스타일): one script per style, only the picked one is asked for

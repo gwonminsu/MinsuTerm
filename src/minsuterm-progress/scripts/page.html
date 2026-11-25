@@ -216,6 +216,7 @@
   .face ellipse.eye { fill: #2b1a12; }
   .face .line { fill: none; stroke: #2b1a12; stroke-width: 1.3; stroke-linecap: round; }
   .face .yawn { fill: #5a2a1c; }
+  .char.capped .ao-hat { display: none; } /* minsuterm: 잘 때는 차림의 모자류를 벗고 수면모자를 쓴다 */
   .cap-hat { fill: #4a6fd8; } .cap-brim { fill: #dfe7ff; } .cap-pom { fill: #ffffff; }
   .lid { fill: #c4ccd8; } .lid-dot { fill: #ffffff; opacity: .8; }
   .sipper { transform-origin: 13px 3px; }
@@ -736,6 +737,11 @@
       root.dataset.room = t.room;
       window.dispatchEvent(new Event('mt-room'));
     }
+    // minsuterm: 꾸미기에서 고른 에이전트 캐릭터 차림과 다른 세션 표시 (그림은 /agent-outfits.js)
+    let dressed = false;
+    if (typeof t.outfit === 'string' && /^[a-z0-9-]{1,24}$/.test(t.outfit) && root.dataset.outfit !== t.outfit) { root.dataset.outfit = t.outfit; dressed = true; }
+    if (typeof t.amark === 'string' && /^[a-z0-9-]{1,24}$/.test(t.amark) && root.dataset.amark !== t.amark) { root.dataset.amark = t.amark; dressed = true; }
+    if (dressed) window.dispatchEvent(new Event('mt-outfit'));
     const vars = t.vars && typeof t.vars === 'object' ? t.vars : {};
     const set = [];
     for (const [k, name] of Object.entries(VARS)) if (Object.hasOwn(vars, k) && okColor(vars[k])) set.push([name, vars[k].trim()]);
@@ -785,6 +791,9 @@
 <!-- minsuterm: 진행 바는 꾸미기 → 진행도에서 고른 스타일로 (src/renderer/progress-bars.*) -->
 <link rel="stylesheet" href="/progress-bars.css">
 <script src="/progress-bars.js"></script>
+<!-- minsuterm: 방의 Claude·Codex가 쓰는 차림과 다른 세션 표시 (src/renderer/agent-outfits.*) -->
+<link rel="stylesheet" href="/agent-outfits.css">
+<script src="/agent-outfits.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -1577,6 +1586,7 @@
     for (const slot of svg.querySelectorAll('.rs-slot')) slot.innerHTML = (m && m[slot.dataset.slot]) || '';
   }
   window.addEventListener('mt-room', applyRoomStyle);
+  window.addEventListener('mt-outfit', () => { if (data) renderRoom(); }); // minsuterm: 차림을 바꾸면 방을 다시 그린다
   applyRoomStyle();
 
   function renderRequests() {
@@ -1851,10 +1861,10 @@
     return `<title></title><ellipse class="shadow" cx="0" cy="24" rx="14" ry="2.6"/>
       <ellipse class="cushion" cx="0" cy="19" rx="19" ry="5.4" style="display:none"/>
       <g class="hop"><g class="bob"><g class="lean"><g class="appear">
-        <g class="rays">${RAYS}</g><circle class="cl-body" r="8.6"/>
+        <g class="ao-back"></g><g class="rays">${RAYS}</g><circle class="cl-body" r="8.6"/>
         <g transform="scale(.9)">
           <circle class="cheek" cx="-5.6" cy="2.4" r="1.6"/><circle class="cheek" cx="5.6" cy="2.4" r="1.6"/>
-          <g class="face"></g>${HELD}
+          <g class="face"></g><g class="ao-front" transform="scale(1.1111)"></g><g class="ao-mark" transform="scale(1.1111)"></g>${HELD}
           ${CAP}
         </g>
       </g></g></g></g>${OVER}`;
@@ -1865,10 +1875,11 @@
     return `<title></title><ellipse class="shadow" cx="0" cy="24" rx="15" ry="2.6"/>
       <ellipse class="cushion" cx="0" cy="19" rx="19" ry="5.4" style="display:none"/>
       <g class="hop"><g class="bob"><g class="lean"><g class="appear">
-        <g class="cx-body"><use href="#cxcloud" transform="scale(1.62) translate(-12 -12)"/></g>
+        <g class="ao-back"></g><g class="cx-body"><use href="#cxcloud" transform="scale(1.62) translate(-12 -12)"/></g>
         <circle class="cx-cheek" cx="-10.5" cy="-4.5" r="1.8"/><circle class="cx-cheek" cx="10.5" cy="-4.5" r="1.8"/>
         <g class="face"></g>
         <path class="cx-prompt" d="M-8.4-2.4L-4.8 1.6L-8.4 5.6"/><path class="cx-prompt cursor" d="M-1.2 5.6H6.6"/>
+        <g class="ao-front"></g><g class="ao-mark"></g>
         <g transform="translate(0 2) scale(.9)">${HELD}</g>
         <g transform="translate(0 -10)">${CAP}</g>
       </g></g></g></g>${OVER}`;
@@ -2111,7 +2122,7 @@
       if (going === 'out') x = x < ROOM_W / 2 ? -50 : ROOM_W + 50;
       want.set(`s:${s.id}`, {
         // minsuterm: 같은 폴더의 Codex 세션은 Codex로 선다
-        kind: 'claude', skin: s.agent === 'codex' ? 'codex' : 'claude', x, y: OTHER_Y, face: going ? 'smile' : ss.face, cap: false, act: going ? (going === 'bye' ? 'bye' : '') : ss.act,
+        kind: 'claude', skin: s.agent === 'codex' ? 'codex' : 'claude', x, y: OTHER_Y, sess: s.id, sessN: i + 2, face: going ? 'smile' : ss.face, cap: false, act: going ? (going === 'bye' ? 'bye' : '') : ss.act,
         props: going ? {} : ss.props, awake: Boolean(going) || ss.key !== 'sleep', shadow: false, cushion: !going, tag: name, label: `${name} · ${going ? '방을 나가는 중' : ss.label}`,
       });
       const ag = going ? [] : (s.agents || []).slice(-3);
@@ -2211,6 +2222,23 @@
     show(tag, true);
   }
 
+  // minsuterm: 꾸미기에서 고른 차림을 입히고(잘 때는 모자류를 벗고 수면모자), 다른 세션에는 그 세션의 표시를 단다
+  function dress(e, w) {
+    e.g.classList.toggle('capped', Boolean(w.cap));
+    if (typeof agentOutfitParts !== 'function') return; // (차림 그림을 받지 못했으면 기본 모습)
+    const outfit = document.documentElement.dataset.outfit || 'none';
+    const mark = w.main ? 'none' : document.documentElement.dataset.amark || 'none';
+    const key = [outfit, mark, w.sess || '', w.sessN || ''].join('|');
+    if (e.dressed === key) return;
+    e.dressed = key;
+    agentOutfitDefs();
+    const skin = w.skin === 'codex' ? 'codex' : 'claude';
+    const parts = agentOutfitParts(outfit, skin);
+    e.g.querySelector('.ao-back').innerHTML = parts.back;
+    e.g.querySelector('.ao-front').innerHTML = parts.front;
+    e.g.querySelector('.ao-mark').innerHTML = mark === 'none' ? '' : agentMarkSvg(mark, skin, w.sess, w.sessN);
+  }
+
   function syncChars(want, instant) {
     const layer = $('chars');
     const still = instant || reduce;
@@ -2263,6 +2291,7 @@
           e.face = w.face;
         }
         const pr = w.props || {};
+        dress(e, w);
         show(e.g.querySelector('.cap'), w.cap);
         show(e.g.querySelector('.shadow'), w.shadow);
         show(e.g.querySelector('.cushion'), w.cushion);
