@@ -7659,14 +7659,12 @@ function previewProgressBar(kind, el) {
 }
 /** 꾸미기 → 진행도 → 에이전트 캐릭터: Claude and Codex in that outfit. */
 function previewAgentOutfit(kind, el) { el.innerHTML = agentOutfitPreviewSvg(kind); return () => {}; }
-/** The outfit list for the picker: one from a room shows that room's name as a hashtag, the others what they are. */
+/** The outfit list for the picker: each shows its group as a hashtag (a room's name, #다른세션표시 or #일반). */
 function agentOutfitItems() {
-  const tag = (room) => {
-    const name = tr((ROOM_STYLES.find((r) => r[0] === room) || [])[1] || room);
-    // one word, as hashtags are written: 우주 정거장 → #우주정거장, Space station → #SpaceStation
-    return `#${name.split(/\s+/).map((w) => (/^[a-z]/i.test(w) ? w[0].toUpperCase() + w.slice(1) : w)).join('')}`;
-  };
-  return AGENT_OUTFITS.map(([v, name, room, desc]) => [v, name, room ? tag(room) : desc]);
+  // one word without punctuation, as hashtags are written: 우주 정거장 → #우주정거장, Space station → #SpaceStation
+  const tag = (name) => `#${tr(name).replace(/[^\p{L}\p{N}\s]/gu, '').split(/\s+/).map((w) => (/^[a-z]/i.test(w) ? w[0].toUpperCase() + w.slice(1) : w)).join('')}`;
+  const group = (g) => (g === 'session' ? '다른 세션 표시' : g === 'general' ? '일반' : (ROOM_STYLES.find((r) => r[0] === g) || [])[1] || g);
+  return AGENT_OUTFITS.map(([v, name, g]) => [v, name, g ? tag(group(g)) : '기본 모습']);
 }
 
 const CHOICE_PROMPT = /Enter to select|↑\/↓ to navigate|Do you want to (proceed|make this edit|create|allow|run)|Would you like to (run|make|apply|proceed|allow)|Press enter to confirm|Allow (this )?command\?/i;

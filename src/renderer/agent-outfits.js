@@ -1,7 +1,8 @@
 'use strict';
 /*
  * 에이전트 캐릭터: what every Claude and Codex in 진행도's room wears, other sessions too (꾸미기 → 진행도 →
- * 에이전트 캐릭터, settings.agentOutfit). One source for both windows: the app draws the picker previews from it, and
+ * 에이전트 캐릭터, settings.agentOutfit): a room's outfits, 일반 ones, and 다른 세션 표시 marks that tell the
+ * characters apart. One source for both windows: the app draws the picker previews from it, and
  * the progress server serves it to 진행도 (/agent-outfits.js), which dresses the characters in the room. Motion lives
  * in agent-outfits.css.
  *
@@ -10,51 +11,57 @@
  * Parts with class ao-hat come off while the character sleeps (it wears its nightcap then).
  */
 const AGENT_OUTFITS = [
-  // [id, name, the room it comes from (the picker shows it as a hashtag), what it is (for the ones from no room)]
-  ['none', '없음', '', '기본 모습'],
-  ['space-helmet', '우주 헬멧', 'space', ''],
-  ['space-antenna', '안테나 머리띠', 'space', ''],
-  ['space-headset', '교신 헤드셋', 'space', ''],
-  ['hanok-gat', '갓', 'hanok', ''],
-  ['hanok-bokgeon', '복건', 'hanok', ''],
-  ['hanok-jobawi', '조바위', 'hanok', ''],
-  ['neon-visor', 'LED 바이저', 'neon', ''],
-  ['neon-phones', '네온 헤드폰', 'neon', ''],
-  ['neon-cat', '네온 고양이 귀', 'neon', ''],
-  ['sea-goggles', '물안경과 스노클', 'sea', ''],
-  ['sea-jelly', '해파리 모자', 'sea', ''],
-  ['sea-star', '불가사리 핀', 'sea', ''],
-  ['attic-beanie', '니트 비니', 'attic', ''],
-  ['attic-scarf', '빨간 목도리', 'attic', ''],
-  ['attic-muffs', '털 귀마개', 'attic', ''],
-  ['library-glasses', '동그란 안경과 나비넥타이', 'library', ''],
-  ['library-cap', '학사모', 'library', ''],
-  ['library-monocle', '외알 안경', 'library', ''],
-  ['sakura-pin', '벚꽃 머리핀', 'sakura', ''],
-  ['sakura-crown', '꽃 화관', 'sakura', ''],
-  ['sakura-straw', '밀짚모자', 'sakura', ''],
-  ['arcade-cap', '거꾸로 쓴 캡', 'arcade', ''],
-  ['arcade-shades', '땀밴드와 셔터 안경', 'arcade', ''],
-  ['arcade-crown', '8비트 왕관', 'arcade', ''],
-  ['train-conductor', '차장 모자', 'train', ''],
-  ['train-fedora', '중절모', 'train', ''],
-  ['train-beret', '여행 베레모', 'train', ''],
-  ['lighthouse-rainhat', '노란 방수모', 'lighthouse', ''],
-  ['lighthouse-captain', '선장 모자', 'lighthouse', ''],
-  ['lighthouse-sailor', '세일러 칼라', 'lighthouse', ''],
-  ['cloud-band', '구름 머리띠', 'cloud', ''],
-  ['cloud-halo', '천사 링', 'cloud', ''],
-  ['cloud-wings', '작은 날개', 'cloud', ''],
-  ['headphones', '헤드폰', '', '흰 귀덮개 헤드폰'],
-  ['bow', '큰 리본', '', '머리 위 분홍 리본'],
-  ['crown', '왕관', '', '보석 박힌 금관'],
-  ['wizard', '마법사 모자', '', '별이 박힌 보라 고깔'],
-  ['santa', '산타 모자', '', '털방울 달린 빨간 모자'],
-  ['party', '생일 고깔', '', '줄무늬 고깔과 털방울'],
-  ['sunglasses', '선글라스', '', '까만 선글라스'],
-  ['sprout', '새싹', '', '머리에서 돋은 새싹'],
-  ['starpin', '별 머리핀', '', '반짝이는 노란 별 핀'],
+  // [id, name, group]. The picker shows the group as a hashtag: a room's name (outfits from that room's style),
+  // 다른 세션 표시 ('session': each character in the room gets its own colour and shape, by its place) or 일반 ('general')
+  ['none', '없음', ''],
+  ['space-helmet', '우주 헬멧', 'space'],
+  ['space-antenna', '안테나 머리띠', 'space'],
+  ['space-headset', '교신 헤드셋', 'space'],
+  ['hanok-gat', '갓', 'hanok'],
+  ['hanok-bokgeon', '복건', 'hanok'],
+  ['hanok-jobawi', '조바위', 'hanok'],
+  ['neon-visor', 'LED 바이저', 'neon'],
+  ['neon-phones', '네온 헤드폰', 'neon'],
+  ['neon-cat', '네온 고양이 귀', 'neon'],
+  ['sea-goggles', '물안경과 스노클', 'sea'],
+  ['sea-jelly', '해파리 모자', 'sea'],
+  ['sea-star', '불가사리 핀', 'sea'],
+  ['attic-beanie', '니트 비니', 'attic'],
+  ['attic-scarf', '빨간 목도리', 'attic'],
+  ['attic-muffs', '털 귀마개', 'attic'],
+  ['library-glasses', '동그란 안경과 나비넥타이', 'library'],
+  ['library-cap', '학사모', 'library'],
+  ['library-monocle', '외알 안경', 'library'],
+  ['sakura-pin', '벚꽃 머리핀', 'sakura'],
+  ['sakura-crown', '꽃 화관', 'sakura'],
+  ['sakura-straw', '밀짚모자', 'sakura'],
+  ['arcade-cap', '거꾸로 쓴 캡', 'arcade'],
+  ['arcade-shades', '땀밴드와 셔터 안경', 'arcade'],
+  ['arcade-crown', '8비트 왕관', 'arcade'],
+  ['train-conductor', '차장 모자', 'train'],
+  ['train-fedora', '중절모', 'train'],
+  ['train-beret', '여행 베레모', 'train'],
+  ['lighthouse-rainhat', '노란 방수모', 'lighthouse'],
+  ['lighthouse-captain', '선장 모자', 'lighthouse'],
+  ['lighthouse-sailor', '세일러 칼라', 'lighthouse'],
+  ['cloud-band', '구름 머리띠', 'cloud'],
+  ['cloud-halo', '천사 링', 'cloud'],
+  ['cloud-wings', '작은 날개', 'cloud'],
+  ['headphones', '헤드폰', 'general'],
+  ['bow', '큰 리본', 'general'],
+  ['crown', '왕관', 'general'],
+  ['wizard', '마법사 모자', 'general'],
+  ['santa', '산타 모자', 'general'],
+  ['party', '생일 고깔', 'general'],
+  ['sunglasses', '선글라스', 'general'],
+  ['sprout', '새싹', 'general'],
+  ['starpin', '별 머리핀', 'general'],
+  ['mark-ribbon', '색 리본', 'session'],
+  ['mark-badge', '번호 배지', 'session'],
+  ['mark-pin', '모양 머리핀', 'session'],
+  ['mark-flag', '작은 깃발', 'session'],
 ];
+const AGENT_MARK_COLORS = ['#ff6fa0', '#5fb3ff', '#7fd35a', '#ffb03b', '#b58cff', '#3fd0c9'];
 
 const AGENT_OUTFIT_DRAW = (() => {
   // where things sit on each character. hy/hs: hat base and scale; ex/ey/er: eye centres and lens size; ny/ns: neck;
@@ -132,16 +139,34 @@ const AGENT_OUTFIT_DRAW = (() => {
     sunglasses: (a) => ({ front: `<g class="ao-hat">${lenses(a, (x) => `<rect x="${f2(x - a.er - 0.6)}" y="${f2(a.ey - a.er * 0.9)}" width="${f2(2 * a.er + 1.2)}" height="${f2(a.er * 1.8)}" rx="${f2(a.er * 0.7)}" fill="#1d2330"/><path d="M${f2(x - a.er * 0.5)} ${f2(a.ey - a.er * 0.4)}l${f2(a.er * 0.5)} ${f2(-a.er * 0.3)}" stroke="#fff" stroke-width=".5" opacity=".7"/>`)}<path d="M${f2(-a.ex + a.er)} ${f2(a.ey - 0.4)}H${f2(a.ex - a.er)}" stroke="#1d2330" stroke-width="${f2(0.8 * a.ss)}"/></g>` }),
     sprout: (a) => ({ front: hat(a, '<g class="ao-hat"><g class="ao-sway"><path d="M0-.6V-7" stroke="#4fa83a" stroke-width="1.1" stroke-linecap="round"/><path d="M0-6C-4-9.4-7.2-7.4-7.2-5.2C-4.2-4.2-1.6-5 0-6Z" fill="#6cc24a"/><path d="M0-6.4C3.4-11 7.8-9.6 8.4-7C5.6-5.4 2-5.2 0-6.4Z" fill="#7fd35a"/></g></g>') }),
     starpin: (a) => ({ front: hat(a, `<g class="ao-hat">${star(6, -3, 3.4, '#ffd43b', 10)}<path d="M10.4-7.6v2M9.4-6.6h2" stroke="#fff" stroke-width=".5" class="ao-blink"/></g>`) }),
+    // 다른 세션 표시: the colour (and the pin's shape) and the badge's number come from the character's place in the room
+    'mark-ribbon': (a, w) => ({ front: hat(a, `<g class="ao-hat" transform="translate(5 -4.4) scale(1.7) translate(-5 4.4)"><path d="M5-4.4C1.6-8 .4-2 5-4.4ZM5-4.4C8.4-8 9.6-2 5-4.4Z" fill="${w.color}"/><circle cx="5" cy="-4.4" r="1.1" fill="${w.color}" stroke="rgba(0,0,0,.2)" stroke-width=".4"/></g>`) }),
+    // (upper left of the body: a held laptop, mug or can never covers it)
+    'mark-badge': (a, w) => ({ front: `<g transform="translate(${f2(-a.ex - 4.2 * a.ss)} ${f2(a.ey - 4.5 * a.ss)}) scale(${a.ss})"><circle r="3.2" fill="${w.color}" stroke="#fff" stroke-width=".7"/><text y=".3" text-anchor="middle" dominant-baseline="central" font-size="4.4" font-weight="800" fill="#fff" font-family="system-ui, sans-serif">${w.n}</text></g>` }),
+    'mark-pin': (a, w) => ({ front: hat(a, `<g class="ao-hat">${[
+      star(5.6, -3, 3, w.color, 8),
+      `<path d="M5.6-.6C1.6-3.4 2.6-6.6 4.4-6.4C5-6.4 5.4-6 5.6-5.4C5.8-6 6.2-6.4 6.8-6.4C8.6-6.6 9.6-3.4 5.6-.6Z" fill="${w.color}"/>`,
+      `<path d="M6.6-6.8A3.6 3.6 0 1 0 8.6-.8A3 3 0 1 1 6.6-6.8Z" fill="${w.color}"/>`,
+      flower(5.6, -3.2, 3, w.color, '#fff'),
+      `<path d="M6.6-7.4L3.8-3H5.8L4.6.8L8.2-4.2H6.2L7.6-7.4Z" fill="${w.color}"/>`,
+    ][w.shape]}</g>`) }),
+    'mark-flag': (a, w) => ({ front: hat(a, `<g class="ao-hat"><path d="M4.4-1.4V-12" stroke="#8a92a5" stroke-width=".7"/><path d="M4.6-12L10.2-10.2L4.6-8.4Z" fill="${w.color}"/></g>`) }),
   };
 
   return { A, D };
 })();
 
-/** What a character wears: { front, back } SVG for that outfit on 'claude' or 'codex' (empty for none or unknown). */
-function agentOutfitParts(id, skin) {
+/**
+ * What a character wears: { front, back } SVG for that outfit on 'claude' or 'codex' (empty for none or unknown).
+ * n is the character's place in the room (the main agent 1, other sessions 2, 3, ...): the 다른 세션 표시 outfits
+ * give each place its own colour and shape, so no two in the room look alike.
+ */
+function agentOutfitParts(id, skin, n = 1) {
   const draw = AGENT_OUTFIT_DRAW.D[id];
   if (!draw) return { front: '', back: '' };
-  const parts = draw(AGENT_OUTFIT_DRAW.A[skin === 'codex' ? 'codex' : 'claude']);
+  const i = Math.max(0, n - 1);
+  const who = { color: AGENT_MARK_COLORS[i % AGENT_MARK_COLORS.length], shape: i % 5, n };
+  const parts = draw(AGENT_OUTFIT_DRAW.A[skin === 'codex' ? 'codex' : 'claude'], who);
   return { front: parts.front || '', back: parts.back || '' };
 }
 
@@ -168,5 +193,5 @@ function agentOutfitPreviewSvg(id) {
   agentOutfitDefs();
   const claude = (x, wear) => `<g transform="translate(${x} 0)">${wear.back}<use href="#ao-clogo"/><circle r="8.6" fill="#d97757"/><g transform="scale(.9)"><circle cx="-5.6" cy="2.4" r="1.6" fill="#f3a487" opacity=".8"/><circle cx="5.6" cy="2.4" r="1.6" fill="#f3a487" opacity=".8"/><ellipse cx="-3.4" cy="-1.4" rx="1.45" ry="2" fill="#2b1a12"/><ellipse cx="3.4" cy="-1.4" rx="1.45" ry="2" fill="#2b1a12"/><path d="M-2.2 3.3Q0 5.1 2.2 3.3" fill="none" stroke="#2b1a12" stroke-width="1.3" stroke-linecap="round"/></g>${wear.front}</g>`;
   const codex = (x, wear) => `<g transform="translate(${x} 0)">${wear.back}<use href="#ao-cxcloud" transform="scale(1.62) translate(-12 -12)"/><circle cx="-10.5" cy="-4.5" r="1.8" fill="#ffc6ec" opacity=".55"/><circle cx="10.5" cy="-4.5" r="1.8" fill="#ffc6ec" opacity=".55"/><ellipse cx="-4.4" cy="-9" rx="1.9" ry="2.5" fill="#1e2470"/><ellipse cx="4.4" cy="-9" rx="1.9" ry="2.5" fill="#1e2470"/><path d="M-8.4-2.4L-4.8 1.6L-8.4 5.6M-1.2 5.6H6.6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>${wear.front}</g>`;
-  return `<svg class="pv-agent" viewBox="-56 -33 112 59" aria-hidden="true">${claude(-27, agentOutfitParts(id, 'claude'))}${codex(27, agentOutfitParts(id, 'codex'))}</svg>`;
+  return `<svg class="pv-agent" viewBox="-56 -33 112 59" aria-hidden="true">${claude(-27, agentOutfitParts(id, 'claude', 1))}${codex(27, agentOutfitParts(id, 'codex', 2))}</svg>`;
 }

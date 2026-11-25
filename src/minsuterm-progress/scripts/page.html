@@ -2105,7 +2105,7 @@
     if (!st.gone) { // minsuterm: 방에서 나갔으면 메인 에이전트는 없다
       const named = owner?.named ? owner.title : ''; // minsuterm: 이름을 붙여 줬으면 이름표를 단다
       want.set(`main:${skin}`, {
-        kind: 'claude', skin, main: true, x: st.spot.x, y: st.spot.y, face: st.face, cap: st.cap, act: st.act, props: st.props,
+        kind: 'claude', skin, main: true, place: 1, x: st.spot.x, y: st.spot.y, face: st.face, cap: st.cap, act: st.act, props: st.props,
         mark: st.mark, awake: st.key !== 'sleep', shadow: st.key !== 'sleep', say: ev && !leave ? ev.text : st.say, tag: named,
         label: `${named || agentName()} · ${st.name}`,
       });
@@ -2122,7 +2122,7 @@
       if (going === 'out') x = x < ROOM_W / 2 ? -50 : ROOM_W + 50;
       want.set(`s:${s.id}`, {
         // minsuterm: 같은 폴더의 Codex 세션은 Codex로 선다
-        kind: 'claude', skin: s.agent === 'codex' ? 'codex' : 'claude', x, y: OTHER_Y, face: going ? 'smile' : ss.face, cap: false, act: going ? (going === 'bye' ? 'bye' : '') : ss.act,
+        kind: 'claude', skin: s.agent === 'codex' ? 'codex' : 'claude', x, y: OTHER_Y, place: i + 2, face: going ? 'smile' : ss.face, cap: false, act: going ? (going === 'bye' ? 'bye' : '') : ss.act,
         props: going ? {} : ss.props, awake: Boolean(going) || ss.key !== 'sleep', shadow: false, cushion: !going, tag: name, label: `${name} · ${going ? '방을 나가는 중' : ss.label}`,
       });
       const ag = going ? [] : (s.agents || []).slice(-3);
@@ -2222,16 +2222,18 @@
     show(tag, true);
   }
 
-  // minsuterm: 꾸미기에서 고른 차림을 입힌다. 다른 세션의 캐릭터도 같은 차림이고, 잘 때는 모자류를 벗고 수면모자를 쓴다
+  // minsuterm: 꾸미기에서 고른 차림을 입힌다. 다른 세션의 캐릭터도 같은 차림이고, 잘 때는 모자류를 벗고 수면모자를 쓴다.
+  // #다른세션표시 차림은 방 안 순서(메인 1번, 다른 세션 2번부터)마다 색·모양·번호가 달라 서로 겹치지 않는다
   function dress(e, w) {
     e.g.classList.toggle('capped', Boolean(w.cap));
     if (typeof agentOutfitParts !== 'function') return; // (차림 그림을 받지 못했으면 기본 모습)
     const outfit = document.documentElement.dataset.outfit || 'none';
-    if (e.dressed === outfit) return;
-    e.dressed = outfit;
+    const key = [outfit, w.place || 1].join('|');
+    if (e.dressed === key) return;
+    e.dressed = key;
     agentOutfitDefs();
     const skin = w.skin === 'codex' ? 'codex' : 'claude';
-    const parts = agentOutfitParts(outfit, skin);
+    const parts = agentOutfitParts(outfit, skin, w.place);
     e.g.querySelector('.ao-back').innerHTML = parts.back;
     e.g.querySelector('.ao-front').innerHTML = parts.front;
   }
