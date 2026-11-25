@@ -7657,9 +7657,8 @@ function previewProgressBar(kind, el) {
   el.innerHTML = `<div class="pv-pbar">${progressBarHtml(kind, { done: 3, total: 6 })}</div>`;
   return () => {};
 }
-/** 꾸미기 → 진행도 → 에이전트 캐릭터: Claude and Codex in that outfit; and the marks for other sessions. */
+/** 꾸미기 → 진행도 → 에이전트 캐릭터: Claude and Codex in that outfit. */
 function previewAgentOutfit(kind, el) { el.innerHTML = agentOutfitPreviewSvg(kind); return () => {}; }
-function previewAgentMark(kind, el) { el.innerHTML = agentOutfitPreviewSvg(`mark:${kind}`); return () => {}; }
 /** The outfit list for the picker: one from a room shows that room's name as a hashtag, the others what they are. */
 function agentOutfitItems() {
   const tag = (room) => {
@@ -9377,8 +9376,7 @@ function progressTheme() {
     mono: "'Cascadia Mono', Consolas, monospace",
     bar: S.settings.progressBar || 'plain', // 꾸미기 → 진행도: the summary card's progress bar
     room: S.settings.roomStyle || 'default', // and the room's style
-    outfit: S.settings.agentOutfit || 'none', // what the room's Claude and Codex wear
-    amark: S.settings.agentMark || 'none', // and how other sessions in the room are told apart
+    outfit: S.settings.agentOutfit || 'none', // what every Claude and Codex in the room wears
     vars: {
       bg: col('var(--stage-solid)', isLight() ? '#fafbfc' : '#10131a'),
       card: col('var(--surface)', isLight() ? '#ffffff' : '#161922'),
@@ -10497,8 +10495,7 @@ function openSettings() {
     ${decoSec('progress', 'progressRing', '진행도', `
       <div class="field"><div class="field-label"><b>진행 바</b><span>진행도 요약 카드에 보이는 진행 바의 모양</span></div>${pk('progressBar')}</div>
       <div class="field"><div class="field-label"><b>방 스타일</b><span>진행도의 방 그림. 가구 자리는 같고 분위기가 바뀝니다</span></div>${pk('roomStyle')}</div>
-      <div class="field"><div class="field-label"><b>에이전트 캐릭터</b><span>방의 Claude와 Codex가 쓰거나 두르는 것. 잘 때는 수면모자로 바꿔 씁니다</span></div>${pk('agentOutfit')}</div>
-      <div class="field"><div class="field-label"><b>다른 세션 표시</b><span>방에 Claude나 Codex가 여럿일 때 세션마다 다는 표시</span></div>${pk('agentMark')}</div>`)}
+      <div class="field"><div class="field-label"><b>에이전트 캐릭터</b><span>방의 Claude와 Codex가 모두 쓰거나 두르는 것. 잘 때는 수면모자로 바꿔 씁니다</span></div>${pk('agentOutfit')}</div>`)}
     ${decoSec('done', 'star', '작업 완료', `
       <div class="field"><div class="field-label"><b>축하 효과</b><span>작업을 마치면 그 화면 위로 효과가 터집니다</span></div><div class="ctl-row">${sw('celebrate')}${subBtn('celebrate')}</div></div>
       ${subBox('celebrate', `
@@ -10657,9 +10654,7 @@ function openSettings() {
   setupPicker(body.querySelector('[data-picker="workGlowStyle"]'), { key: 'workGlowStyle', items: WG_KINDS, preview: previewGlow, onPick: () => applySettings() });
   setupPicker(body.querySelector('[data-picker="progressBar"]'), { key: 'progressBar', items: PROGRESS_BARS, preview: previewProgressBar, onPick: () => postProgressTheme() });
   setupPicker(body.querySelector('[data-picker="roomStyle"]'), { key: 'roomStyle', items: ROOM_STYLES, preview: previewRoomStyle, onPick: () => postProgressTheme() });
-  setupPicker(body.querySelector('[data-picker="agentOutfit"]'), { key: 'agentOutfit', items: agentOutfitItems(), preview: previewAgentOutfit, onPick: () => postProgressTheme() });
-  setupPicker(body.querySelector('[data-picker="agentMark"]'), { key: 'agentMark', items: AGENT_MARKS, preview: previewAgentMark, onPick: () => postProgressTheme() });
-  setupPicker(body.querySelector('[data-picker="celebrateStyle"]'), { key: 'celebrateStyle', items: CELEB_KINDS, preview: previewCelebrate, onPick: () => applySettings() });
+  setupPicker(body.querySelector('[data-picker="agentOutfit"]'), { key: 'agentOutfit', items: agentOutfitItems(), preview: previewAgentOutfit, onPick: () => postProgressTheme() });  setupPicker(body.querySelector('[data-picker="celebrateStyle"]'), { key: 'celebrateStyle', items: CELEB_KINDS, preview: previewCelebrate, onPick: () => applySettings() });
   setupDoneTextSettings(body);
   if (SOUND_ALIASES[S.settings.typingSound]) S.settings.typingSound = SOUND_ALIASES[S.settings.typingSound];
   setupPicker(body.querySelector('[data-picker="typingSound"]'), {

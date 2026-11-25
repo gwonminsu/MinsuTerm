@@ -737,11 +737,11 @@
       root.dataset.room = t.room;
       window.dispatchEvent(new Event('mt-room'));
     }
-    // minsuterm: 꾸미기에서 고른 에이전트 캐릭터 차림과 다른 세션 표시 (그림은 /agent-outfits.js)
-    let dressed = false;
-    if (typeof t.outfit === 'string' && /^[a-z0-9-]{1,24}$/.test(t.outfit) && root.dataset.outfit !== t.outfit) { root.dataset.outfit = t.outfit; dressed = true; }
-    if (typeof t.amark === 'string' && /^[a-z0-9-]{1,24}$/.test(t.amark) && root.dataset.amark !== t.amark) { root.dataset.amark = t.amark; dressed = true; }
-    if (dressed) window.dispatchEvent(new Event('mt-outfit'));
+    // minsuterm: 꾸미기에서 고른 에이전트 캐릭터 차림. 방의 Claude·Codex가 모두 입는다 (그림은 /agent-outfits.js)
+    if (typeof t.outfit === 'string' && /^[a-z0-9-]{1,24}$/.test(t.outfit) && root.dataset.outfit !== t.outfit) {
+      root.dataset.outfit = t.outfit;
+      window.dispatchEvent(new Event('mt-outfit'));
+    }
     const vars = t.vars && typeof t.vars === 'object' ? t.vars : {};
     const set = [];
     for (const [k, name] of Object.entries(VARS)) if (Object.hasOwn(vars, k) && okColor(vars[k])) set.push([name, vars[k].trim()]);
@@ -1864,7 +1864,7 @@
         <g class="ao-back"></g><g class="rays">${RAYS}</g><circle class="cl-body" r="8.6"/>
         <g transform="scale(.9)">
           <circle class="cheek" cx="-5.6" cy="2.4" r="1.6"/><circle class="cheek" cx="5.6" cy="2.4" r="1.6"/>
-          <g class="face"></g><g class="ao-front" transform="scale(1.1111)"></g><g class="ao-mark" transform="scale(1.1111)"></g>${HELD}
+          <g class="face"></g><g class="ao-front" transform="scale(1.1111)"></g>${HELD}
           ${CAP}
         </g>
       </g></g></g></g>${OVER}`;
@@ -1879,7 +1879,7 @@
         <circle class="cx-cheek" cx="-10.5" cy="-4.5" r="1.8"/><circle class="cx-cheek" cx="10.5" cy="-4.5" r="1.8"/>
         <g class="face"></g>
         <path class="cx-prompt" d="M-8.4-2.4L-4.8 1.6L-8.4 5.6"/><path class="cx-prompt cursor" d="M-1.2 5.6H6.6"/>
-        <g class="ao-front"></g><g class="ao-mark"></g>
+        <g class="ao-front"></g>
         <g transform="translate(0 2) scale(.9)">${HELD}</g>
         <g transform="translate(0 -10)">${CAP}</g>
       </g></g></g></g>${OVER}`;
@@ -2122,7 +2122,7 @@
       if (going === 'out') x = x < ROOM_W / 2 ? -50 : ROOM_W + 50;
       want.set(`s:${s.id}`, {
         // minsuterm: 같은 폴더의 Codex 세션은 Codex로 선다
-        kind: 'claude', skin: s.agent === 'codex' ? 'codex' : 'claude', x, y: OTHER_Y, sess: s.id, sessN: i + 2, face: going ? 'smile' : ss.face, cap: false, act: going ? (going === 'bye' ? 'bye' : '') : ss.act,
+        kind: 'claude', skin: s.agent === 'codex' ? 'codex' : 'claude', x, y: OTHER_Y, face: going ? 'smile' : ss.face, cap: false, act: going ? (going === 'bye' ? 'bye' : '') : ss.act,
         props: going ? {} : ss.props, awake: Boolean(going) || ss.key !== 'sleep', shadow: false, cushion: !going, tag: name, label: `${name} · ${going ? '방을 나가는 중' : ss.label}`,
       });
       const ag = going ? [] : (s.agents || []).slice(-3);
@@ -2222,21 +2222,18 @@
     show(tag, true);
   }
 
-  // minsuterm: 꾸미기에서 고른 차림을 입히고(잘 때는 모자류를 벗고 수면모자), 다른 세션에는 그 세션의 표시를 단다
+  // minsuterm: 꾸미기에서 고른 차림을 입힌다. 다른 세션의 캐릭터도 같은 차림이고, 잘 때는 모자류를 벗고 수면모자를 쓴다
   function dress(e, w) {
     e.g.classList.toggle('capped', Boolean(w.cap));
     if (typeof agentOutfitParts !== 'function') return; // (차림 그림을 받지 못했으면 기본 모습)
     const outfit = document.documentElement.dataset.outfit || 'none';
-    const mark = w.main ? 'none' : document.documentElement.dataset.amark || 'none';
-    const key = [outfit, mark, w.sess || '', w.sessN || ''].join('|');
-    if (e.dressed === key) return;
-    e.dressed = key;
+    if (e.dressed === outfit) return;
+    e.dressed = outfit;
     agentOutfitDefs();
     const skin = w.skin === 'codex' ? 'codex' : 'claude';
     const parts = agentOutfitParts(outfit, skin);
     e.g.querySelector('.ao-back').innerHTML = parts.back;
     e.g.querySelector('.ao-front').innerHTML = parts.front;
-    e.g.querySelector('.ao-mark').innerHTML = mark === 'none' ? '' : agentMarkSvg(mark, skin, w.sess, w.sessN);
   }
 
   function syncChars(want, instant) {

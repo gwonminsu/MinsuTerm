@@ -1,9 +1,9 @@
 'use strict';
 /*
- * 에이전트 캐릭터: what the room's Claude and Codex wear (꾸미기 → 진행도 → 에이전트 캐릭터, settings.agentOutfit) and the
- * mark that tells other sessions apart (settings.agentMark). One source for both windows: the app draws the picker
- * previews from it, and the progress server serves it to 진행도 (/agent-outfits.js), which dresses the characters in
- * the room. Motion lives in agent-outfits.css.
+ * 에이전트 캐릭터: what every Claude and Codex in 진행도's room wears, other sessions too (꾸미기 → 진행도 →
+ * 에이전트 캐릭터, settings.agentOutfit). One source for both windows: the app draws the picker previews from it, and
+ * the progress server serves it to 진행도 (/agent-outfits.js), which dresses the characters in the room. Motion lives
+ * in agent-outfits.css.
  *
  * Everything is drawn in a character's own coordinates (its body centred on 0,0, as page.html draws it), placed by
  * anchors that differ between the two: a hat's base and scale, the eyes, the neck, the ears, the whole body, the back.
@@ -55,15 +55,6 @@ const AGENT_OUTFITS = [
   ['sprout', '새싹', '', '머리에서 돋은 새싹'],
   ['starpin', '별 머리핀', '', '반짝이는 노란 별 핀'],
 ];
-
-const AGENT_MARKS = [
-  ['none', '없음', '이름표로만 구별'],
-  ['ribbon', '색 리본', '세션마다 리본 색이 달라요'],
-  ['badge', '번호 배지', '몸에 작은 번호 배지'],
-  ['pin', '모양 머리핀', '별, 하트, 달, 꽃, 번개 중 하나'],
-  ['flag', '작은 깃발', '머리 위에 색 깃발 하나'],
-];
-const AGENT_MARK_COLORS = ['#ff6fa0', '#5fb3ff', '#7fd35a', '#ffb03b', '#b58cff', '#3fd0c9'];
 
 const AGENT_OUTFIT_DRAW = (() => {
   // where things sit on each character. hy/hs: hat base and scale; ex/ey/er: eye centres and lens size; ny/ns: neck;
@@ -143,20 +134,7 @@ const AGENT_OUTFIT_DRAW = (() => {
     starpin: (a) => ({ front: hat(a, `<g class="ao-hat">${star(6, -3, 3.4, '#ffd43b', 10)}<path d="M10.4-7.6v2M9.4-6.6h2" stroke="#fff" stroke-width=".5" class="ao-blink"/></g>`) }),
   };
 
-  // the marks for other sessions: kind, colour, a number (for the badge) and a shape pick (for the pin)
-  const M = {
-    ribbon: (a, c) => hat(a, `<g transform="translate(5 -4.4) scale(1.7) translate(-5 4.4)"><path d="M5-4.4C1.6-8 .4-2 5-4.4ZM5-4.4C8.4-8 9.6-2 5-4.4Z" fill="${c}"/><circle cx="5" cy="-4.4" r="1.1" fill="${c}" stroke="rgba(0,0,0,.2)" stroke-width=".4"/></g>`),
-    badge: (a, c, n) => `<g transform="translate(${f2(a.ex + 3.4 * a.ss)} ${a.ny - 1}) scale(${a.ss})"><circle r="3.2" fill="${c}" stroke="#fff" stroke-width=".7"/><text y=".3" text-anchor="middle" dominant-baseline="central" font-size="4.4" font-weight="800" fill="#fff" font-family="system-ui, sans-serif">${n}</text></g>`,
-    pin: (a, c, n, shape) => hat(a, [
-      star(5.6, -3, 3, c, 8),
-      `<path d="M5.6-.6C1.6-3.4 2.6-6.6 4.4-6.4C5-6.4 5.4-6 5.6-5.4C5.8-6 6.2-6.4 6.8-6.4C8.6-6.6 9.6-3.4 5.6-.6Z" fill="${c}"/>`,
-      `<path d="M6.6-6.8A3.6 3.6 0 1 0 8.6-.8A3 3 0 1 1 6.6-6.8Z" fill="${c}"/>`,
-      flower(5.6, -3.2, 3, c, '#fff'),
-      `<path d="M6.6-7.4L3.8-3H5.8L4.6.8L8.2-4.2H6.2L7.6-7.4Z" fill="${c}"/>`,
-    ][shape % 5]),
-    flag: (a, c) => hat(a, `<path d="M4.4-1.4V-12" stroke="#8a92a5" stroke-width=".7"/><path d="M4.6-12L10.2-10.2L4.6-8.4Z" fill="${c}"/>`),
-  };
-  return { A, D, M };
+  return { A, D };
 })();
 
 /** What a character wears: { front, back } SVG for that outfit on 'claude' or 'codex' (empty for none or unknown). */
@@ -165,15 +143,6 @@ function agentOutfitParts(id, skin) {
   if (!draw) return { front: '', back: '' };
   const parts = draw(AGENT_OUTFIT_DRAW.A[skin === 'codex' ? 'codex' : 'claude']);
   return { front: parts.front || '', back: parts.back || '' };
-}
-
-/** A session's mark: colour and shape come from its id (the same session keeps them); n is the badge's number. */
-function agentMarkSvg(kind, skin, seed, n) {
-  const draw = AGENT_OUTFIT_DRAW.M[kind];
-  if (!draw) return '';
-  let h = 0;
-  for (const ch of String(seed || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return draw(AGENT_OUTFIT_DRAW.A[skin === 'codex' ? 'codex' : 'claude'], AGENT_MARK_COLORS[h % AGENT_MARK_COLORS.length], n || 2, (h >>> 3) % 5);
 }
 
 /** The gradients the outfits use (once per document; the room's own defs are separate). */
@@ -191,7 +160,7 @@ function agentOutfitDefs() {
 }
 
 /**
- * A still picture of Claude and Codex wearing an outfit (for the picker), or wearing marks (kind 'mark:<id>').
+ * A still picture of Claude and Codex wearing an outfit (for the picker).
  * The room's own characters are drawn by page.html; this is the same art without its motion: the whole Claude logo
  * under the round body, and Codex's cloud (the Codex mark from LobeHub Icons, MIT).
  */
@@ -199,10 +168,5 @@ function agentOutfitPreviewSvg(id) {
   agentOutfitDefs();
   const claude = (x, wear) => `<g transform="translate(${x} 0)">${wear.back}<use href="#ao-clogo"/><circle r="8.6" fill="#d97757"/><g transform="scale(.9)"><circle cx="-5.6" cy="2.4" r="1.6" fill="#f3a487" opacity=".8"/><circle cx="5.6" cy="2.4" r="1.6" fill="#f3a487" opacity=".8"/><ellipse cx="-3.4" cy="-1.4" rx="1.45" ry="2" fill="#2b1a12"/><ellipse cx="3.4" cy="-1.4" rx="1.45" ry="2" fill="#2b1a12"/><path d="M-2.2 3.3Q0 5.1 2.2 3.3" fill="none" stroke="#2b1a12" stroke-width="1.3" stroke-linecap="round"/></g>${wear.front}</g>`;
   const codex = (x, wear) => `<g transform="translate(${x} 0)">${wear.back}<use href="#ao-cxcloud" transform="scale(1.62) translate(-12 -12)"/><circle cx="-10.5" cy="-4.5" r="1.8" fill="#ffc6ec" opacity=".55"/><circle cx="10.5" cy="-4.5" r="1.8" fill="#ffc6ec" opacity=".55"/><ellipse cx="-4.4" cy="-9" rx="1.9" ry="2.5" fill="#1e2470"/><ellipse cx="4.4" cy="-9" rx="1.9" ry="2.5" fill="#1e2470"/><path d="M-8.4-2.4L-4.8 1.6L-8.4 5.6M-1.2 5.6H6.6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>${wear.front}</g>`;
-  if (id.startsWith('mark:')) {
-    const kind = id.slice(5);
-    const m = (skin, seed, n) => ({ front: agentMarkSvg(kind, skin, seed, n), back: '' });
-    return `<svg class="pv-agent" viewBox="-56 -33 112 59" aria-hidden="true">${claude(-27, m('claude', 'sa', 2))}${codex(27, m('codex', 'sb', 3))}</svg>`;
-  }
   return `<svg class="pv-agent" viewBox="-56 -33 112 59" aria-hidden="true">${claude(-27, agentOutfitParts(id, 'claude'))}${codex(27, agentOutfitParts(id, 'codex'))}</svg>`;
 }
