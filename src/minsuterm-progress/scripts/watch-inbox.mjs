@@ -9,7 +9,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve(process.env.PROGRESS_ROOT ?? process.cwd());
 const FILE = path.join(ROOT, 'progress', 'inbox.jsonl');
-const NAMES = { ack: '했어요', request: '요청', bump: '먼저 해 주세요', sleep: '자러 가기', wake: '자러 가기 취소', unrequest: '요청 취소', answer: '확인 답변', unanswer: '답변 취소' };
+const NAMES = { ack: '했어요', request: '요청', bump: '먼저 해 주세요', sleep: '자러 가기', wake: '자러 가기 취소', unrequest: '요청 취소', answer: '확인 답변', opinion: '의견', unanswer: '답변 취소' };
 
 const sizeOf = () => {
   try {
@@ -18,6 +18,9 @@ const sizeOf = () => {
     return 0;
   }
 };
+
+// 이 감시를 건 세션. 자러 가기와 그 취소는 대상 세션에만 알린다 (같은 폴더의 다른 세션은 넘긴다)
+const ME = String(process.env.PROGRESS_SESSION_ID || process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID || '').toLowerCase();
 
 let offset = sizeOf();
 let rest = Buffer.alloc(0); // 아직 줄바꿈이 오지 않은 조각
@@ -30,6 +33,7 @@ function print(line) {
     console.log(`알 수 없는 줄: ${line}`);
     return;
   }
+  if ((e.type === 'sleep' || e.type === 'wake') && e.target && ME && String(e.target).toLowerCase() !== ME) return;
   const text = String(e.text ?? '').replace(/\s*\r?\n\s*/g, ' / '); // 알림 한 줄에 담는다
   console.log(`${NAMES[e.type] ?? e.type} [${e.id ?? '-'}] ${e.at ?? ''} ${text}`);
 }

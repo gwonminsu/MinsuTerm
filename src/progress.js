@@ -7,7 +7,7 @@
  * and installs them into ~/.claude/skills when the user asks (구축하기). The page is served from this process on
  * 127.0.0.1 (a port the OS picks), with the same API as the skill's server.mjs, so no Node and no separate server are
  * needed: /data /events /crew /projects and the POSTs (/ack /request /bump /sleep /wake), plus MinsuTerm's own
- * /unrequest (보낸 요청·답 지우기), /answer (확인 필요 항목에 답하기) and /leave (방에서 내쫓기).
+ * /unrequest (보낸 요청·답 지우기), /answer (확인 필요 항목에 답하기, 보류 항목에 의견 보내기) and /leave (방에서 내쫓기).
  * A skill folder MinsuTerm did not install (the owner's own progress / dreaming) is never written to.
  */
 const http = require('http');
@@ -383,17 +383,24 @@ const posts = {
     const ids = [...new Set(want)].filter((id) => d.items.some((x) => x.id === id));
     const titles = {};
     for (const id of ids) titles[id] = d.items.find((x) => x.id === id).title;
-    d.sleep = { at: stamp(), ids, titles };
-    return { type: 'sleep', id: ids.length ? ids.join(',') : '-', text: ids.length ? ids.map((id) => `#${id} ${titles[id]}`).join(', ') : '마칠 일 없이 바로' };
+    // 자러 갈 에이전트(그 세션): 그 세션만 알림을 받는다 (watch-inbox가 자기 세션이 아닌 자러 가기는 넘긴다)
+    const target = typeof body.target === 'string' && /^[\w-]{1,80}$/.test(body.target) ? body.target.toLowerCase() : '';
+    const name = String(body.name ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 80);
+    const agent = body.agent === 'codex' || body.agent === 'claude' ? body.agent : '';
+    d.sleep = { at: stamp(), ids, titles, ...(target ? { target } : {}), ...(name ? { name } : {}), ...(agent ? { agent } : {}) };
+    const what = ids.length ? ids.map((id) => `#${id} ${titles[id]}`).join(', ') : '마칠 일 없이 바로';
+    return { type: 'sleep', id: ids.length ? ids.join(',') : '-', text: name ? `${what} (대상: ${name})` : what, ...(target ? { target } : {}) };
   },
   '/wake'(d) {
+    const target = d.sleep?.target;
     delete d.sleep;
-    return { type: 'wake', id: '-', text: '자러 가기를 취소함' };
+    return { type: 'wake', id: '-', text: '자러 가기를 취소함', ...(target ? { target } : {}) };
   },
   /*
-   * The user's answer to an item waiting on them (확인 필요): kept among the item's notes (by: 'user') and in the sent
-   * list (answerTo: the item; status 'new' until the agent turns the flag off — cli marks it 'seen'), and the agent
-   * is told.
+   * The user's answer to an item waiting on them (확인 필요), or their word on an item on hold (의견: take it up again,
+   * drop it, keep waiting): kept among the item's notes (by: 'user') and in the sent list (answerTo: the item; status
+   * 'new' until the agent acts on it: a 확인 필요 flag turned off, or for an opinion the item moved or a note of the
+   * agent's after it — cli marks it 'seen'), and the agent is told.
    */
   '/answer'(d, body) {
     const item = d.items.find((x) => x.id === Number(body.id));
@@ -403,7 +410,9 @@ const posts = {
     if (!Array.isArray(item.notes)) item.notes = [];
     const at = stamp();
     item.notes.push({ at: at.slice(11, 16), text, by: 'user' });
-    d.requests.push({ id: nextRequestId(d), text, at, status: 'new', answerTo: item.id, answerTitle: item.title });
+    const wait = Boolean(item.wait);
+    d.requests.push({ id: nextRequestId(d), text, at, status: 'new', answerTo: item.id, answerTitle: item.title, wait, group: item.group });
+    if (!wait) return { type: 'opinion', id: item.id, text: `'${item.title}'(${item.group === 'hold' ? '보류' : item.group})에 대한 의견: ${text}` };
     return { type: 'answer', id: item.id, text: `'${item.title}'에 대한 답: ${text}` };
   },
   /*
@@ -488,7 +497,8 @@ async function handle(req, res) {
         case '/favicon.ico': return send(res, 204);
         // shared with the app window (one source for both): the sidebar's minions, which the room draws its sub-agents
         // as, and the progress bar styles and the agent characters' outfits picked in 꾸미기 → 진행도
-        case '/minions.js': case '/progress-bars.js': case '/agent-outfits.js':
+        // and the app's translator with its dictionary (the page follows MinsuTerm's language, passed with the theme)
+        case '/minions.js': case '/progress-bars.js': case '/agent-outfits.js': case '/i18n.js': case '/i18n-data.js':
           return send(res, 200, fs.readFileSync(path.join(__dirname, 'renderer', url.pathname.slice(1))), 'text/javascript; charset=utf-8');
         case '/minions.css': case '/progress-bars.css': case '/agent-outfits.css':
           return send(res, 200, fs.readFileSync(path.join(__dirname, 'renderer', url.pathname.slice(1))), 'text/css; charset=utf-8');

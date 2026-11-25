@@ -258,6 +258,7 @@ function show() {
     out.push('', `[${label}] ${list.length}개`);
     for (const i of list) {
       const tags = [i.wait && '확인 필요', i.bumpedAt && `${i.bumpedAt}에 먼저 해 달라고 함`].filter(Boolean);
+      if (!mine(i)) tags.push('다른 세션이 맡음');
       out.push(`  #${i.id} ${i.title}${tags.length ? ` (${tags.join(', ')})` : ''}`);
       if (i.detail) out.push(`      ${i.detail}`);
       const last = Array.isArray(i.notes) ? i.notes.at(-1) : null;
@@ -269,7 +270,9 @@ function show() {
   for (const r of fresh) out.push(`  요청 ${r.id} (${r.at}) ${String(r.text).replace(/\s*\r?\n\s*/g, ' / ')}`);
   if (d.sleep) {
     const ids = Array.isArray(d.sleep.ids) ? d.sleep.ids : [];
-    out.push('', `[자러 가기 계획] ${d.sleep.at}에 부탁함`);
+    const target = d.sleep.target ? String(d.sleep.target).toLowerCase() : '';
+    const forMe = !target || !session || target === session;
+    out.push('', `[자러 가기 계획] ${d.sleep.at}에 부탁함${d.sleep.name ? ` · 대상: ${d.sleep.name}` : ''}${forMe ? '' : ' (다른 세션이 대상: 하지 않음)'}`);
     if (!ids.length) out.push('  마칠 일 없이 바로 정리하고 잠들기');
     for (const id of ids) {
       const left = d.items.some((i) => i.id === id);
@@ -286,6 +289,17 @@ function show() {
   console.log(out.join('\n'));
 }
 
+// 이 명령을 부른 에이전트와 그 세션. Claude Code는 CLAUDE_CODE_SESSION_ID, Codex는 명령에 CODEX_THREAD_ID를 넘긴다
+const { agent, sure } = detectAgent();
+const session = String(process.env.PROGRESS_SESSION_ID
+  || (agent === 'codex' ? process.env.CODEX_THREAD_ID : agent === 'claude' ? process.env.CLAUDE_CODE_SESSION_ID : '') || '').toLowerCase();
+// 항목을 맡은 에이전트: 항목을 더하거나 지금 하는 것으로 가져온 세션. 페이지가 항목마다 그 에이전트의 캐릭터를 보인다
+function claim(item) {
+  if (session) item.by = session;
+  if (agent) item.agent = agent;
+}
+const mine = (i) => !i.by || !session || i.by === session;
+
 // ---------- 명령 ----------
 const COMMANDS = {
   batch() {
@@ -299,6 +313,7 @@ const COMMANDS = {
     const item = { id: d.nextId++, group, title };
     const detail = String(args[2] ?? '').trim();
     if (detail) item.detail = detail;
+    claim(item);
     d.items.push(item);
     return `#${item.id} ${item.title}`;
   },
@@ -307,6 +322,7 @@ const COMMANDS = {
     const group = needGroup(args[1]);
     if (item.group !== group) delete item.bumpedAt; // 칸을 옮기면 '먼저' 표시는 끝난다
     item.group = group;
+    if (group === 'now') claim(item); // 지금 하는 것으로 가져온 세션이 맡는다
     return `#${item.id} → ${GROUPS[group]}`;
   },
   wait() {
@@ -404,17 +420,20 @@ const message = COMMANDS[cmd]();
 if (!(cmd === 'sleep' && args[0] === 'now')) delete d.asleepAt; // 무엇이든 고치면 깬다
 if (!(cmd === 'sleep' && args[0] === 'done')) delete d.restAt;
 delete d.leftAt; // 방에서 내쫓겼어도 진행 보고를 다시 하면 방으로 돌아온다
-// 확인 필요 항목에 보낸 답은 그 표시가 꺼지면(또는 항목이 끝나거나 지워지면) 보낸 요청 목록에서 '확인함'이 된다
+// 확인 필요 항목에 보낸 답은 그 표시가 꺼지면(또는 항목이 끝나거나 지워지면) 보낸 요청 목록에서 '확인함'이 된다.
+// 보류 항목 등에 보낸 의견(wait: false)은 에이전트가 그 항목을 옮기거나 의견 뒤에 메모를 남기면 '확인함'이 된다
 for (const r of d.requests) {
   if (r.answerTo == null || r.status !== 'new') continue;
   const item = d.items.find((i) => i.id === Number(r.answerTo));
-  if (!item || !item.wait) r.status = 'seen';
+  if (!item) { r.status = 'seen'; continue; }
+  if (r.wait === false) {
+    const notes = Array.isArray(item.notes) ? item.notes : [];
+    const k = notes.findLastIndex((n) => n.by === 'user' && n.text === r.text);
+    if (item.group !== r.group || (k >= 0 && notes.slice(k + 1).some((n) => n.by !== 'user'))) r.status = 'seen';
+  } else if (!item.wait) r.status = 'seen';
 }
-const { agent, sure } = detectAgent();
-// 메인 에이전트의 세션: Claude Code는 CLAUDE_CODE_SESSION_ID, Codex는 명령에 CODEX_THREAD_ID를 넘긴다
-const session = process.env.PROGRESS_SESSION_ID
-  || (agent === 'codex' ? process.env.CODEX_THREAD_ID : agent === 'claude' ? process.env.CLAUDE_CODE_SESSION_ID : '');
-if (session) d.owner = String(session).toLowerCase();
+// 메인 에이전트의 세션: 마지막으로 진행 명령을 부른 세션 (위의 session)
+if (session) d.owner = session;
 else if (sure && d.agent && agent !== d.agent) delete d.owner; // 다른 에이전트가 이어 받았는데 세션을 모른다: 앞 에이전트의 세션을 남기지 않는다
 if (agent) d.agent = agent; // 페이지가 메인 에이전트 캐릭터(Claude·Codex)를 고른다
 d.updated = stamp();

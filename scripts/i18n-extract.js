@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
-const FILES = ['src/renderer/app.js', 'src/main.js', 'src/renderer/index.html', 'src/renderer/icons.js', 'src/renderer/themes.js', 'src/renderer/progress-bars.js', 'src/renderer/room-styles.js', 'src/renderer/agent-outfits.js', 'src/renderer/usage-gauge.js'];
+const FILES = ['src/renderer/app.js', 'src/main.js', 'src/renderer/index.html', 'src/renderer/icons.js', 'src/renderer/themes.js', 'src/renderer/progress-bars.js', 'src/renderer/room-styles.js', 'src/renderer/agent-outfits.js', 'src/renderer/usage-gauge.js', 'src/minsuterm-progress/scripts/page.html'];
 const HANGUL = /[가-힣ㄱ-ㆎ]/;
 
 /** String literal / template text pieces of a JS source (comments skipped). */
@@ -86,7 +86,10 @@ function lineFallback(src) {
 for (const f of FILES) {
   const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
   if (f.endsWith('.html')) {
-    const body = src.replace(/<!--[\s\S]*?-->/g, '');
+    // a page with scripts of its own (진행도): their strings as JS, the markup without them as HTML
+    const scripts = [...src.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+    for (const js of scripts) { for (const t of jsStrings(js)) if (HANGUL.test(t)) addText(t); lineFallback(js); }
+    const body = src.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, '').replace(/<!--[\s\S]*?-->/g, '');
     for (const m of body.matchAll(/>([^<]+)</g)) addText(m[1]);
     for (const m of body.matchAll(/(?:title|placeholder|aria-label)="([^"]+)"/g)) addText(m[1]);
   } else {

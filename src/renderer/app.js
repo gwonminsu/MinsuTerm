@@ -9712,6 +9712,7 @@ function progressTheme() {
     bar: S.settings.progressBar || 'plain', // 꾸미기 → 진행도: the summary card's progress bar
     room: S.settings.roomStyle || 'default', // and the room's style
     outfit: S.settings.agentOutfit || 'none', // what every Claude and Codex in the room wears
+    lang: window.I18N ? window.I18N.lang : 'ko', // the page translates itself with the app's translator (ko · en · ja · zh)
     vars: {
       bg: col('var(--stage-solid)', isLight() ? '#fafbfc' : '#10131a'),
       card: col('var(--surface)', isLight() ? '#ffffff' : '#161922'),
@@ -10099,7 +10100,8 @@ $('#sb-progress').addEventListener('click', (e) => { e.stopPropagation(); openPr
 $('#pg-close').addEventListener('click', closeProgress);
 $('#pg-reload').addEventListener('click', () => { if (S.progress.open) loadProgressPage(S.progress.seq); });
 $('#pg-retry').addEventListener('click', () => { if (S.progress.open) openProgress(S.progress.path, S.progress.name); });
-$('#pg-browser').addEventListener('click', () => { if (S.progress.origin && S.progress.key) window.mt.openExternal(`${S.progress.origin}/#p=${S.progress.key}`); });
+// (in the app's language: the page reads lang from the theme in the address, colours stay the browser's own)
+$('#pg-browser').addEventListener('click', () => { if (S.progress.origin && S.progress.key) window.mt.openExternal(`${S.progress.origin}/#p=${S.progress.key}&theme=${b64url(JSON.stringify({ type: 'minsuterm-theme', lang: window.I18N ? window.I18N.lang : 'ko' }))}`); });
 window.addEventListener('keydown', (e) => { // Esc closes it, unless a dialog is open or the page itself has the focus
   if (e.key !== 'Escape' || PROGRESS_ONLY || !S.progress.open || S.overlay || document.activeElement === PG.frame) return; // (a window of 진행도 alone closes by its button)
   e.preventDefault();
@@ -11100,7 +11102,7 @@ function openSettings() {
       const v = key === 'uiZoom' ? Number(b.dataset.val) : b.dataset.val;
       segEl.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
       if (key === 'appearance') { setAppearanceMode(v).then(refreshThemeCards); return; }
-      if (key === 'lang') { saveSettings({ lang: v }); window.I18N?.setLang(v); window.mt.setLang?.(v); renderSessions(); renderProjects(); return; }
+      if (key === 'lang') { saveSettings({ lang: v }); window.I18N?.setLang(v); window.mt.setLang?.(v); renderSessions(); renderProjects(); if (S.progress) postProgressTheme(); return; }
       saveSettings({ [key]: v });
       if (key === 'bgEffect') body.querySelector('[data-dep="bgEffect"]').classList.toggle('disabled', v === 'none');
       if (key === 'typingSound') {

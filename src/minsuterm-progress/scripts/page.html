@@ -371,6 +371,33 @@
   .req-box { flex: 1 1 320px; min-width: 0; }
   .req-row { display: flex; gap: 8px; align-items: flex-end; }
   .search-box { flex: 0 1 210px; min-width: 160px; }
+  /* 요청 남기기 옆 ?: 올리면 언제 전달되는지 잠깐, 누르면 채운 ?로 바뀌며 고정, 다시 누르면 닫힘 */
+  .req-head { position: relative; display: flex; align-items: center; gap: 3px; margin-bottom: 4px; }
+  .tools .req-head label { margin-bottom: 0; }
+  .help-q { display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--faint); cursor: pointer; }
+  .help-q svg { display: block; width: 14px; height: 14px; overflow: visible; }
+  .help-q .q-ring { fill: transparent; stroke: currentColor; stroke-width: 1.3; transition: fill .15s; }
+  .help-q .q-mark { fill: none; stroke: currentColor; stroke-width: 1.45; stroke-linecap: round; stroke-linejoin: round; transition: stroke .15s; }
+  .help-q .q-dot { fill: currentColor; transition: fill .15s; }
+  .help-q:hover, .help-q:focus-visible, .help-q.on { color: var(--accent); }
+  .help-q:focus-visible { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
+  .help-q.on .q-ring { fill: var(--accent); }
+  .help-q.on .q-mark { stroke: var(--on-accent); }
+  .help-q.on .q-dot { fill: var(--on-accent); }
+  .help-tip {
+    position: absolute; left: 0; top: calc(100% + 7px); z-index: 30; width: max-content; max-width: min(290px, 100%);
+    padding: 7px 11px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: var(--text);
+    box-shadow: 0 6px 22px rgba(10, 16, 30, .18); font-size: 12.5px; line-height: 1.5; text-align: left;
+    opacity: 0; visibility: hidden; transform: translateY(-3px); pointer-events: none;
+    transition: opacity .15s, transform .15s, visibility .15s;
+  }
+  .help-tip::before { /* 꼬리: ?를 가리킨다 (--arrow-x는 스크립트가 맞춘다) */
+    content: ''; position: absolute; top: -5px; left: calc(var(--arrow-x, 84px) - 4.5px); width: 8px; height: 8px;
+    background: inherit; border-left: 1px solid; border-top: 1px solid; border-color: inherit; transform: rotate(45deg);
+  }
+  .help-q:hover + .help-tip, .help-q:focus-visible + .help-tip, .help-tip.pinned { opacity: 1; visibility: visible; transform: none; }
+  .help-q.quiet:hover + .help-tip, .help-q.quiet:focus-visible + .help-tip { opacity: 0; visibility: hidden; transform: translateY(-3px); }
+  .help-tip.pinned { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
   textarea, input[type="search"] {
     width: 100%; font: inherit; font-size: 14px; color: var(--text); background: var(--bg);
     border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px;
@@ -459,6 +486,28 @@
   .check-row { display: flex; gap: 10px; align-items: flex-start; padding: 6px 6px; border-radius: 8px; cursor: pointer; }
   .check-row:hover { background: var(--hover); }
   .check-row input { margin-top: 4px; accent-color: var(--accent); }
+  /* minsuterm: 항목을 맡은 에이전트 (방의 캐릭터를 줄인 아이콘, 다른 세션은 방 안 순서 번호). 누르면 이름이 뜬다 */
+  .who { flex: none; display: inline-grid; place-items: center; position: relative; width: 20px; height: 20px; margin: -2px 6px -2px 0; border-radius: 50%; cursor: pointer; vertical-align: middle; }
+  .who:hover, .who.on { background: var(--hover); box-shadow: 0 0 0 1px var(--line); }
+  .who.on { box-shadow: 0 0 0 1.5px var(--accent); }
+  .who:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .who svg { display: block; width: 17px; height: 17px; overflow: visible; }
+  .who .who-n { position: absolute; right: -4px; bottom: -3px; min-width: 11px; height: 11px; padding: 0 2px; border-radius: 6px; font-size: 8px; line-height: 11px; font-weight: 700; text-align: center; color: var(--on-accent); background: var(--accent); }
+  .who.gone svg { opacity: .45; filter: grayscale(.6); }
+  #whoTip { position: fixed; z-index: 60; max-width: 240px; padding: 6px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: var(--text); box-shadow: 0 6px 22px rgba(10, 16, 30, .18); font-size: 12.5px; line-height: 1.45; pointer-events: none; }
+  #whoTip b { display: block; font-weight: 650; overflow-wrap: anywhere; }
+  #whoTip span { color: var(--muted); font-size: 11.5px; }
+  /* 자러 가기: 자러 갈 에이전트를 고르면 그 에이전트가 맡은 작업이 나온다 */
+  .sleep-agents { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 12px; }
+  .sleep-agent { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; padding: 5px 12px 5px 7px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+  .sleep-agent:hover { border-color: var(--accent); }
+  .sleep-agent.on { border-color: var(--accent); background: var(--accent-soft); }
+  .sleep-agent .who { margin: 0; cursor: inherit; }
+  .sleep-agent .who:hover { background: none; box-shadow: none; }
+  .sleep-agent .sa-name { font-weight: 600; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sleep-agent .sa-sub { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .sb-target { display: flex; align-items: center; gap: 2px; margin-top: 3px; font-size: 12px; color: var(--muted); }
+  .sb-target .who { cursor: default; }
   .dlg-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
   .dlg-btns { display: flex; gap: 8px; margin-left: auto; }
   .proj {
@@ -737,6 +786,11 @@
       root.dataset.room = t.room;
       window.dispatchEvent(new Event('mt-room'));
     }
+    // minsuterm: MinsuTerm의 언어(ko·en·ja·zh, auto는 이 창의 언어). 화면 글자는 MinsuTerm의 번역기(/i18n.js)가 바꾼다
+    if (typeof t.lang === 'string' && /^(ko|en|ja|zh|auto)$/.test(t.lang) && root.dataset.lang !== t.lang) {
+      root.dataset.lang = t.lang;
+      window.dispatchEvent(new Event('mt-lang'));
+    }
     // minsuterm: 꾸미기에서 고른 에이전트 캐릭터 차림. 방의 Claude·Codex가 모두 입는다 (그림은 /agent-outfits.js)
     if (typeof t.outfit === 'string' && /^[a-z0-9-]{1,24}$/.test(t.outfit) && root.dataset.outfit !== t.outfit) {
       root.dataset.outfit = t.outfit;
@@ -794,25 +848,28 @@
 <!-- minsuterm: 방의 Claude·Codex가 쓰는 차림과 다른 세션 표시 (src/renderer/agent-outfits.*) -->
 <link rel="stylesheet" href="/agent-outfits.css">
 <script src="/agent-outfits.js"></script>
+<!-- minsuterm: 다국어. 앱과 같은 번역기와 사전(src/renderer/i18n*.js)을 진행 서버가 내준다. 언어는 MinsuTerm이 테마와 함께 넘긴다 -->
+<script src="/i18n-data.js"></script>
+<script src="/i18n.js"></script>
 </head>
 <body>
 <div class="wrap">
   <header>
     <div class="top-row">
       <div>
-        <h1 id="title">작업 진행</h1>
+        <h1 id="title" class="no-i18n">작업 진행</h1>
         <div class="sub"><span id="dot" class="dot" hidden></span><span id="updated"></span></div>
       </div>
       <button id="sleepBtn" class="btn" type="button" hidden>
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8.5 8.5 0 1 0 11.1 11.1z" fill="currentColor"/></svg>
-        <span>Claude 자러 가기</span>
+        <span>에이전트 자러가기</span>
       </button>
     </div>
     <div id="scopeBar" class="card scope scope-none">
       <div class="scope-info">
         <div class="scope-label">프로젝트 스코프</div>
-        <div class="scope-name"><b id="scopeName">없음</b></div>
-        <div id="scopePath" class="scope-path"></div>
+        <div class="scope-name"><b id="scopeName" class="no-i18n">없음</b></div>
+        <div id="scopePath" class="scope-path no-i18n"></div>
       </div>
       <button id="projBtn" class="btn" type="button">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3.5 6.8A1.8 1.8 0 0 1 5.3 5h3.9l2 2.1h7.5a1.8 1.8 0 0 1 1.8 1.8v8.3a1.8 1.8 0 0 1-1.8 1.8H5.3a1.8 1.8 0 0 1-1.8-1.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
@@ -962,7 +1019,7 @@
           <text class="z z1" x="374" y="82">z</text><text class="z z2" x="381" y="73">z</text><text class="z z3" x="388" y="63">z</text>
         </g>
       </svg>
-      <div class="room-status" aria-live="polite"><b id="stateName"></b><span id="stateDesc"></span></div>
+      <div class="room-status" aria-live="polite"><b id="stateName" class="no-i18n"></b><span id="stateDesc" class="no-i18n"></span></div>
       <ul id="crewList" class="crew" hidden></ul>
     </section>
 
@@ -972,7 +1029,13 @@
 
     <section class="card tools">
       <div class="req-box">
-        <label for="reqText">요청 남기기</label>
+        <div class="req-head">
+          <label for="reqText">요청 남기기</label>
+          <button id="reqHelp" class="help-q" type="button" aria-label="요청은 언제 전달되나요?" aria-expanded="false" aria-describedby="reqHelpTip">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle class="q-ring" cx="8" cy="8" r="6.6"/><path class="q-mark" d="M6.15 6.35a1.9 1.9 0 0 1 3.75.45c0 1.25-1.9 1.45-1.9 2.6"/><circle class="q-dot" cx="8" cy="11.55" r=".85"/></svg>
+          </button>
+          <div id="reqHelpTip" class="help-tip" role="tooltip">세션이 작업 중일 때 Claude에게 전달돼요. 쉬는 중에 남기면 다음 작업을 시작할 때 읽어요.</div>
+        </div>
         <div class="req-row">
           <textarea id="reqText" rows="1" maxlength="2000" placeholder="Claude에게 부탁할 일 (Ctrl+Enter로 보내기)"></textarea>
           <button id="reqSend" class="btn primary" type="button">보내기</button>
@@ -1002,8 +1065,9 @@
 
 <dialog id="sleepDlg" aria-labelledby="sleepTitle">
   <div class="dlg">
-    <h2 id="sleepTitle">마무리할 작업을 선택해 주세요</h2>
-    <p id="sleepLead">고른 작업을 마치면 Claude가 남은 일을 정리하고 잠들어요. 아무것도 고르지 않으면 바로 정리하고 잠들어요.</p>
+    <h2 id="sleepTitle">자러 갈 에이전트를 골라 주세요</h2>
+    <p id="sleepLead">고른 작업을 마치면 남은 일을 정리하고 잠들어요. 아무것도 고르지 않으면 바로 정리하고 잠들어요.</p>
+    <div id="sleepAgents" class="sleep-agents" role="radiogroup" aria-label="자러 갈 에이전트"></div>
     <div id="sleepList" class="dlg-body"></div>
     <div class="dlg-foot">
       <span id="sleepCount" class="muted small"></span>
@@ -1020,8 +1084,8 @@
 
 <dialog id="kickDlg" aria-labelledby="kickTitle">
   <div class="dlg">
-    <h2 id="kickTitle">방에서 내쫓을까요?</h2>
-    <p id="kickLead"></p>
+    <h2 id="kickTitle" class="no-i18n">방에서 내쫓을까요?</h2>
+    <p id="kickLead" class="no-i18n"></p>
     <div id="kickBody"></div>
     <div class="dlg-foot">
       <div class="dlg-btns">
@@ -1047,6 +1111,7 @@
 </dialog>
 
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="whoTip" class="no-i18n" role="tooltip" hidden></div>
 
 <script>
 (() => {
@@ -1068,6 +1133,21 @@
 
   // 화면에 넣는 모든 글자는 이스케이프한다
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  // minsuterm: 다국어. 고정 문구는 MinsuTerm의 번역기가 화면에서 바로 바꾼다(i18n.js). 기록에 적힌 글(할 일·메모·요청·이름·
+  // 경로)은 번역하지 않는다(.no-i18n). 문구와 기록이 섞인 글(말풍선, 방 상태, 확인 창 제목)은 그릴 때 T()로 바꾸고, 기록 부분은
+  // D()로 감싸 그대로 둔다. 말풍선은 번역한 글로 폭을 재야 하므로 화면 번역기에 맡기지 않는다
+  const DM = '⁣';
+  const SLOT = '';
+  const D = (v) => `${DM}${String(v ?? '').split(DM).join('')}${DM}`;
+  function T(s) {
+    const vals = [];
+    const frame = String(s ?? '').replace(/⁣([^⁣]*)⁣/g, (_, v) => { vals.push(v); return SLOT; });
+    const out = window.I18N && window.I18N.lang !== 'ko' ? window.I18N.tr(frame) : frame;
+    let k = 0;
+    return out.replace(//g, () => vals[k++] ?? '');
+  }
+  const LOC = () => ({ en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' })[window.I18N?.lang] || '';
+  if (window.I18N) window.I18N.start(document.documentElement.dataset.lang || 'auto');
   const store = {
     get(k, def) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장이 막혀도 화면은 그대로 */ } },
@@ -1105,10 +1185,13 @@
     if (min < 1440) return `${Math.floor(min / 60)}시간 전`;
     return s;
   }
+  // '갱신 5분 전': 두 조각을 따로 번역한다 (한 덩어리면 번역기가 반만 바꾼다)
+  const updatedText = (u) => `${T('갱신')} ${T(rel(u))}`;
   function when(s) {
     const t = parseStamp(s);
     if (!t) return s || '';
-    return t.toDateString() === new Date().toDateString() ? hm(s) : `${t.getMonth() + 1}월 ${t.getDate()}일 ${hm(s)}`;
+    if (t.toDateString() === new Date().toDateString()) return hm(s);
+    return LOC() ? `${t.toLocaleDateString(LOC(), { month: 'short', day: 'numeric' })} ${hm(s)}` : `${t.getMonth() + 1}월 ${t.getDate()}일 ${hm(s)}`;
   }
   function agoText(sec) {
     if (sec < 60) return '방금';
@@ -1118,7 +1201,8 @@
   function dayLabel(date) {
     const [y, m, d] = String(date).split('-').map(Number);
     if (!y) return date;
-    return `${m}월 ${d}일 (${WEEK[new Date(y, m - 1, d).getDay()]})`;
+    const day = new Date(y, m - 1, d);
+    return LOC() ? day.toLocaleDateString(LOC(), { month: 'short', day: 'numeric', weekday: 'short' }) : `${m}월 ${d}일 (${WEEK[day.getDay()]})`;
   }
 
   // ---------- 서버 ----------
@@ -1182,8 +1266,8 @@
   // ---------- 프로젝트 스코프 ----------
   function renderScope() {
     $('scopeBar').classList.toggle('scope-none', !scope);
-    $('scopeName').textContent = scope ? (data?.project || scope.name) : '없음';
-    $('scopePath').textContent = scope ? scope.root : '볼 프로젝트를 아직 고르지 않았어요';
+    $('scopeName').textContent = scope ? (data?.project || scope.name) : T('없음');
+    $('scopePath').textContent = scope ? scope.root : T('볼 프로젝트를 아직 고르지 않았어요');
   }
 
   function setDot(on, hide) {
@@ -1221,8 +1305,8 @@
     if (!p) {
       $('main').hidden = true;
       $('guide').hidden = false;
-      $('title').textContent = '작업 진행';
-      document.title = '작업 진행';
+      $('title').textContent = T('작업 진행');
+      document.title = T('작업 진행');
       $('updated').textContent = '';
       $('sleepBtn').hidden = true;
       setDot(false, true);
@@ -1438,14 +1522,23 @@
     const wait = waits ? `<button class="chip wait" type="button" data-act="scrollWait">확인 필요<b>${waits}</b></button>` : '';
     const name = data.batch || '이름 없는 묶음';
     $('summary').innerHTML = `<div class="mt-sum">
-        <div class="mt-sum-text"><span class="batch-name" title="${esc(name)}">${esc(name)}</span>
-          <span class="muted small">남은 ${remaining}개 · 끝낸 ${done}개<span id="mtUpdated">${data.updated ? ` · 갱신 ${esc(rel(data.updated))}` : ''}</span></span></div>
+        <div class="mt-sum-text"><span class="batch-name${data.batch ? ' no-i18n' : ''}" title="${esc(name)}">${esc(name)}</span>
+          <span class="muted small">남은 ${remaining}개 · 끝낸 ${done}개<span id="mtUpdated">${data.updated ? ` · ${esc(updatedText(data.updated))}` : ''}</span></span></div>
         ${barHtml(done, pct)}
         <div class="pct" aria-label="진행도 ${pct}%">${pct}<span>%</span></div>
       </div>${wait || chips ? `<div class="chips">${wait}${chips}</div>` : ''}`;
   }
 
   // ---------- 그리기 ----------
+  // minsuterm: MinsuTerm의 언어가 바뀌면 번역기를 바꾸고, 그릴 때 번역하는 글(방, 날짜, 확인 창)을 다시 그린다
+  window.addEventListener('mt-lang', () => {
+    if (!window.I18N) return;
+    window.I18N.setLang(document.documentElement.dataset.lang || 'auto');
+    for (const e of chars.values()) { e.bubbleKey = ''; e.tagKey = ''; }
+    if (data && scope) render();
+    else if (!scope) { $('title').textContent = T('작업 진행'); document.title = T('작업 진행'); renderScope(); }
+  });
+
   function render() {
     const y = window.scrollY;
     renderHeader();
@@ -1474,22 +1567,27 @@
     const b = renderLog();
     const empty = $('searchEmpty');
     if (query && !a && !b) {
-      if (!empty) $('groups').insertAdjacentHTML('beforeend', `<p id="searchEmpty" class="card empty">'${esc(query)}'와 맞는 내용이 없어요</p>`);
-      else empty.textContent = `'${query}'와 맞는 내용이 없어요`;
+      const msg = T(`'${D(query)}'와 맞는 내용이 없어요`);
+      if (!empty) $('groups').insertAdjacentHTML('beforeend', `<p id="searchEmpty" class="card empty no-i18n">${esc(msg)}</p>`);
+      else empty.textContent = msg;
     } else empty?.remove();
   }
 
   function renderHeader() {
     const name = data.project || scope.name;
-    $('title').textContent = `${name} 작업 진행`;
-    document.title = `${name} 작업 진행`;
-    $('updated').textContent = data.updated ? `갱신 ${rel(data.updated)}` : '';
+    $('title').textContent = T(`${D(name)} 작업 진행`);
+    document.title = $('title').textContent;
+    $('updated').textContent = data.updated ? updatedText(data.updated) : '';
     const b = $('sleepBtn');
     b.hidden = Boolean(data.leftAt); // minsuterm: 방이 비었으면 재울 에이전트가 없다
-    b.querySelector('span').textContent = data.sleep ? '자러 가기 고치기' : `${agentName()} 자러 가기`;
+    b.querySelector('span').textContent = data.sleep ? '자러 가기 고치기' : '에이전트 자러가기';
     // minsuterm: 요청 칸과 자러 가기 창도 지금 메인 에이전트(Claude·Codex)의 이름으로
     $('reqText').placeholder = `${agentName()}에게 부탁할 일 (Ctrl+Enter로 보내기)`;
-    $('sleepLead').textContent = `고른 작업을 마치면 ${agentName()}가 남은 일을 정리하고 잠들어요. 아무것도 고르지 않으면 바로 정리하고 잠들어요.`;
+    // (Codex에는 알림 감시가 없다: 차례를 시작할 때와 할 일을 시작하고 끝낼 때 기록을 본다)
+    $('reqHelpTip').textContent = data?.agent === 'codex'
+      ? 'Codex는 다음 차례를 시작할 때나 할 일을 시작하고 끝낼 때 읽어요.'
+      : `세션이 작업 중일 때 ${agentName()}에게 전달돼요. 쉬는 중에 남기면 다음 작업을 시작할 때 읽어요.`;
+
     renderScope();
   }
 
@@ -1505,11 +1603,11 @@
     const list = ids.map((id) => {
       const done = !live.has(id);
       const title = live.get(id)?.title ?? s.titles?.[id] ?? `#${id}`;
-      return `<li class="${done ? 'done' : ''}">${done ? '<span class="ok">✓</span>' : ''}${esc(title)}</li>`;
+      return `<li class="no-i18n${done ? ' done' : ''}">${done ? '<span class="ok">✓</span>' : ''}${esc(title)}</li>`;
     }).join('');
     band.innerHTML = `<div class="band-head">
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8.5 8.5 0 1 0 11.1 11.1z" fill="currentColor"/></svg>
-        <div><b>${esc(head)}</b><div class="muted small">${esc(hm(s.at))}에 부탁함</div></div>
+        <div><b>${esc(head)}</b><div class="muted small">${esc(hm(s.at))}에 부탁함</div>${s.name && manyAgents() ? `<div class="sb-target">${agentBadge({ kind: s.agent === 'codex' ? 'codex' : 'claude' })}<span class="no-i18n">${esc(s.name)}</span></div>` : ''}</div>
         <button class="btn small" type="button" data-act="wake">취소</button>
       </div>${list ? `<ul class="band-list">${list}</ul>` : ''}`;
     band.hidden = false;
@@ -1517,10 +1615,10 @@
 
   function renderNotices() {
     $('notices').innerHTML = data.notices.map((n) => n.ackedAt
-      ? `<section class="card notice acked"><div class="n-label">알렸어요 · ${esc(when(n.ackedAt))}</div><div class="n-text">${esc(n.text)}</div></section>`
+      ? `<section class="card notice acked"><div class="n-label">알렸어요 · ${esc(when(n.ackedAt))}</div><div class="n-text no-i18n">${esc(n.text)}</div></section>`
       : `<section class="card notice"><div class="n-head"><span class="n-label">해 주셔야 할 일</span>
           <button class="btn small amber" type="button" data-act="ack" data-id="${esc(n.id)}">했어요</button></div>
-          <div class="n-text">${esc(n.text)}</div><div class="n-since">${esc(when(n.since))}부터</div></section>`).join('');
+          <div class="n-text no-i18n">${esc(n.text)}</div><div class="n-since">${esc(when(n.since))}부터</div></section>`).join('');
   }
 
   function renderSummary() {
@@ -1529,18 +1627,26 @@
     for (const day of data.log) for (const x of day.items) if ((x.batch ?? '') === data.batch) done += 1;
     const total = remaining + done;
     const pct = total ? Math.round((done / total) * 100) : 0;
-    if (EMBED) { renderEmbedSummary(remaining, done, pct); return; } // minsuterm: 한 줄짜리 진행도 띠
+    if (EMBED) { renderEmbedSummary(remaining, done, pct); markBar(); return; } // minsuterm: 한 줄짜리 진행도 띠
     const chips = ORDER.map((g) => {
       const n = data.items.filter((i) => i.group === g).length;
       return n ? `<button class="chip" type="button" data-act="scroll" data-group="${g}">${LABEL[g]}<b>${n}</b></button>` : '';
     }).join('');
     $('summary').innerHTML = `<div class="sum-top">
-        <div><div class="muted small">작업 묶음</div><div class="batch-name">${esc(data.batch || '이름 없는 묶음')}</div>
+        <div><div class="muted small">작업 묶음</div><div class="batch-name${data.batch ? ' no-i18n' : ''}">${esc(data.batch || '이름 없는 묶음')}</div>
         <div class="muted small">남은 ${remaining}개 · 끝낸 ${done}개 (보류 제외)</div></div>
         <div class="pct" aria-label="진행도 ${pct}%">${pct}<span>%</span></div>
       </div>
       ${barHtml(done, pct)}
       ${chips ? `<div class="chips">${chips}</div>` : ''}`;
+    markBar();
+  }
+  // minsuterm: 고리 옆 글에는 할 일 제목이 들어 있어 화면 번역기에 맡기지 않는다 (barHtml이 그릴 때 이미 번역했다)
+  function markBar() {
+    const sp = $('summary').querySelector('.pb-ring > span');
+    if (!sp) return;
+    sp.classList.add('no-i18n');
+    if (sp.textContent === '모두 끝냈어요') sp.textContent = T('모두 끝냈어요');
   }
 
   // minsuterm: 진행 바 (꾸미기 → 진행도에서 고른 스타일, progress-bars.js). 고리는 옆에 지금(없으면 다음) 할 일을 보인다
@@ -1550,7 +1656,7 @@
     const rank = { now: 0, agent: 1, next: 2 };
     const rest = data.items.filter((i) => i.group !== 'hold').sort((a, b) => (rank[a.group] ?? 3) - (rank[b.group] ?? 3));
     const now = rest.find((i) => i.group === 'now');
-    const next = now ? `지금: ${now.title}` : rest.length ? `다음: ${rest[0].title}` : '';
+    const next = T(now ? `지금: ${D(now.title)}` : rest.length ? `다음: ${D(rest[0].title)}` : '');
     return `<div class="pb-slot" aria-hidden="true">${progressBarHtml(document.documentElement.dataset.pbar || 'plain', { done, total: done + rest.length, next })}</div>`;
   }
   window.addEventListener('mt-pbar', () => { if (data) renderSummary(); });
@@ -1600,9 +1706,9 @@
       const ans = r.answerTo != null;
       const added = ans ? r.status !== 'new' : r.status === 'added';
       const del = added ? '목록에서 지우기' : ans ? '답 거두고 지우기' : '요청 취소하고 지우기';
-      const to = ans ? `<span class="r-to" title="'${esc(r.answerTitle ?? '')}'에 보낸 답">#${esc(r.answerTo)} ${esc(r.answerTitle ?? '')}</span>` : '';
+      const to = ans ? `<span class="r-to" title="${esc(T(`'${D(r.answerTitle ?? '')}'에 보낸 답`))}">#${esc(r.answerTo)} ${esc(r.answerTitle ?? '')}</span>` : '';
       return `<li>
-        <span class="when">${esc(when(r.at))}</span><span class="r-text">${to}${esc(r.text)}</span>
+        <span class="when">${esc(when(r.at))}</span><span class="r-text no-i18n">${to}${esc(r.text)}</span>
         <span class="r-status ${added ? 'added' : ''}">${added ? (ans ? '확인함' : '할 일에 넣음') : '확인 기다림'}</span>
         <button class="r-del" type="button" data-act="unrequest" data-id="${esc(r.id)}" title="${del}" aria-label="${del}">${ICON_X}</button></li>`;
     }).join('')}</ul>`;
@@ -1617,23 +1723,28 @@
     return (i.wait ? '<span class="tag wait">확인 필요</span>' : '') + (i.bumpedAt ? '<span class="tag first">먼저</span>' : '');
   }
 
-  const noteHTML = (n) => `<li><time>${esc(n.at)}</time>${n.by === 'user' ? '<b class="by-me">내 답</b>' : ''}<span>${esc(n.text)}</span></li>`;
+  const noteHTML = (n, opinion = false) => `<li><time>${esc(n.at)}</time>${n.by === 'user' ? `<b class="by-me">${opinion ? '내 의견' : '내 답'}</b>` : ''}<span class="no-i18n">${esc(n.text)}</span></li>`;
   // minsuterm: '확인 필요' 항목에는 그 자리에서 답을 적어 보낼 수 있다 (쓰던 답은 목록을 다시 그려도 남는다)
   const answerDrafts = new Map();
+  // minsuterm: 보류 항목에는 의견을 보낼 수 있다(다시 할지, 그만둘지, 더 기다릴지). '의견 보내기'를 누른 항목만 칸을 연다
+  const opinionOpen = new Set();
   function answerHTML(i) {
-    if (!i.wait) return '';
-    return `<div class="answer"><textarea class="ans-text" data-id="${i.id}" rows="1" maxlength="2000" placeholder="이 항목에 답하기 · Ctrl+Enter로 보내기" aria-label="#${i.id}에 답하기">${esc(answerDrafts.get(i.id) ?? '')}</textarea>
-      <button class="btn small" type="button" data-act="answer" data-id="${i.id}">답하기</button></div>`;
+    const opinion = !i.wait && i.group === 'hold';
+    if (!i.wait && !(opinion && opinionOpen.has(i.id))) return '';
+    const ph = opinion ? '다시 할지, 그만둘지, 더 기다릴지 적어 주세요 · Ctrl+Enter로 보내기' : '이 항목에 답하기 · Ctrl+Enter로 보내기';
+    const label = opinion ? T(`${D(`#${i.id}`)}에 의견 보내기`) : T(`${D(`#${i.id}`)}에 답하기`);
+    return `<div class="answer"><textarea class="ans-text no-i18n" data-id="${i.id}" rows="1" maxlength="2000" placeholder="${esc(T(ph))}" aria-label="${esc(label)}">${esc(answerDrafts.get(i.id) ?? '')}</textarea>
+      <button class="btn small" type="button" data-act="answer" data-id="${i.id}">${opinion ? '보내기' : '답하기'}</button></div>`;
   }
 
   function itemHTML(i, g) {
     const flash = flashIds.has(i.id) ? ' flash' : '';
-    const title = `<span class="num">#${i.id}</span><span class="item-title">${esc(i.title)}</span>${tagsHTML(i)}`;
-    const detail = i.detail ? `<span class="item-detail">${esc(i.detail)}</span>` : '';
+    const title = `${whoHTML(i)}<span class="num">#${i.id}</span><span class="item-title no-i18n">${esc(i.title)}</span>${tagsHTML(i)}`;
+    const detail = i.detail ? `<span class="item-detail no-i18n">${esc(i.detail)}</span>` : '';
     if (g === 'now' || g === 'agent') {
       const open = openItems.has(i.id) || notesMatch(i);
       const notes = i.notes.length
-        ? `<ol>${i.notes.slice().reverse().map(noteHTML).join('')}</ol>`
+        ? `<ol>${i.notes.slice().reverse().map((n) => noteHTML(n)).join('')}</ol>`
         : '<p class="muted">아직 진행 메모가 없습니다</p>';
       return `<li class="item${open ? ' open' : ''}${flash}" data-id="${i.id}">
         <button class="item-head" type="button" data-act="toggle" data-id="${i.id}" aria-expanded="${open}">
@@ -1643,14 +1754,16 @@
         <div class="notes"${open ? '' : ' hidden'}>${notes}</div>${answerHTML(i)}</li>`;
     }
     // 다른 칸은 메모를 보이지 않으니, 확인을 기다리는 항목에 보낸 답만 보인다
-    const mine = i.wait ? i.notes.filter((n) => n.by === 'user') : [];
-    const sent = mine.length ? `<div class="notes"><ol>${mine.slice().reverse().map(noteHTML).join('')}</ol></div>` : '';
+    const mine = i.wait || g === 'hold' ? i.notes.filter((n) => n.by === 'user') : [];
+    const sent = mine.length ? `<div class="notes"><ol>${mine.slice().reverse().map((n) => noteHTML(n, g === 'hold' && !i.wait)).join('')}</ol></div>` : '';
     if (g === 'next') {
       return `<li class="item${flash}" data-id="${i.id}"><div class="item-row">
         <span class="item-main">${title}${detail}</span>
         <button class="btn small" type="button" data-act="bump" data-id="${i.id}">먼저 해 주세요</button></div>${sent}${answerHTML(i)}</li>`;
     }
-    return `<li class="item hold${flash}" data-id="${i.id}"><div class="item-row"><span class="item-main"><span class="num">#${i.id}</span><span class="item-title">${esc(i.title)}</span>${tagsHTML(i)}</span></div>${sent}${answerHTML(i)}</li>`;
+    const op = opinionOpen.has(i.id);
+    const opBtn = i.wait ? '' : `<button class="btn small" type="button" data-act="opinion" data-id="${i.id}" aria-expanded="${op}">${op ? '닫기' : '의견 보내기'}</button>`;
+    return `<li class="item hold${flash}" data-id="${i.id}"><div class="item-row"><span class="item-main">${whoHTML(i)}<span class="num">#${i.id}</span><span class="item-title no-i18n">${esc(i.title)}</span>${tagsHTML(i)}</span>${opBtn}</div>${sent}${answerHTML(i)}</li>`;
   }
 
   // 답을 쓰는 동안에는 목록을 다시 그리지 않는다 (쓰던 글의 커서와 한글 조합이 끊긴다). 칸을 떠나면 그린다
@@ -1671,13 +1784,17 @@
   async function sendAnswer(id, btn) {
     const ta = document.querySelector(`.ans-text[data-id="${id}"]`);
     const text = (ta?.value ?? '').trim();
-    if (!text) { toast('답을 적어 주세요', true); ta?.focus(); return; }
+    const opinion = data?.items.find((x) => x.id === id)?.group === 'hold' && !data.items.find((x) => x.id === id)?.wait;
+    if (!text) { toast(opinion ? '의견을 적어 주세요' : '답을 적어 주세요', true); ta?.focus(); return; }
     if (btn) btn.disabled = true;
     try {
       await post('/answer', { id, text });
       answerDrafts.delete(id);
       if (ta) { ta.value = ''; ta.blur(); }
-      toast(data?.agent === 'codex' ? '답을 보냈어요 · Codex는 다음 차례에 확인해요' : '답을 보냈어요');
+      if (opinion) {
+        opinionOpen.delete(id);
+        toast(data?.agent === 'codex' ? '의견을 보냈어요 · Codex는 다음 차례에 확인해요' : '의견을 보냈어요');
+      } else toast(data?.agent === 'codex' ? '답을 보냈어요 · Codex는 다음 차례에 확인해요' : '답을 보냈어요');
       openItems.add(id); // 답이 그 항목의 메모에 쌓인 것이 보이게 펼친다
       store.set(`progress:${scope.key}:items`, [...openItems]);
       load(false);
@@ -1736,8 +1853,8 @@
       shown += list.length;
       const open = dayOpen(day.date);
       const rows = list.map((x) => `<li>
-          <div class="done-title"><span class="ok">✓</span>${esc(x.title)}${x.batch && x.batch !== data.batch ? `<span class="tag batch">${esc(x.batch)}</span>` : ''}</div>
-          ${x.detail ? `<span class="item-detail">${esc(x.detail)}</span>` : ''}
+          <div class="done-title no-i18n"><span class="ok">✓</span>${esc(x.title)}${x.batch && x.batch !== data.batch ? `<span class="tag batch">${esc(x.batch)}</span>` : ''}</div>
+          ${x.detail ? `<span class="item-detail no-i18n">${esc(x.detail)}</span>` : ''}
           ${x.commits?.length ? `<div class="commits">${x.commits.map((h) => `<button class="hash" type="button" data-act="copy" data-hash="${esc(h)}" title="눌러서 복사">${esc(String(h).slice(0, 7))}</button>`).join('')}</div>` : ''}
         </li>`).join('');
       return `<div class="log-day${open ? ' open' : ''}"><button class="day-head" type="button" data-act="day" data-date="${esc(day.date)}" aria-expanded="${open}">
@@ -1852,13 +1969,13 @@
       <text class="prop-z z" x="11" y="-17" style="display:none">z</text>
       <g class="mark" style="display:none"><circle cx="15" cy="-24" r="4.6"/><text class="mark-t" x="15" y="-24" dominant-baseline="central" text-anchor="middle">!</text></g>
       <g class="fx"></g>
-      <g class="nametag" style="display:none"><rect class="tag-bg"/><text class="tag-text" dominant-baseline="central"></text></g>
-      <g class="bubble" style="display:none"><path class="bubble-bg"/><text class="bubble-text" dominant-baseline="central"></text></g>`;
+      <g class="nametag" style="display:none"><rect class="tag-bg"/><text class="tag-text no-i18n" dominant-baseline="central"></text></g>
+      <g class="bubble" style="display:none"><path class="bubble-bg"/><text class="bubble-text no-i18n" dominant-baseline="central"></text></g>`;
   const CAP = `<g class="cap" style="display:none"><path class="cap-hat" d="M-8-7C-7-18 4-24 12.5-18C9-16 8.5-11 8-7Z"/>
           <rect class="cap-brim" x="-8.8" y="-8.8" width="17.6" height="3.4" rx="1.7"/><circle class="cap-pom" cx="12.5" cy="-18" r="2.6"/></g>`;
 
   function claudeSVG() {
-    return `<title></title><ellipse class="shadow" cx="0" cy="24" rx="14" ry="2.6"/>
+    return `<title class="no-i18n"></title><ellipse class="shadow" cx="0" cy="24" rx="14" ry="2.6"/>
       <ellipse class="cushion" cx="0" cy="19" rx="19" ry="5.4" style="display:none"/>
       <g class="hop"><g class="bob"><g class="lean"><g class="appear">
         <g class="ao-back"></g><g class="rays">${RAYS}</g><circle class="cl-body" r="8.6"/>
@@ -1872,7 +1989,7 @@
 
   // Codex: 로고의 구름(그라데이션)과 >_ 프롬프트. 일할 때는 구름이 부풀고 커서가 깜빡인다
   function codexSVG() {
-    return `<title></title><ellipse class="shadow" cx="0" cy="24" rx="15" ry="2.6"/>
+    return `<title class="no-i18n"></title><ellipse class="shadow" cx="0" cy="24" rx="15" ry="2.6"/>
       <ellipse class="cushion" cx="0" cy="19" rx="19" ry="5.4" style="display:none"/>
       <g class="hop"><g class="bob"><g class="lean"><g class="appear">
         <g class="ao-back"></g><g class="cx-body"><use href="#cxcloud" transform="scale(1.62) translate(-12 -12)"/></g>
@@ -1888,11 +2005,11 @@
   // 하수인은 HTML이라 foreignObject에 담는다. 22×22 하수인이 캐릭터 자리(가운데 0,0)에 오고, 손에 든 도구와 효과가
   // 삐져나갈 여유를 둔다. sa-running / sa-done은 사이드바 줄과 같은 상태 표시다
   function agentSVG(a) {
-    return `<title></title><ellipse class="shadow" cx="0" cy="9" rx="6.5" ry="1.6"/>
+    return `<title class="no-i18n"></title><ellipse class="shadow" cx="0" cy="9" rx="6.5" ry="1.6"/>
       <g class="hop"><g class="bob"><g class="lean"><g class="appear">
         <foreignObject class="mn-fo" x="-22" y="-27" width="44" height="40"><div xmlns="http://www.w3.org/1999/xhtml" class="mn-host sa-${minionState(a)}">${minionBody(a)}</div></foreignObject>
       </g></g></g></g>
-      <g class="nametag"><rect class="tag-bg"/><text class="tag-text" dominant-baseline="central"></text></g>`;
+      <g class="nametag"><rect class="tag-bg"/><text class="tag-text no-i18n" dominant-baseline="central"></text></g>`;
   }
 
   function sessState(ago) {
@@ -1937,10 +2054,10 @@
     if (data.asleepAt) {
       return S({ key: 'sleep', name: '자는 중', desc: `${hm(data.asleepAt)}에 잠들었어요. 깨우면 이어서 해요`, spot: 'bed', face: 'closed', cap: true, act: 'sleep', say: '' });
     }
-    if (data.sleep) {
+    if (sleepIsMain(data)) {
       const left = (data.sleep.ids || []).map((id) => items.find((i) => i.id === id)).filter(Boolean);
       if (left.length) {
-        return S({ key: 'wrapup', name: '자기 전에 마무리하는 중', desc: `${left.length}개 남음: ${left[0].title}`, spot: 'desk', face: 'focus', cap: true, act: 'work', say: `마무리 중 · ${left[0].title}` });
+        return S({ key: 'wrapup', name: '자기 전에 마무리하는 중', desc: `${left.length}개 남음: ${D(left[0].title)}`, spot: 'desk', face: 'focus', cap: true, act: 'work', say: `마무리 중 · ${D(left[0].title)}` });
       }
       return S({ key: 'tobed', name: '자러 가는 중', desc: '', spot: 'bedside', face: 'sleepy', cap: true, act: 'tobed', say: '하암… 이제 잘게요' });
     }
@@ -1957,17 +2074,17 @@
     const freshReq = data.requests.some((r) => r.status === 'new' && r.answerTo == null); // (보낸 답은 그 항목의 확인 필요로 이미 센다)
     const needUser = unacked.length > 0 || waiting.length > 0;
     if (doing.length && (meActive || recent)) {
-      return S({ key: 'work', name: '일하는 중', desc: doing[0].title, spot: 'desk', face: 'focus', act: 'work', say: doing[0].title, mark: needUser || freshReq });
+      return S({ key: 'work', name: '일하는 중', desc: D(doing[0].title), spot: 'desk', face: 'focus', act: 'work', say: D(doing[0].title), mark: needUser || freshReq });
     }
     if (needUser) {
       return S({
         key: 'ask', name: '확인을 기다리는 중', spot: 'call', face: 'open', act: 'call', mark: true,
-        desc: unacked.length ? '해 주셔야 할 일이 있어요' : `#${waiting[0].id} 확인을 기다려요`,
-        say: unacked.length ? `부탁드려요: ${unacked[0].text}` : `확인해 주세요: ${waiting[0].title}`,
+        desc: unacked.length ? '해 주셔야 할 일이 있어요' : `${D(`#${waiting[0].id}`)} 확인을 기다려요`,
+        say: unacked.length ? `부탁드려요: ${D(unacked[0].text)}` : `확인해 주세요: ${D(waiting[0].title)}`,
       });
     }
     if (doing.length) {
-      return S({ key: 'stalled', name: '잠깐 멈춘 중', desc: `${doing[0].title} · 한동안 진행이 없어요`, spot: 'desk', face: 'sleepy', act: 'doze', say: '잠깐 손을 멈췄어요', props: { z: true } });
+      return S({ key: 'stalled', name: '잠깐 멈춘 중', desc: `${D(doing[0].title)} · 한동안 진행이 없어요`, spot: 'desk', face: 'sleepy', act: 'doze', say: '잠깐 손을 멈췄어요', props: { z: true } });
     }
     const running = items.filter((i) => i.group === 'agent').length + (me?.agents || []).filter((a) => !a.finished).length;
     if (running) {
@@ -1982,7 +2099,7 @@
     const h = new Date().getHours();
     if (h >= 23 || h < 5) return S({ key: 'yawn', name: '졸린 중', desc: '밤이 깊었어요', spot: 'chair', face: 'sleepy', act: 'yawn', say: '밤이 깊었네요… 하암', mark: freshReq });
     if (next.length) {
-      return S({ key: 'plan', name: '쉬는 중', desc: `다음 할 일 ${next.length}개`, spot: 'chair', face: 'down', act: 'read', say: `다음엔 '${next[0].title}'`, props: { book: true }, mark: freshReq });
+      return S({ key: 'plan', name: '쉬는 중', desc: `다음 할 일 ${next.length}개`, spot: 'chair', face: 'down', act: 'read', say: `다음엔 '${D(next[0].title)}'`, props: { book: true }, mark: freshReq });
     }
     const idle = IDLE[Math.floor(Date.now() / 40000) % IDLE.length];
     return S({ key: idle.key, name: '쉬는 중', desc: '할 일이 없어 쉬고 있어요', spot: idle.spot, face: idle.face, act: idle.act, say: idle.say, props: idle.props, mark: freshReq });
@@ -1996,6 +2113,89 @@
   const goneOthers = new Set();
   const renamed = new Map(); // 방금 바꾼 이름: 세션 기록에 적히기 전에 crew를 다시 읽어도 옛 이름으로 돌아가지 않게
   // 기록의 away: 내쫓긴 다른 세션. 그 뒤로 대화가 다시 바뀌면(다시 일하면) 돌아온다
+  // minsuterm: 자러 가기 계획이 메인 에이전트의 것인가 (다른 세션을 재우는 중이면 메인 캐릭터는 하던 대로 한다)
+  const sleepIsMain = (d) => Boolean(d.sleep) && (!d.sleep.target || String(d.sleep.target) === String(d.owner || '').toLowerCase());
+  // minsuterm: 방에 있는 에이전트(메인과, 방에 보이는 다른 세션 셋까지)와 항목을 맡은 에이전트.
+  // 항목의 by는 그 항목을 더하거나 지금 하는 것으로 가져온 세션이다 (없으면 메인 에이전트)
+  function roomAgents() {
+    const list = [];
+    const owner = String(data.owner || '').toLowerCase();
+    if (!data.leftAt) {
+      const me = owner ? crew.find((s) => s.id === owner) : null;
+      list.push({ sid: owner, kind: data.agent === 'codex' ? 'codex' : 'claude', name: me?.named ? me.title : agentName(), main: true, badge: 0 });
+    }
+    crew.filter((s) => s.id !== owner && !awayNow(s)).slice(0, 3)
+      .forEach((s, k) => list.push({ sid: s.id, kind: s.agent === 'codex' ? 'codex' : 'claude', name: s.title || T('이름 없는 세션'), main: false, badge: k + 2 }));
+    return list;
+  }
+  function itemOwner(i) {
+    const sid = String(i.by || data.owner || '').toLowerCase();
+    const known = roomAgents().find((a) => a.sid === sid);
+    if (known) return known;
+    const s = crew.find((x) => x.id === sid);
+    const kind = (i.agent || s?.agent || data.agent) === 'codex' ? 'codex' : 'claude';
+    return { sid, kind, name: s?.title || (kind === 'codex' ? 'Codex' : 'Claude'), main: false, badge: 0, gone: true };
+  }
+  const ownerRole = (o) => `${T(o.main ? '메인 에이전트' : o.gone ? '방에 없는 세션' : '다른 세션')} · ${o.kind === 'codex' ? 'Codex' : 'Claude'}`;
+  // 캐릭터 아이콘: Claude는 빛살과 동그란 몸, Codex는 구름과 >_ (방 그림과 같은 색)
+  const CL_RAYS = Array.from({ length: 12 }, (_, k) => {
+    const a = ((k * 30 + 8) * Math.PI) / 180;
+    const r2 = k % 2 ? 9.4 : 10.8;
+    return `M${(Math.cos(a) * 5.6).toFixed(2)} ${(Math.sin(a) * 5.6).toFixed(2)}L${(Math.cos(a) * r2).toFixed(2)} ${(Math.sin(a) * r2).toFixed(2)}`;
+  }).join('');
+  function agentIcon(kind) {
+    if (kind === 'codex') {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#mtIcoCloud"/><path d="M8.3 9.4l2.5 2.5-2.5 2.5M12.8 14.7h3.4" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
+    return `<svg viewBox="-12 -12 24 24" aria-hidden="true"><path d="${CL_RAYS}" stroke="#d97757" stroke-width="2.3" stroke-linecap="round"/><circle r="6.3" fill="#d97757"/><circle cx="-2.2" cy="-.5" r="1.1" fill="#2b1d17"/><circle cx="2.2" cy="-.5" r="1.1" fill="#2b1d17"/></svg>`;
+  }
+  const agentBadge = (a) => `<span class="who no-i18n">${agentIcon(a.kind)}${a.badge ? `<span class="who-n">${a.badge}</span>` : ''}</span>`;
+  let whoOpen = 0; // 이름을 띄운 항목
+  // 에이전트가 둘 이상일 때만(방에 둘 이상이거나, 메인이 아닌 세션이 맡은 항목이 있을 때) 아이콘과 대상 고르기를 보인다.
+  // 하나뿐이면 화면은 예전 그대로다
+  function manyAgents() {
+    if (roomAgents().length > 1) return true;
+    const owner = String(data.owner || '').toLowerCase();
+    return data.items.some((i) => String(i.by || owner).toLowerCase() !== owner);
+  }
+  function whoHTML(i) {
+    if (!manyAgents()) return '';
+    const o = itemOwner(i);
+    return `<span class="who no-i18n${o.gone ? ' gone' : ''}${whoOpen === i.id ? ' on' : ''}" role="button" tabindex="0" data-act="who" data-id="${i.id}" aria-label="${esc(T(`맡은 에이전트: ${D(o.name)}`))}">${agentIcon(o.kind)}${o.badge ? `<span class="who-n">${o.badge}</span>` : ''}</span>`;
+  }
+  // 아이콘을 누르면 그 아래에 이름과 역할이 뜨고, 다시 누르거나 다른 곳을 누르면(또는 Esc, 스크롤) 닫힌다
+  function toggleWho(el, id) {
+    const tip = $('whoTip');
+    for (const x of document.querySelectorAll('.who.on')) x.classList.remove('on');
+    const item = el && whoOpen !== id ? data.items.find((x) => x.id === id) : null;
+    if (!item) { whoOpen = 0; tip.hidden = true; return; }
+    const o = itemOwner(item);
+    whoOpen = id;
+    el.classList.add('on');
+    tip.innerHTML = `<b>${esc(o.name)}</b><span>${esc(ownerRole(o))}</span>`;
+    tip.hidden = false;
+    const r = el.getBoundingClientRect();
+    tip.style.left = `${Math.max(6, Math.min(innerWidth - tip.offsetWidth - 6, r.left - 6))}px`;
+    tip.style.top = `${r.bottom + 6}px`;
+  }
+  const hideWho = () => { if (whoOpen) toggleWho(null, 0); };
+  window.addEventListener('scroll', hideWho, { passive: true });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') hideWho();
+    const w = ev.target.closest?.('.who[data-act]');
+    if (w && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); toggleWho(w, Number(w.dataset.id)); }
+  });
+  // 아이콘에 쓰는 Codex 구름 (방 그림의 구름과 같은 모양. 방이 접혀 있어도 그려지게 따로 둔다)
+  {
+    const cloud = document.getElementById('cxcloud');
+    const sprite = document.createElementNS(SVGNS, 'svg');
+    sprite.setAttribute('width', '0');
+    sprite.setAttribute('height', '0');
+    sprite.setAttribute('aria-hidden', 'true');
+    sprite.style.position = 'absolute';
+    sprite.innerHTML = `<defs><linearGradient id="mtIcoGrad" gradientUnits="userSpaceOnUse" x1="12" x2="12" y1="1" y2="23"><stop stop-color="#B1A7FF"/><stop offset=".5" stop-color="#7A9DFF"/><stop offset="1" stop-color="#3941FF"/></linearGradient><path id="mtIcoCloud" fill="url(#mtIcoGrad)" d="${cloud ? cloud.getAttribute('d') : ''}"/></defs>`;
+    document.body.appendChild(sprite);
+  }
   const awayNow = (s) => {
     if (goneOthers.has(s.id)) return true;
     const t = Number(data?.away?.[s.id]);
@@ -2029,7 +2229,7 @@
     if (next.leftAt && !prev.leftAt) return; // 방에서 내쫓겼다: 자러 가기가 지워진 것에 대답하지 않는다
     const total = (d) => d.log.reduce((n, day) => n + day.items.length, 0);
     if (total(next) > total(prev)) {
-      sayFor(`끝냈어요! ${next.log[0]?.items[0]?.title ?? ''}`.trim(), 4500, true);
+      sayFor(`끝냈어요! ${D(next.log[0]?.items[0]?.title ?? '')}`, 4500, true);
       return;
     }
     const seen = new Set(prev.requests.map((r) => r.id));
@@ -2039,12 +2239,13 @@
     if (gone.some((r) => r.answerTo == null)) { sayFor('알겠어요, 그 요청은 안 할게요', 3000); return; }
     if (gone.length) { sayFor('알겠어요, 그 답은 없던 걸로 할게요', 3000); return; }
     const answers = (i) => (i?.notes || []).filter((n) => n.by === 'user').length;
-    if (next.items.some((i) => answers(i) > answers(prev.items.find((p) => p.id === i.id)))) { sayFor('답 고마워요! 확인해 볼게요', 3500); return; }
+    const answered = next.items.find((i) => answers(i) > answers(prev.items.find((p) => p.id === i.id)));
+    if (answered) { sayFor(answered.group === 'hold' && !answered.wait ? '의견 고마워요! 어떻게 할지 볼게요' : '답 고마워요! 확인해 볼게요', 3500); return; }
     const bumped = next.items.find((i) => i.bumpedAt && i.bumpedAt !== prev.items.find((p) => p.id === i.id)?.bumpedAt);
-    if (bumped) { sayFor(`네, '${bumped.title}' 먼저 할게요`, 3500); return; }
+    if (bumped) { sayFor(`네, '${D(bumped.title)}' 먼저 할게요`, 3500); return; }
     const acked = next.notices.find((n) => n.ackedAt && !prev.notices.find((p) => String(p.id) === String(n.id))?.ackedAt);
     if (acked) { sayFor('고마워요! 확인해 볼게요', 3500); return; }
-    if (!prev.sleep && next.sleep) { sayFor('네, 마무리하고 잘게요', 3500); return; }
+    if (!prev.sleep && sleepIsMain(next)) { sayFor('네, 마무리하고 잘게요', 3500); return; }
     if (prev.sleep && !next.sleep && !next.asleepAt) sayFor('알겠어요, 계속할게요', 3000);
   }
 
@@ -2095,8 +2296,8 @@
     svg.classList.toggle('working', st.act === 'work');
     svg.classList.toggle('resting', Boolean(st.props.mug));
     svg.setAttribute('aria-label', `${agentName()}의 방`);
-    $('stateName').textContent = st.name;
-    $('stateDesc').textContent = st.desc;
+    $('stateName').textContent = T(st.name);
+    $('stateDesc').textContent = T(st.desc);
     $('stateDesc').hidden = !st.desc;
 
     const want = new Map();
@@ -2107,7 +2308,7 @@
       want.set(`main:${skin}`, {
         kind: 'claude', skin, main: true, place: 1, x: st.spot.x, y: st.spot.y, face: st.face, cap: st.cap, act: st.act, props: st.props,
         mark: st.mark, awake: st.key !== 'sleep', shadow: st.key !== 'sleep', say: ev && !leave ? ev.text : st.say, tag: named,
-        label: `${named || agentName()} · ${st.name}`,
+        label: `${D(named || agentName())} · ${st.name}`,
       });
     }
     const ownAgents = st.gone ? [] : (owner?.agents || []).slice(-5);
@@ -2117,13 +2318,13 @@
     others.forEach((s, i) => {
       let x = Math.round((ROOM_W * (i + 1)) / (others.length + 1));
       const ss = sessState(s.ago);
-      const name = s.title || '이름 없는 세션';
+      const name = s.title || T('이름 없는 세션');
       const going = leavingOthers.get(s.id); // minsuterm: 내쫓기면 몸을 흔들어 인사하고 가까운 쪽 밖으로 걸어 나간다
       if (going === 'out') x = x < ROOM_W / 2 ? -50 : ROOM_W + 50;
       want.set(`s:${s.id}`, {
         // minsuterm: 같은 폴더의 Codex 세션은 Codex로 선다
         kind: 'claude', skin: s.agent === 'codex' ? 'codex' : 'claude', x, y: OTHER_Y, place: i + 2, face: going ? 'smile' : ss.face, cap: false, act: going ? (going === 'bye' ? 'bye' : '') : ss.act,
-        props: going ? {} : ss.props, awake: Boolean(going) || ss.key !== 'sleep', shadow: false, cushion: !going, tag: name, label: `${name} · ${going ? '방을 나가는 중' : ss.label}`,
+        props: going ? {} : ss.props, awake: Boolean(going) || ss.key !== 'sleep', shadow: false, cushion: !going, tag: name, label: `${D(name)} · ${going ? '방을 나가는 중' : ss.label}`,
       });
       const ag = going ? [] : (s.agents || []).slice(-3);
       ag.forEach((a, j) => row.push({ a, sid: s.id, want: x + (j - (ag.length - 1) / 2) * AGENT_GAP }));
@@ -2133,7 +2334,7 @@
     row.forEach((r, i) => {
       want.set(`a:${r.sid}:${r.a.id}`, {
         kind: 'agent', x: r.x, y: AGENT_Y[i % 2], agent: r.a, act: '', // (일하는 동작은 하수인이 스스로 한다)
-        tag: r.a.description || r.a.type, label: `${r.a.description || r.a.type} · ${r.a.finished ? '끝냄' : '작업 중'}`,
+        tag: r.a.description || r.a.type, label: `${D(r.a.description || r.a.type)} · ${r.a.finished ? '끝냄' : '작업 중'}`,
       });
     });
     syncChars(want, firstRoom);
@@ -2158,6 +2359,7 @@
 
   // 메인 에이전트 머리 위 말풍선
   function setBubble(e, text, x) {
+    text = T(text); // minsuterm: 번역한 글로 폭을 잰다
     const k = roomK(); // minsuterm: 방이 작게 그려지면 글자를 키워 읽히게 한다 (브라우저에서는 늘 1)
     const key = `${text}|${x}|${k}`;
     if (e.bubbleKey === key) return;
@@ -2316,7 +2518,7 @@
       }
       e.act = w.act;
       if (!e.walking) applyAct(e);
-      e.g.querySelector('title').textContent = w.label;
+      e.g.querySelector('title').textContent = T(w.label);
     }
     for (const [key, e] of chars) {
       if (want.has(key)) continue;
@@ -2375,7 +2577,7 @@
 
   function renderCrewList(ownAgents, others) {
     const row = (dot, text, status, ago, sub) => `<li class="${sub ? 'nested' : ''}">
-      ${dot}<span class="ctext" title="${esc(text)}">${esc(text)}</span>
+      ${dot}<span class="ctext no-i18n" title="${esc(text)}">${esc(text)}</span>
       <span class="cstat">${esc(status)}</span><span class="cago">${agoText(ago)}</span></li>`;
     const dotOf = (color) => `<span class="cdot" style="background:${color}"></span>`;
     // minsuterm: 서브 에이전트는 방 안과 같은 하수인 얼굴로
@@ -2383,7 +2585,7 @@
     const rows = [];
     for (const a of ownAgents) rows.push(row(agentDot(a), a.description || a.type, a.finished ? '끝냄' : '작업 중', a.ago, false));
     for (const s of others) {
-      rows.push(row(dotOf(s.agent === 'codex' ? CODEX_BLUE : ORANGE), s.title || '이름 없는 세션', sessState(s.ago).label, s.ago, false));
+      rows.push(row(dotOf(s.agent === 'codex' ? CODEX_BLUE : ORANGE), s.title || T('이름 없는 세션'), sessState(s.ago).label, s.ago, false));
       for (const a of (s.agents || []).slice(-3)) rows.push(row(agentDot(a), a.description || a.type, a.finished ? '끝냄' : '작업 중', a.ago, true));
     }
     const ul = $('crewList');
@@ -2431,9 +2633,9 @@
     const t = charTarget(ent.key);
     if (!t) return;
     menuFor = t;
-    const who = t.main ? (t.named ? t.title : `${agentName()} · 메인 에이전트`) : t.title || '이름 없는 세션';
+    const who = t.main ? (t.named ? t.title : T(`${agentName()} · 메인 에이전트`)) : t.title || T('이름 없는 세션');
     const m = $('charMenu');
-    m.innerHTML = `<div class="cm-label" title="${esc(who)}">${esc(who)}</div>
+    m.innerHTML = `<div class="cm-label no-i18n" title="${esc(who)}">${esc(who)}</div>
       <button class="cm-item" type="button" role="menuitem" data-act="charName">${ICON_EDIT}<span>이름 바꾸기</span></button>
       <div class="cm-sep" role="separator"></div>
       <button class="cm-item danger" type="button" role="menuitem" data-act="charKick">${ICON_DOOR}<span>방에서 내쫓기</span></button>`;
@@ -2473,9 +2675,9 @@
     kickTarget = { ...t, info };
     const kind = (info.found ? info.agent : t.agent) === 'codex' ? 'Codex' : 'Claude';
     const quit = kind === 'Codex' ? '/quit' : '/exit';
-    $('kickTitle').textContent = t.main ? `${agentName()}를 방에서 내쫓을까요?` : `'${fit(t.title || '이름 없는 세션', 17, 250)}' 세션을 방에서 내쫓을까요?`;
+    $('kickTitle').textContent = T(t.main ? `${agentName()}를 방에서 내쫓을까요?` : `'${D(fit(t.title || T('이름 없는 세션'), 17, 250))}' 세션을 방에서 내쫓을까요?`);
     if (info.found) {
-      $('kickLead').textContent = `'${info.label}' 탭의 ${kind} 세션이 종료돼요(${quit}). 탭은 셸로 남아요.`;
+      $('kickLead').textContent = T(`'${D(info.label)}' 탭의 ${kind} 세션이 종료돼요(${quit}). 탭은 셸로 남아요.`);
       const asleep = t.main && Boolean(data.asleepAt);
       const lost = [
         info.working && (asleep ? '지금 하던 기억 정리(수면)가 중간에 멈춰요' : '지금 하던 작업이 중간에 멈춰요'),
@@ -2486,10 +2688,10 @@
       ].filter(Boolean);
       $('kickBody').innerHTML = `<p class="kick-what">사라지는 것</p><ul class="kick-list">${lost.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
         <p class="kick-keep">대화 기록과 진행 기록(할 일·끝낸 일·요청)은 그대로 남아요. 대화는 나중에 이어서 열 수 있어요.</p>
-        ${t.main && !info.sure ? `<p class="kick-guess">이 폴더에 열린 ${kind} 탭이 '${esc(info.label)}' 하나라서 그 탭으로 골랐어요.</p>` : ''}`;
+        ${t.main && !info.sure ? `<p class="kick-guess no-i18n">${esc(T(`이 폴더에 열린 ${kind} 탭이 '${D(info.label)}' 하나라서 그 탭으로 골랐어요.`))}</p>` : ''}`;
       $('kickGo').textContent = '내쫓기';
     } else {
-      $('kickLead').textContent = '이 세션이 열린 MinsuTerm 탭을 찾지 못했어요. 세션은 건드리지 않고 캐릭터만 방에서 내보내요.';
+      $('kickLead').textContent = T('이 세션이 열린 MinsuTerm 탭을 찾지 못했어요. 세션은 건드리지 않고 캐릭터만 방에서 내보내요.');
       $('kickBody').innerHTML = '<p class="kick-keep">세션이 이미 끝났거나 MinsuTerm 밖에서 열려 있을 수 있어요. 진행 기록은 그대로 남아요.</p>';
       $('kickGo').textContent = '내보내기';
     }
@@ -2636,7 +2838,7 @@
   function setProjHead() {
     const trash = projView === 'trash';
     $('projTitle').textContent = trash ? '휴지통' : '볼 프로젝트를 골라 주세요';
-    $('projDesc').textContent = trash ? `지운 진행 기록이에요. 되살리거나 영구 삭제할 수 있어요. ${SAFE_NOTE}` : PROJ_DESC;
+    $('projDesc').textContent = trash ? `${T('지운 진행 기록이에요. 되살리거나 영구 삭제할 수 있어요.')} ${T(SAFE_NOTE)}` : T(PROJ_DESC);
     const b = $('trashBtn');
     b.dataset.act = trash ? 'listView' : 'trashView';
     b.textContent = trash ? '← 프로젝트 목록' : `휴지통${trashItems.length ? ` ${trashItems.length}` : ''}`;
@@ -2653,14 +2855,14 @@
         <div class="proj-form-btns"><button class="btn small" type="button" data-act="purgeCancel">취소</button>
           <button class="btn small danger" type="button" data-act="purgeConfirm" data-id="${esc(id)}">영구 삭제</button></div></div>`;
     $('projList').innerHTML = trashItems.map((x) => `<div class="proj-row"><div class="proj proj-form trash-item">
-          <span><b>${esc(x.name)}</b></span>
-          <span class="proj-path">${esc(x.root || '원래 위치 모름')}</span>
+          <span><b class="no-i18n">${esc(x.name)}</b></span>
+          <span class="proj-path${x.root ? ' no-i18n' : ''}">${esc(x.root || '원래 위치 모름')}</span>
           <span class="muted small">${esc(when(x.deletedAt))}에 지움 · 할 일 ${x.remaining}개 · 끝낸 일 ${x.done}개</span>
           <div class="proj-form-btns"><button class="btn small" type="button" data-act="restore" data-id="${esc(x.id)}">되살리기</button>
             <button class="btn small" type="button" data-act="purge" data-id="${esc(x.id)}">영구 삭제</button></div>
-        </div>${purgingId === x.id ? confirmBox(x.id, `<b>'${esc(x.name)}' 진행 기록을 영구 삭제할까요?</b><br>되돌릴 수 없어요. ${SAFE_NOTE}`) : ''}</div>`).join('') +
+        </div>${purgingId === x.id ? confirmBox(x.id, `<b class="no-i18n">${esc(T(`'${D(x.name)}' 진행 기록을 영구 삭제할까요?`))}</b><br>되돌릴 수 없어요. <span>${SAFE_NOTE}</span>`) : ''}</div>`).join('') +
       `<div class="trash-foot"><button class="btn small" type="button" data-act="purge" data-id="ALL">휴지통 비우기</button></div>` +
-      (purgingId === 'ALL' ? confirmBox('ALL', `<b>휴지통의 진행 기록 ${trashItems.length}개를 모두 영구 삭제할까요?</b><br>되돌릴 수 없어요. ${SAFE_NOTE}`) : '');
+      (purgingId === 'ALL' ? confirmBox('ALL', `<b>휴지통의 진행 기록 ${trashItems.length}개를 모두 영구 삭제할까요?</b><br>되돌릴 수 없어요. <span>${SAFE_NOTE}</span>`) : '');
   }
 
   async function restoreTrash(id) {
@@ -2698,23 +2900,23 @@
         return `<div class="proj-row"><div class="proj proj-form${cur}">
             <label class="muted small" for="projName">진행 기록 이름</label>
             <input id="projName" class="proj-input" maxlength="80" value="${esc(p.name)}" data-key="${k}" autocomplete="off">
-            <span class="proj-path">${esc(p.root)}</span>
+            <span class="proj-path no-i18n">${esc(p.root)}</span>
             <div class="proj-form-btns"><button class="btn small" type="button" data-act="renameCancel">취소</button>
               <button class="btn small primary" type="button" data-act="renameSave">저장</button></div>
           </div></div>`;
       }
       const confirm = deletingKey === p.key ? `<div class="proj-confirm" role="alert">
-            <p><b>'${esc(p.name)}' 진행 기록을 지울까요?</b><br>할 일 ${p.remaining}개와 끝낸 일 ${p.done ?? 0}개 기록이 목록에서 사라져요.
-            휴지통(<code>~/.claude/progress/trash/</code>)으로 옮겨 두니 되살릴 수 있어요. ${SAFE_NOTE}</p>
+            <p><b class="no-i18n">${esc(T(`'${D(p.name)}' 진행 기록을 지울까요?`))}</b><br>할 일 ${p.remaining}개와 끝낸 일 ${p.done ?? 0}개 기록이 목록에서 사라져요.
+            휴지통(<code>~/.claude/progress/trash/</code>)으로 옮겨 두니 되살릴 수 있어요. <span>${SAFE_NOTE}</span></p>
             <div class="proj-form-btns"><button class="btn small" type="button" data-act="deleteCancel">취소</button>
               <button class="btn small danger" type="button" data-act="deleteConfirm" data-key="${k}">지우기</button></div>
           </div>` : '';
       return `<div class="proj-row"><div class="proj-line">
           <button class="proj${cur}" type="button" data-act="pick" data-key="${k}">
             <span class="radio"></span><span class="proj-main">
-              <span><b>${esc(p.name)}</b></span>
-              <span class="proj-path">${esc(p.root)}</span>
-              <span class="muted small">남은 ${p.remaining}개 · 끝낸 ${p.done ?? 0}개 · 갱신 ${esc(rel(p.updated))}${p.asleep ? ' · 자는 중' : ''}</span>
+              <span><b class="no-i18n">${esc(p.name)}</b></span>
+              <span class="proj-path no-i18n">${esc(p.root)}</span>
+              <span class="muted small">남은 ${p.remaining}개 · 끝낸 ${p.done ?? 0}개 · ${esc(updatedText(p.updated))}${p.asleep ? ' · 자는 중' : ''}</span>
             </span></button>
           <div class="proj-acts">
             <button class="icon-btn" type="button" data-act="rename" data-key="${k}" title="이름 바꾸기" aria-label="${esc(p.name)} 이름 바꾸기">${ICON_EDIT}</button>
@@ -2769,23 +2971,53 @@
     await refreshProjList();
   }
 
+  // minsuterm: 자러 가기는 에이전트를 골라서 한다. 고른 에이전트가 맡은 작업만 나오고, 그 세션에만 알린다.
+  // 방에 에이전트가 하나뿐이면 그 에이전트를 미리 골라 둔다
+  let sleepFor = null; // 자러 갈 에이전트의 세션 (null: 아직 고르지 않음)
   function openSleep() {
     if (!data) return;
-    const chosen = data.sleep ? new Set(data.sleep.ids || []) : new Set(data.items.filter((i) => i.group === 'now').map((i) => i.id));
-    const blocks = ['now', 'agent', 'next'].map((g) => {
-      const list = data.items.filter((i) => i.group === g);
-      if (!list.length) return '';
-      return `<fieldset><legend>${LABEL[g]}</legend>${list.map((i) => `<label class="check-row">
-          <input type="checkbox" value="${i.id}"${chosen.has(i.id) ? ' checked' : ''}><span><span class="num">#${i.id}</span>${esc(i.title)}</span></label>`).join('')}</fieldset>`;
-    }).join('');
-    $('sleepList').innerHTML = blocks || '<p class="muted">마칠 작업이 없어요. 보내면 바로 정리하고 잠들어요.</p>';
-    sleepCount();
+    const agents = roomAgents();
+    const planned = data.sleep ? String(data.sleep.target ?? '') : null;
+    const one = agents.length <= 1 || !manyAgents();
+    sleepFor = planned !== null && agents.some((a) => a.sid === planned) ? planned
+      : one ? (agents[0]?.sid ?? String(data.owner || '').toLowerCase()) : null;
+    renderSleepPick();
     $('sleepDlg').showModal();
+  }
+  function renderSleepPick() {
+    const agents = roomAgents();
+    const many = manyAgents();
+    const work = (sid) => data.items.filter((i) => i.group !== 'hold' && (!many || itemOwner(i).sid === sid));
+    $('sleepAgents').hidden = !many;
+    $('sleepTitle').textContent = many ? '자러 갈 에이전트를 골라 주세요' : '마무리할 작업을 선택해 주세요';
+    $('sleepLead').textContent = many
+      ? '고른 작업을 마치면 남은 일을 정리하고 잠들어요. 아무것도 고르지 않으면 바로 정리하고 잠들어요.'
+      : `고른 작업을 마치면 ${agentName()}가 남은 일을 정리하고 잠들어요. 아무것도 고르지 않으면 바로 정리하고 잠들어요.`;
+    $('sleepAgents').innerHTML = agents.length ? agents.map((a) => {
+      const on = a.sid === sleepFor;
+      return `<button type="button" class="sleep-agent${on ? ' on' : ''}" role="radio" aria-checked="${on}" data-act="sleepAgent" data-sid="${esc(a.sid)}">${agentBadge(a)}
+        <span class="sa-name no-i18n">${esc(a.name)}</span><span class="sa-sub">${esc(`${T(a.main ? '메인 에이전트' : '다른 세션')} · ${T(`작업 ${work(a.sid).length}개`)}`)}</span></button>`;
+    }).join('') : '<p class="muted">방에 에이전트가 없어요</p>';
+    if (sleepFor === null) {
+      $('sleepList').innerHTML = '<p class="muted">에이전트를 고르면 그 에이전트가 맡은 작업이 나와요.</p>';
+    } else {
+      const same = data.sleep && String(data.sleep.target ?? '') === sleepFor;
+      const chosen = same ? new Set(data.sleep.ids || []) : new Set(work(sleepFor).filter((i) => i.group === 'now').map((i) => i.id));
+      const blocks = ['now', 'agent', 'next'].map((g) => {
+        const list = work(sleepFor).filter((i) => i.group === g);
+        if (!list.length) return '';
+        return `<fieldset><legend>${LABEL[g]}</legend>${list.map((i) => `<label class="check-row">
+            <input type="checkbox" value="${i.id}"${chosen.has(i.id) ? ' checked' : ''}><span class="no-i18n"><span class="num">#${i.id}</span>${esc(i.title)}</span></label>`).join('')}</fieldset>`;
+      }).join('');
+      $('sleepList').innerHTML = blocks || '<p class="muted">마칠 작업이 없어요. 보내면 바로 정리하고 잠들어요.</p>';
+    }
+    $('sleepSend').disabled = sleepFor === null;
+    sleepCount();
   }
 
   function sleepCount() {
     const n = $('sleepList').querySelectorAll('input:checked').length;
-    $('sleepCount').textContent = n ? `${n}개 마치고 잠들어요` : '바로 정리하고 잠들어요';
+    $('sleepCount').textContent = sleepFor === null ? '' : n ? `${n}개 마치고 잠들어요` : '바로 정리하고 잠들어요';
   }
 
   async function sendSleep() {
@@ -2793,7 +3025,8 @@
     const btn = $('sleepSend');
     btn.disabled = true;
     try {
-      await post('/sleep', { ids });
+      const who = roomAgents().find((x) => x.sid === sleepFor);
+      await post('/sleep', { ids, ...(sleepFor ? { target: sleepFor } : {}), ...(who ? { agent: who.kind, name: who.name } : {}) });
       $('sleepDlg').close();
       toast('자러 가기를 부탁했어요');
       load(false);
@@ -2805,6 +3038,24 @@
   }
 
   // ---------- 요청 남기기 ----------
+  // ?: 올리면 언제 전달되는지 잠깐 보이고, 누르면 채운 ?로 바뀌며 툴팁이 고정되고, 한 번 더 누르면 닫힌다
+  {
+    const q = $('reqHelp');
+    const tip = $('reqHelpTip');
+    const place = () => tip.style.setProperty('--arrow-x', `${q.offsetLeft + q.offsetWidth / 2}px`);
+    q.addEventListener('mouseenter', place);
+    q.addEventListener('focus', place);
+    q.addEventListener('click', () => {
+      const on = !q.classList.contains('on');
+      place();
+      q.classList.toggle('on', on);
+      tip.classList.toggle('pinned', on);
+      q.setAttribute('aria-expanded', String(on));
+      q.classList.toggle('quiet', !on); // 닫은 뒤 마우스가 아직 위에 있어도 다시 뜨지 않게
+    });
+    q.addEventListener('mouseleave', () => q.classList.remove('quiet'));
+    q.addEventListener('blur', () => q.classList.remove('quiet'));
+  }
   function grow() {
     const ta = $('reqText');
     ta.style.height = 'auto';
@@ -2869,8 +3120,18 @@
         await post('/ack', { id: t.dataset.id });
         toast('알렸어요');
         load(false);
-      } else if (a === 'answer') { // minsuterm: 확인 필요 항목에 답하기
+      } else if (a === 'answer') { // minsuterm: 확인 필요 항목에 답하기, 보류 항목에 의견 보내기
         await sendAnswer(Number(t.dataset.id), t);
+      } else if (a === 'who') { // minsuterm: 항목을 맡은 에이전트의 이름
+        toggleWho(t, Number(t.dataset.id));
+      } else if (a === 'sleepAgent') { // minsuterm: 자러 갈 에이전트 고르기
+        sleepFor = t.dataset.sid;
+        renderSleepPick();
+      } else if (a === 'opinion') { // minsuterm: 보류 항목의 의견 칸 열고 닫기
+        const id = Number(t.dataset.id);
+        if (opinionOpen.has(id)) opinionOpen.delete(id); else opinionOpen.add(id);
+        renderLists();
+        if (opinionOpen.has(id)) document.querySelector(`.ans-text[data-id="${id}"]`)?.focus();
       } else if (a === 'bump') {
         await post('/bump', { id: Number(t.dataset.id) });
         toast('먼저 하도록 부탁했어요');
@@ -2968,6 +3229,7 @@
 
   document.addEventListener('click', (ev) => {
     const t = ev.target.closest('[data-act]');
+    if (whoOpen && !(t && t.dataset.act === 'who')) hideWho();
     if (t) act(t);
   });
   for (const dlg of document.querySelectorAll('dialog')) {
@@ -3029,9 +3291,9 @@
   // 30초마다 '갱신 N분 전'과 방을 다시 그린다
   setInterval(() => {
     if (!scope || !data) return;
-    $('updated').textContent = data.updated ? `갱신 ${rel(data.updated)}` : '';
+    $('updated').textContent = data.updated ? updatedText(data.updated) : '';
     const mu = $('mtUpdated'); // minsuterm: 진행도 띠의 갱신 시각
-    if (mu) mu.textContent = data.updated ? ` · 갱신 ${rel(data.updated)}` : '';
+    if (mu) mu.textContent = data.updated ? ` · ${updatedText(data.updated)}` : '';
     renderRoom();
   }, 30000);
 
