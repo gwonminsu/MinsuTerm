@@ -2015,5 +2015,11 @@
  "해제": "Unlink",
  "해제하지 못했어요:": "Could not unlink:",
  "해제하지 못했어요: #": "Could not unlink: #",
- "행성 궤도": "Planet orbit"
+ "행성 궤도": "Planet orbit",
+ "개가 있습니다. 창을 닫을까요?": " running. Close the window?",
+ "다른 창": "Other window",
+ "다른 창에 열려 있는 대화예요. 그 창에서 닫은 뒤 지워 주세요": "This conversation is open in another window. Close it there before deleting it",
+ "이 창에서 실행 중인 에이전트 세션": "Agent sessions in this window",
+ "이 창에서 실행 중인 에이전트 세션 #개가 있습니다. 창을 닫을까요?": "# agent sessions are running in this window. Close the window?",
+ "창을 닫으면 이 창의 세션이 종료됩니다. 탭을 다른 창으로 끌어다 놓으면 이어서 쓸 수 있어요.": "Closing the window ends its sessions. Drag a tab onto another window to keep it going."
 }

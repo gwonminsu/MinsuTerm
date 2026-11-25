@@ -463,6 +463,7 @@ function spawnPty(spec, wc = null) {
 /** The ptys of one window (and any whose window is gone): what a page that starts or a window that closes leaves. */
 function killOwnedBy(wc) {
   for (const [id, r] of ptys) {
+    if (r.hold) continue; // on its way to another window
     if (r.wc && r.wc !== wc && !r.wc.isDestroyed()) continue; // another window's
     try { r.p.kill(); } catch { /* ignore */ }
     ptys.delete(id);
@@ -2017,10 +2018,80 @@ ipcMain.handle('agent:delete', async (_e, agent, cwd, id, title) => {
   }
 });
 
-ipcMain.on('store:projects', (_e, projects) => { store.projects = projects; saveStore(); });
-ipcMain.on('store:layout', (_e, layout) => { store.layout = layout; saveStore(); });
-ipcMain.on('store:tasks', (_e, tasks) => { store.tasks = Array.isArray(tasks) ? tasks.slice(-400) : []; saveStore(); });
-ipcMain.on('store:settings', (_e, settings) => { store.settings = { ...store.settings, ...settings }; saveStore(); });
+/*
+ * Many windows, one app: the main window and the windows tabs were dragged out into share settings, projects, the
+ * task history and the knowledge of which tab is where. Whatever one window saves reaches the others.
+ */
+/** The windows that hold tabs: the main one and the ones tabs went to (not the 진행도 windows). */
+function appWindows() {
+  return [win, ...[...soloWins.values()].map((x) => x.win)].filter((w) => w && !w.isDestroyed());
+}
+/** Every MinsuTerm window but the one that sent it (진행도 windows too: they follow settings). */
+function toOthers(sender, channel, ...args) {
+  for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed() && w.webContents !== sender) w.webContents.send(channel, ...args);
+}
+ipcMain.on('store:projects', (_e, projects) => { store.projects = projects; saveStore(); toOthers(_e.sender, 'projects:changed', projects); });
+ipcMain.on('store:layout', (_e, layout) => {
+  if (!win || _e.sender === win.webContents) { store.layout = layout; saveStore(); return; }
+  const s = soloWins.get(_e.sender.id); // a window a tab went to: kept for the next start too
+  if (s) { s.layout = layout; saveWindows(); }
+});
+/*
+ * Tasks: every window has the whole list, but a task is changed by one window, the one its tab is in now (a tab
+ * moved to another window takes it along; a closed tab's last word comes from the window it was in). The stored
+ * list is the merge, sent on to the other windows.
+ */
+const taskOwner = new Map(); // task id → webContents id of the window whose word counts (history: the main window)
+ipcMain.on('store:tasks', (_e, p) => {
+  const list = Array.isArray(p) ? p : (p && Array.isArray(p.list) ? p.list : []);
+  const removed = new Set(p && Array.isArray(p.removed) ? p.removed : []);
+  const me = _e.sender.id;
+  const mainId = win && !win.isDestroyed() ? win.webContents.id : -1;
+  const byId = new Map((store.tasks || []).map((t) => [t.id, t]));
+  for (const id of removed) { byId.delete(id); taskOwner.delete(id); }
+  for (const t of list) {
+    if (!t || !t.id) continue;
+    const r = t.tabId && ptys.get(t.tabId);
+    const live = r && !r.hold && r.wc && !r.wc.isDestroyed() ? r.wc.id : null; // the window its tab is open in
+    const owner = live ?? taskOwner.get(t.id) ?? (byId.has(t.id) ? mainId : me);
+    if (owner !== me && !(r && r.hold)) continue; // another window's: its copy here is not the word
+    byId.set(t.id, t);
+    taskOwner.set(t.id, me);
+  }
+  store.tasks = [...byId.values()].sort((a, b) => (a.start || 0) - (b.start || 0)).slice(-400);
+  saveStore();
+  toOthers(_e.sender, 'tasks:changed', store.tasks);
+});
+ipcMain.on('store:settings', (_e, settings) => { store.settings = { ...store.settings, ...settings }; saveStore(); toOthers(_e.sender, 'settings:changed', settings); });
+// Which tab is where: each window tells its tabs; every window learns the others' (a conversation open in another
+// window is not opened twice, and its row leads there).
+const tabsBy = new Map(); // webContents id → [{ id, sessionId, agent, cwd, label, status }]
+function sendRemoteTabs() {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w.isDestroyed()) continue;
+    const id = w.webContents.id;
+    const list = [];
+    for (const [k, v] of tabsBy) if (k !== id) list.push(...v);
+    w.webContents.send('tabs:remote', list);
+  }
+}
+ipcMain.on('tabs:report', (_e, list) => { tabsBy.set(_e.sender.id, Array.isArray(list) ? list.slice(0, 200) : []); sendRemoteTabs(); });
+/** Go to a tab in whichever window holds it. */
+ipcMain.on('win:focusTab', (_e, tabId) => {
+  const owner = ptys.get(tabId)?.wc;
+  const w = owner && !owner.isDestroyed() && BrowserWindow.fromWebContents(owner);
+  if (!w) return;
+  if (w.isMinimized()) w.restore();
+  w.show();
+  w.focus();
+  owner.send('focus-tab', tabId);
+});
+/** The windows tabs went to, for the next start: where each was and which tabs it had. */
+function saveWindows() {
+  store.windows = [...soloWins.values()].filter((s) => s.layout && s.layout.tabs && s.layout.tabs.length && !s.win.isDestroyed())
+    .map((s) => ({ bounds: s.win.getBounds(), layout: s.layout }));
+  saveStore();
+}
 const runningBy = new Map(); // agent sessions running, per window (the quit question counts them all)
 ipcMain.on('app:running', (_e, n) => {
   runningBy.set(_e.sender.id, n | 0);
@@ -2136,8 +2207,8 @@ function bgImageData() {
   if (!f) return '';
   return `data:${IMG_TYPES[path.extname(f).toLowerCase()]};base64,${fs.readFileSync(f).toString('base64')}`;
 }
-ipcMain.handle('bg:pick', async () => {
-  const r = await dialog.showOpenDialog(win, { title: T('배경 이미지 선택'), properties: ['openFile'], filters: [{ name: T('이미지'), extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }] });
+ipcMain.handle('bg:pick', async (_e) => {
+  const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(_e.sender) || win, { title: T('배경 이미지 선택'), properties: ['openFile'], filters: [{ name: T('이미지'), extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }] });
   if (r.canceled || !r.filePaths[0]) return '';
   const src = r.filePaths[0];
   const ext = path.extname(src).toLowerCase();
@@ -2153,8 +2224,8 @@ ipcMain.handle('bg:clear', () => { const f = bgImageFile(); if (f) fs.rmSync(f, 
 
 ipcMain.on('win:title', (_e, title) => { const w = BrowserWindow.fromWebContents(_e.sender); if (w && typeof title === 'string') w.setTitle(title.slice(0, 200)); });
 
-ipcMain.handle('dialog:folder', async () => {
-  const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'], title: T('프로젝트 폴더 선택') });
+ipcMain.handle('dialog:folder', async (_e) => {
+  const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(_e.sender) || win, { properties: ['openDirectory'], title: T('프로젝트 폴더 선택') });
   return r.canceled ? null : r.filePaths[0];
 });
 
@@ -2172,33 +2243,41 @@ ipcMain.handle('progress:open', (_e, dir) => {
   return progress.open(dir);
 });
 /*
- * 진행도 in a window of its own (picked in the folder list instead of the terminal area): the same page the browser
- * gets (#p=<key>, no embed), in the app's theme of the moment. One window per folder; asking again brings it up.
+ * 진행도 in a window of its own (picked in the folder list instead of the terminal area): a MinsuTerm window showing
+ * only 진행도 보기 (index.html?progress=<folder>), so it looks and works as in the main window. Its room requests
+ * (rename a session, end one) reach the window that holds that tab (progress:room); settings, the theme among them,
+ * reach it as they reach every window. One window per folder; asking again brings it up.
  */
 const progressWins = new Map();
-ipcMain.handle('progress:window', async (_e, dir, theme, title) => {
+ipcMain.handle('progress:window', async (_e, dir, title) => {
   if (!isFolder(dir) || !fs.existsSync(dir)) throw new Error('폴더를 찾지 못했어요');
   const key = path.resolve(dir).toLowerCase();
   const had = progressWins.get(key);
   if (had && !had.isDestroyed()) { if (had.isMinimized()) had.restore(); had.focus(); return true; }
-  const r = await progress.open(dir);
-  const name = String(title || r.name || path.basename(dir)).slice(0, 80);
-  const dark = nativeTheme.shouldUseDarkColors;
-  const w = new BrowserWindow({
-    width: 1180, height: 820, minWidth: 560, minHeight: 420, title: `진행도 · ${name}`, icon: ICON,
-    backgroundColor: dark ? '#10131a' : '#fafbfc', autoHideMenuBar: true,
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
-  });
-  w.removeMenu();
-  w.on('page-title-updated', (e) => e.preventDefault()); // keeps the folder name in the title
-  // only the progress server's pages inside; links out go to the browser
+  const name = String(title || path.basename(dir)).slice(0, 80);
+  const w = new BrowserWindow(appWindowOptions({ width: 1180, height: 820, minWidth: 560, minHeight: 420 }));
   w.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
-  w.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(r.origin)) { e.preventDefault(); if (/^https?:\/\//i.test(url)) shell.openExternal(url); } });
-  const hash = typeof theme === 'string' && /^[\w-]{0,12000}$/.test(theme) ? `&theme=${theme}` : '';
-  w.loadURL(`${r.url}#p=${r.key}${hash}`);
+  w.webContents.on('will-navigate', (e) => e.preventDefault());
+  w.webContents.on('render-process-gone', () => { if (!w.isDestroyed()) w.close(); });
+  w.loadFile(path.join(__dirname, 'renderer', 'index.html'), { query: { progress: dir, name } });
   progressWins.set(key, w);
   w.on('closed', () => progressWins.delete(key));
   return true;
+});
+/**
+ * A room request from a 진행도 page (rename a session, the facts before ending one, end it), with the folder that page
+ * shows: answered by the window holding that tab (asked in turn, the main one first), else by the main window.
+ */
+ipcMain.handle('progress:room', async (_e, d) => {
+  if (!d || typeof d !== 'object' || !['rename', 'kickInfo', 'kick'].includes(d.op)) return null;
+  const arg = JSON.stringify(d);
+  let at = null;
+  for (const w of appWindows()) {
+    try { if (await w.webContents.executeJavaScript(`roomHas(${arg})`, true)) { at = w; break; } } catch { /* a window still starting */ }
+  }
+  at = at || (win && !win.isDestroyed() ? win : null);
+  if (!at) return null;
+  try { return await at.webContents.executeJavaScript(`roomRequest(${arg})`, true); } catch { return null; }
 });
 ipcMain.handle('progress:summary', (_e, dirs) => (Array.isArray(dirs) ? dirs.slice(0, 60) : [dirs]).map((d) => (isFolder(d) ? progress.summary(d) : null)));
 ipcMain.on('open:userdata', () => shell.openPath(app.getPath('userData')));
@@ -2323,11 +2402,74 @@ function appWindowOptions(extra) {
 }
 
 /*
- * A tab dragged out of the window: a window of its own (the same page, ?solo=1) takes the tab over. Its pty stays
- * where it runs; its output waits (hold) until the new page claims it, the scrollback goes over as text, and closing
- * that window closes its tabs. The page asks for what it is to show with solo:init.
+ * More windows, one app. A tab dragged out of a window goes to the MinsuTerm window it is let go over (the one in
+ * front there), or to a new one (the same page, ?solo=1). Its pty stays where it runs: its output waits (hold) until
+ * the window taking it claims it, the scrollback goes over as text, its terminal modes and its task with it. A tab
+ * no window takes within 15 s goes back where it was. Each window saves its own tabs (store.windows, for the next
+ * start) and asks before it closes while an agent works in it.
  */
-const soloWins = new Map(); // webContents id → { win, payload }
+const soloWins = new Map(); // webContents id → { win, init, layout }
+const lastFocus = new Map(); // webContents id → when that window was last in front (the drop goes to the one on top)
+let quitting = false; // the app is ending: the windows close without asking, and keep their tabs for the next start
+
+function holdFor(r, payload, from) {
+  r.hold = true;
+  r.holdPayload = payload;
+  clearTimeout(r.holdT);
+  // nobody took it (the new window failed to start, or the one it went to was not ready): back to where it was
+  r.holdT = setTimeout(() => {
+    if (!r.hold || ptys.get(payload.id) !== r) return;
+    const back = from && !from.isDestroyed() ? from : win && !win.isDestroyed() ? win : null;
+    if (back) back.webContents.send('tab:adopt', payload);
+    else { try { r.p.kill(); } catch { /* ignore */ } ptys.delete(payload.id); outBuffers.delete(payload.id); }
+  }, 15000);
+}
+
+/** A window that holds tabs, besides the main one: init is { attach: <a tab dragged in> } or { layout: <tabs to restore> }. */
+function openAppWindow({ x, y, width, height, init }) {
+  const w = new BrowserWindow(appWindowOptions({ width, height, x, y }));
+  const wc = w.webContents;
+  const key = wc.id;
+  const s = { win: w, init, layout: init.layout || null };
+  soloWins.set(key, s);
+  lastFocus.set(key, Date.now());
+  wc.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  wc.on('will-navigate', (e) => e.preventDefault());
+  wc.on('render-process-gone', () => { if (!w.isDestroyed()) w.destroy(); });
+  w.on('focus', () => { lastFocus.set(key, Date.now()); w.flashFrame(false); wc.send('win:focus', true); });
+  w.on('blur', () => { if (!wc.isDestroyed()) wc.send('win:focus', false); });
+  w.on('move', () => saveWindowsSoon());
+  w.on('resize', () => saveWindowsSoon());
+  w.on('close', (e) => {
+    const running = runningBy.get(key) || 0;
+    if (quitting || forceClose || !store.settings.confirmClose || running === 0) return;
+    const choice = dialog.showMessageBoxSync(w, {
+      type: 'question', buttons: [T('닫기'), T('취소')], defaultId: 1, cancelId: 1, title: 'MinsuTerm',
+      message: T(`이 창에서 실행 중인 에이전트 세션 ${running}개가 있습니다. 창을 닫을까요?`),
+      detail: T('창을 닫으면 이 창의 세션이 종료됩니다. 탭을 다른 창으로 끌어다 놓으면 이어서 쓸 수 있어요.'),
+      noLink: true,
+    });
+    if (choice === 1) e.preventDefault();
+  });
+  w.on('closed', () => {
+    killOwnedBy(wc); // its tabs close with it (a tab on its way to another window is not one of them)
+    soloWins.delete(key);
+    lastFocus.delete(key);
+    runningBy.delete(key);
+    tabsBy.delete(key);
+    runningCount = [...runningBy.values()].reduce((a, c) => a + c, 0);
+    sendRemoteTabs();
+    if (!quitting) saveWindows(); // closed by the user: not brought back next time
+  });
+  w.loadFile(path.join(__dirname, 'renderer', 'index.html'), { query: { solo: '1' } });
+  return w;
+}
+let windowsT = null;
+function saveWindowsSoon() { clearTimeout(windowsT); windowsT = setTimeout(() => { if (!quitting) saveWindows(); }, 600); }
+
 ipcMain.handle('tab:detach', (_e, payload) => {
   const r = payload && ptys.get(payload.id);
   if (!r) throw new Error('터미널을 찾지 못했어요');
@@ -2335,45 +2477,42 @@ ipcMain.handle('tab:detach', (_e, payload) => {
   const b = from.getBounds();
   const width = Math.max(640, Math.min(b.width, Number(payload.width) || 1000));
   const height = Math.max(400, Math.min(b.height, Number(payload.height) || 700));
-  const sx = Number.isFinite(payload.screenX) ? payload.screenX : b.x + 60;
-  const sy = Number.isFinite(payload.screenY) ? payload.screenY : b.y + 60;
-  r.hold = true;
-  const w = new BrowserWindow(appWindowOptions({ width, height, x: Math.round(sx - Math.min(160, width / 3)), y: Math.round(sy - 18) }));
-  const wc = w.webContents;
-  const key = wc.id;
-  soloWins.set(key, { win: w, payload });
-  w.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
-    return { action: 'deny' };
-  });
-  w.webContents.on('will-navigate', (e) => e.preventDefault());
-  w.webContents.on('render-process-gone', () => { if (!w.isDestroyed()) w.close(); });
-  w.on('focus', () => { w.flashFrame(false); wc.send('win:focus', true); });
-  w.on('blur', () => { if (!wc.isDestroyed()) wc.send('win:focus', false); });
-  w.on('closed', () => {
-    killOwnedBy(wc); // its tabs close with it
-    soloWins.delete(key);
-    runningBy.delete(key);
-    runningCount = [...runningBy.values()].reduce((a, c) => a + c, 0);
-  });
-  w.loadFile(path.join(__dirname, 'renderer', 'index.html'), { query: { solo: '1' } });
-  // a page that never claims it (it failed to start): the tab's output is not held for ever
-  setTimeout(() => { if (r.hold && ptys.get(payload.id) === r) { r.hold = false; flushOutput(); } }, 15000);
+  // where it was let go: the system's own pointer position (page coordinates shift with the window's zoom); the test
+  // harness drags with made-up events, which leave the real pointer where it is
+  const pt = TEST_DIR && Number.isFinite(payload.screenX) ? { x: payload.screenX, y: payload.screenY } : screen.getCursorScreenPoint();
+  const sx = pt.x;
+  const sy = pt.y;
+  holdFor(r, payload, from);
+  // let go over another MinsuTerm window: it joins that window's tabs (how a tab goes back). Of the windows there,
+  // the one in front: the one most recently brought up. 진행도 windows take no tabs.
+  const inside = (w) => { const k = w.getBounds(); return sx >= k.x && sx < k.x + k.width && sy >= k.y && sy < k.y + k.height; };
+  const to = appWindows().filter((w) => w !== from && w.isVisible() && !w.isMinimized() && inside(w))
+    .sort((a, c) => (lastFocus.get(c.webContents.id) || 0) - (lastFocus.get(a.webContents.id) || 0))[0];
+  if (to) {
+    to.webContents.send('tab:adopt', payload);
+    to.focus();
+    return 'joined';
+  }
+  openAppWindow({ width, height, x: Math.round(sx - Math.min(160, width / 3)), y: Math.round(sy - 18), init: { attach: payload } });
   return true;
 });
-ipcMain.handle('solo:init', (_e) => soloWins.get(_e.sender.id)?.payload || null);
-/** The new window takes its tab's pty: from now on its output goes there. */
+ipcMain.handle('solo:init', (_e) => soloWins.get(_e.sender.id)?.init || null);
+/** A window takes a tab's pty (dragged in, or given back): from now on its output goes there. */
 ipcMain.handle('pty:claim', (_e, id, cols, rows) => {
   const r = ptys.get(id);
   if (!r) return false;
   r.wc = _e.sender;
   r.hold = false;
+  r.holdPayload = null;
+  clearTimeout(r.holdT);
   try { r.p.resize(Math.max(2, cols | 0), Math.max(2, rows | 0)); } catch { /* ignore */ }
+  try { r.p.resume(); } catch { /* not paused */ } // a tab held back for flow control when it left goes on here
   flushOutput();
   return true;
 });
 
 function createWindow() {
+  quitting = false;
   const w = store.window;
   // the saved position counts only while a display still shows part of it (a monitor may have been unplugged since)
   const shown = Number.isFinite(w.x) && Number.isFinite(w.y) && screen.getAllDisplays().some(({ workArea: a }) => (
@@ -2422,7 +2561,7 @@ function createWindow() {
   };
   win.on('resize', rememberBounds);
   win.on('move', rememberBounds);
-  win.on('focus', () => { win.flashFrame(false); send('win:focus', true); });
+  win.on('focus', () => { lastFocus.set(win.webContents.id, Date.now()); win.flashFrame(false); send('win:focus', true); });
   win.on('blur', () => send('win:focus', false));
 
   win.on('close', (e) => {
@@ -2444,7 +2583,10 @@ function createWindow() {
   });
 
   win.on('closed', () => {
+    quitting = true;
+    saveWindows();
     for (const { win: w } of soloWins.values()) if (!w.isDestroyed()) w.destroy();
+    for (const w of progressWins.values()) if (!w.isDestroyed()) w.destroy();
     killAll();
     win = null;
   });
@@ -2460,6 +2602,14 @@ app.on('second-instance', () => {
 app.whenReady().then(() => {
   buildMenu();
   createWindow();
+  const saved = store.settings.restoreSessions && Array.isArray(store.windows) ? store.windows : [];
+  store.windows = [];
+  for (const sw of saved.slice(0, 8)) {
+    const k = sw && sw.bounds;
+    if (!k || !sw.layout || !Array.isArray(sw.layout.tabs) || !sw.layout.tabs.length) continue;
+    const shown = screen.getAllDisplays().some(({ workArea: a }) => k.x < a.x + a.width && k.x + k.width > a.x && k.y < a.y + a.height && k.y + k.height > a.y);
+    openAppWindow({ width: Math.max(640, k.width | 0), height: Math.max(400, k.height | 0), x: shown ? k.x : undefined, y: shown ? k.y : undefined, init: { layout: sw.layout } });
+  }
   if (TEST_DIR) runTestScript();
   progress.refreshInstalled().catch(() => {}); // the skills MinsuTerm installed follow the app's version
   usage.refreshBridge(); // and so does the status line link, when it is in
@@ -2556,6 +2706,15 @@ async function runTestScript() {
         await shot(`step-${log.length}-${step.startsWith('pjs:') ? 'pjs' : 'pclick'}`);
         continue;
       }
+      if (step.startsWith('mouse:') || step.startsWith('fmouse:')) { // "mouse:<down|move|up>:<x>:<y>[:<buttons>]": a mouse event at window coordinates (may lie outside it); fmouse: to the window in front
+        const [pre, kind, xs, ys, bs] = step.split(':');
+        const type = { down: 'mouseDown', move: 'mouseMove', up: 'mouseUp' }[kind];
+        const tw = pre === 'fmouse' ? ([...soloWins.values()].pop() || {}).win || win : win; // fmouse: the newest window a tab went to
+        if (type) tw.webContents.sendInputEvent({ type, x: Number(xs), y: Number(ys), button: 'left', clickCount: 1, ...(bs !== undefined ? { modifiers: Number(bs) ? ['leftButtonDown'] : [] } : kind === 'move' ? { modifiers: ['leftButtonDown'] } : {}) });
+        log.push(`${step}: sent`);
+        await wait(60);
+        continue;
+      }
       if (step.startsWith('size:')) { // "size:<w>x<h>": resize the window (a maximised screen behaves differently from the default 1280 x 800)
         const [w, h2] = step.slice(5).split('x').map(Number);
         win.setBounds({ x: 0, y: 0, width: w, height: h2 });
@@ -2625,7 +2784,21 @@ async function runTestScript() {
   app.quit();
 }
 
-app.on('before-quit', () => { saveStoreNow(); progress.stopServer(); });
+app.on('before-quit', (e) => {
+  if (!quitting && !forceClose && store.settings.confirmClose && runningCount > 0 && win && !win.isDestroyed()) {
+    const choice = dialog.showMessageBoxSync(win, {
+      type: 'question', buttons: [T('종료'), T('취소')], defaultId: 1, cancelId: 1, title: 'MinsuTerm',
+      message: T(`실행 중인 에이전트 세션 ${runningCount}개가 있습니다. 종료할까요?`),
+      detail: store.settings.restoreSessions ? T('다음 실행 시 탭 구성이 복원되고 Claude / Codex 대화가 그대로 이어집니다.') : T('모든 세션이 종료됩니다.'),
+      noLink: true,
+    });
+    if (choice === 1) { e.preventDefault(); return; }
+    forceClose = true;
+  }
+  if (!quitting) { quitting = true; saveWindows(); }
+  saveStoreNow();
+  progress.stopServer();
+});
 app.on('window-all-closed', () => {
   killAll();
   if (probe) { try { probe.kill(); } catch { /* ignore */ } }

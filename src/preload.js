@@ -28,7 +28,13 @@ contextBridge.exposeInMainWorld('mt', {
     claim: (id, cols, rows) => ipcRenderer.invoke('pty:claim', id, cols, rows), // a window a tab was dragged into takes its pty
   },
   // a tab dragged out of the window: a window of its own (solo), which asks what it is to show
-  tab: { detach: (payload) => ipcRenderer.invoke('tab:detach', payload) },
+  tab: {
+    detach: (payload) => ipcRenderer.invoke('tab:detach', payload),
+    report: (list) => ipcRenderer.send('tabs:report', list), // this window's tabs, for the others to know
+    onRemote: (fn) => on('tabs:remote', fn), // the other windows' tabs
+    focus: (tabId) => ipcRenderer.send('win:focusTab', tabId), // go to a tab in whichever window holds it
+    onAdopt: (fn) => on('tab:adopt', fn), // a tab another window let go over this one: it joins these tabs
+  },
   solo: { init: () => ipcRenderer.invoke('solo:init') },
 
   agent: {
@@ -61,6 +67,10 @@ contextBridge.exposeInMainWorld('mt', {
     layout: (l) => ipcRenderer.send('store:layout', l),
     tasks: (t) => ipcRenderer.send('store:tasks', t),
     settings: (s) => ipcRenderer.send('store:settings', s),
+    // what another window saved (one app, many windows)
+    onSettings: (fn) => on('settings:changed', fn),
+    onProjects: (fn) => on('projects:changed', fn),
+    onTasks: (fn) => on('tasks:changed', fn),
   },
 
   fonts: () => ipcRenderer.invoke('fonts:list'),
@@ -85,7 +95,8 @@ contextBridge.exposeInMainWorld('mt', {
     status: () => ipcRenderer.invoke('progress:status'),
     setup: () => ipcRenderer.invoke('progress:setup'),
     open: (dir) => ipcRenderer.invoke('progress:open', dir),
-    window: (dir, theme, title) => ipcRenderer.invoke('progress:window', dir, theme, title), // 진행도 in its own window
+    window: (dir, title) => ipcRenderer.invoke('progress:window', dir, title), // 진행도 in a window of its own
+    room: (d) => ipcRenderer.invoke('progress:room', d), // (that window) its page's room request, answered by the main window
     summary: (dir) => ipcRenderer.invoke('progress:summary', dir),
   },
   openUserData: () => ipcRenderer.send('open:userdata'),

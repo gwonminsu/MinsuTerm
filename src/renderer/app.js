@@ -229,12 +229,17 @@ function shortMiddlePath(p, max = 44) {
 /* Persistence                                                         */
 /* ------------------------------------------------------------------ */
 
-/** A window a tab was dragged out into (index.html?solo=1): it shows that tab, and saves no layout of its own. */
-const SOLO = new URLSearchParams(location.search).get('solo') === '1';
+/** A window besides the main one (index.html?solo=1): a tab was dragged out into it, or it came back with its tabs. */
+/** A window of 진행도 alone (index.html?progress=<folder>&name=<name>): 진행도 보기 over the whole window, no tabs. */
+const PROGRESS_ONLY = new URLSearchParams(location.search).get('progress') || '';
+const PROGRESS_ONLY_SETTINGS = { bgAnim: 'none', typingFx: 'none', crt: false, sidebarVisible: false }; // (in that window only, never saved)
+const SOLO = new URLSearchParams(location.search).get('solo') === '1' || !!PROGRESS_ONLY;
+// what a window of its own keeps whatever is set: a window tabs went to has no sidebar (that is the main window's)
+const WINDOW_SETTINGS = PROGRESS_ONLY ? PROGRESS_ONLY_SETTINGS : SOLO ? { sidebarVisible: false } : null;
 
 let layoutTimer = null;
 function saveLayout() {
-  if (SOLO) return;
+  if (PROGRESS_ONLY) return;
   clearTimeout(layoutTimer);
   layoutTimer = setTimeout(() => {
     const tabs = S.tabs.map((t) => ({
@@ -249,11 +254,54 @@ function saveLayout() {
     const active = Math.max(0, S.tabs.findIndex((t) => t.id === S.activeId));
     const groups = S.groups.map((g) => ({ dir: g.dir, idx: g.ids.map((id) => S.tabs.findIndex((t) => t.id === id)).filter((i) => i >= 0) }));
     window.mt.store.layout({ tabs, active, groups });
+    reportTabs();
   }, 200);
   window.mt.setRunning(agentTabs().length);
 }
 
-function saveProjects() { if (!SOLO) window.mt.store.projects(S.projects); }
+/*
+ * One app, many windows: this window tells the others which tabs it has (so a conversation open there is not opened
+ * twice here, and its row leads there), and learns theirs.
+ */
+S.remoteTabs = [];
+let reportT = null;
+function reportTabs() {
+  if (PROGRESS_ONLY) return;
+  clearTimeout(reportT);
+  reportT = setTimeout(() => {
+    window.mt.tab.report(S.tabs.filter((t) => !t.closed).map((t) => ({
+      id: t.id, agent: t.agent || '', cwd: t.cwd, label: tabLabel(t), status: t.status,
+      sessionId: t.sessionId || (t.launch && t.launch.sessionId) || '',
+    })));
+  }, 150);
+}
+/** A tab of another window that has this conversation open. */
+const remoteTabOfSession = (id) => (id && S.remoteTabs.find((r) => r.sessionId === id)) || null;
+window.mt.tab.onRemote((list) => { S.remoteTabs = Array.isArray(list) ? list : []; renderProjects(); renderSessions(); });
+window.mt.store.onSettings((patch) => {
+  if (!patch || typeof patch !== 'object') return;
+  Object.assign(S.settings, patch);
+  if (WINDOW_SETTINGS) Object.assign(S.settings, WINDOW_SETTINGS);
+  if ('lang' in patch) window.I18N?.setLang(S.settings.lang || 'auto');
+  applySettings();
+  renderProjects();
+  renderSessions();
+});
+window.mt.store.onProjects((list) => { if (Array.isArray(list)) { S.projects = list; renderProjects(); renderSessions(); } });
+window.mt.store.onTasks((list) => mergeTasks(list));
+/** The task list another window saved: its tasks as it has them, this window's own (its tabs') as they are here. */
+function mergeTasks(list) {
+  if (!Array.isArray(list)) return;
+  const mine = new Map(S.tasks.filter((k) => k.tabId && tabById(k.tabId)).map((k) => [k.id, k]));
+  const next = list.map((k) => mine.get(k.id) || k);
+  for (const k of mine.values()) if (!next.includes(k)) next.push(k);
+  S.tasks = next;
+  saveTasks.sent = new Set(S.tasks.map((k) => k.id));
+  renderSessions();
+  renderProjects();
+}
+
+function saveProjects() { if (!PROGRESS_ONLY) window.mt.store.projects(S.projects); }
 function saveSettings(patch) {
   Object.assign(S.settings, patch);
   window.mt.store.settings(patch);
@@ -6086,40 +6134,86 @@ async function attachPty(tab, a) {
   if (tab.closed) return;
   try { tab.fit.fit(); } catch { /* ignore */ }
   const { cols, rows } = tab.term;
-  // the lines up to the cursor's, and the cursor in its column: a shell carries on typing there
-  if (a.scroll) tab.term.write(`${a.scroll.split('\n').join('\r\n')}\x1b[${(a.cursorX || 0) + 1}G`);
-  // an agent: one column less first, then the real size: the change makes Claude or Codex redraw its screen
-  const ok = await window.mt.pty.claim(tab.id, a.agent ? Math.max(2, cols - 1) : cols, rows);
+  const lines = a.scroll ? a.scroll.split('\n') : [];
+  // the modes the program had on, before anything else (a paste must stay one paste, the keys must stay its keys)
+  const m = a.modes || {};
+  const MOUSE = { x10: '\x1b[?9h', vt200: '\x1b[?1000h\x1b[?1006h', drag: '\x1b[?1002h\x1b[?1006h', any: '\x1b[?1003h\x1b[?1006h' };
+  tab.term.write(`${m.paste ? '\x1b[?2004h' : ''}${m.cursor ? '\x1b[?1h' : ''}${m.keypad ? '\x1b=' : ''}${MOUSE[m.mouse] || ''}${m.focus ? '\x1b[?1004h' : ''}`);
+  if (IS_WIN) {
+    // Windows: the console host repaints the whole visible screen when the size changes (below), for a shell as for
+    // Claude or Codex. Only what had scrolled above the screen is written here; the screen itself is left empty for
+    // that repaint (drawn over a copy of it, the two did not line up and left stray letters).
+    const top = Math.max(0, Math.min(lines.length, a.viewTop ?? lines.length));
+    if (top) tab.term.write(`${lines.slice(0, top).join('\r\n')}${'\r\n'.repeat(rows)}`);
+    tab.term.write(m.alt ? '\x1b[?1049h\x1b[H' : '\x1b[H'); // (a full-screen program: on the other screen, as before)
+  } else if (lines.length) {
+    // elsewhere nothing repaints the screen: the lines up to the cursor's, the cursor in its column
+    tab.term.write(`${lines.join('\r\n')}\x1b[${(a.cursorX || 0) + 1}G`);
+  }
+  // The new size makes the screen be drawn again (the console host on Windows; Claude or Codex everywhere). Changed
+  // once only: a shell like cmd with Clink redraws its prompt on each change, and two left a stray copy. When the
+  // new window has the very same size, one row less first and back, so the screen is still drawn again.
+  const nudge = (IS_WIN || !!a.agent) && a.cols === cols && a.rows === rows;
+  const ok = await window.mt.pty.claim(tab.id, cols, nudge ? Math.max(2, rows - 1) : rows);
   if (tab.closed) return;
   if (!ok) {
     tab.term.write(`\r\n\x1b[31m${tr('터미널을 넘겨받지 못했습니다')}\x1b[0m\r\n`);
     setStatus(tab, 'exited');
     return;
   }
-  if (a.agent) setTimeout(() => window.mt.pty.resize(tab.id, tab.term.cols, tab.term.rows), 120);
+  if (nudge) setTimeout(() => window.mt.pty.resize(tab.id, tab.term.cols, tab.term.rows), 120);
   tab.alive = true;
   if (a.agent) {
     setAgent(tab, a.agent);
     tab.sessionId = a.sessionId || '';
     tab.permissionMode = a.permissionMode || '';
-    if (a.status === 'working') setStatus(tab, 'working');
+    if (a.status === 'working' || a.status === 'attention') setStatus(tab, a.status);
+    // its task comes along: this window carries it on (and saves it from now on)
+    if (a.task && a.task.id) {
+      const k = { ...a.task, tabId: tab.id };
+      S.tasks = S.tasks.filter((x) => x.id !== k.id).concat(k);
+      tab.taskId = k.id;
+      saveTasks();
+    }
     pollGauge(tab);
+    saveLayout();
   } else {
     setStatus(tab, 'shell');
   }
   updateTabEl(tab);
 }
 
-/** Drop a tab outside the window: it moves to a window of its own (its shell or agent keeps running). */
+/** A tab another MinsuTerm window let go over this one (one going back, or two windows joining): it joins these tabs. */
+function adoptTab(p) {
+  if (PROGRESS_ONLY || !p || !p.id || tabById(p.id)) return;
+  createTab({ attach: p, shellId: p.shellId, cwd: p.cwd, customTitle: p.customTitle });
+}
+window.mt.tab.onAdopt(adoptTab);
+
+/**
+ * Drop a tab outside the window: it moves to a window of its own, or, let go over another MinsuTerm window, joins
+ * that window's tabs (its shell or agent keeps running either way).
+ */
 async function detachTab(tab, screenX, screenY) {
   if (!tab.alive) { toast('끝난 탭은 새 창으로 옮길 수 없어요', { icon: 'info' }); return; }
   const b = tab.term.buffer.active;
   const lines = [];
   const last = b.baseY + b.cursorY; // up to the cursor's line (below it a shell has printed nothing yet)
-  for (let y = Math.max(0, last - 3000); y <= last; y++) lines.push(b.getLine(y)?.translateToString(true) ?? '');
+  const first = Math.max(0, last - 3000);
+  for (let y = first; y <= last; y++) lines.push(b.getLine(y)?.translateToString(true) ?? '');
+  const viewTop = Math.max(0, b.baseY - first); // where the screen (its last rows, as the shell sees it) starts among those lines
+  // what the running program had switched on (bracketed paste, cursor keys, mouse, focus reports, the other screen)
+  const md = tab.term.modes;
+  const modes = {
+    paste: md.bracketedPasteMode, cursor: md.applicationCursorKeysMode, keypad: md.applicationKeypadMode,
+    mouse: md.mouseTrackingMode, focus: md.sendFocusMode, alt: b.type === 'alternate',
+  };
+  const task = tab.taskId ? taskById(tab.taskId) : null;
+  if (tab.flowPaused) { tab.flowPaused = false; window.mt.pty.resume(tab.id); } // held back for flow control: let it go
   const payload = {
     id: tab.id, shellId: tab.shellId, cwd: tab.cwd, agent: tab.agent, sessionId: tab.sessionId, permissionMode: tab.permissionMode,
-    customTitle: tab.customTitle, status: tab.status, scroll: lines.join('\n'), cursorX: b.cursorX,
+    customTitle: tab.customTitle, status: tab.status, scroll: lines.join('\n'), cursorX: b.cursorX, viewTop, cols: tab.term.cols, rows: tab.term.rows,
+    modes, task: task ? { ...task } : null,
     screenX, screenY, width: window.outerWidth, height: window.outerHeight,
   };
   try {
@@ -6486,7 +6580,7 @@ async function closeTab(id, { confirmWorking = true } = {}) {
   if (tab.closed) return; // already closed while the question was up
   tab.closed = true; // whatever is still on its way for this tab (its pty starting, a transcript check) stops here
   const idx = S.tabs.indexOf(tab);
-  syncTask(tab, 'exited');
+  if (!tab.detached) syncTask(tab, 'exited'); // (a tab moving to another window takes its task along)
   if (tab.agent) S.sessionCache.delete(normP(tab.cwd)); // its conversation is a past one now (a new one may not be listed yet)
   if (!tab.detached) window.mt.pty.kill(tab.id);
   tab.alive = false;
@@ -6629,20 +6723,10 @@ function onPaneHeadPointerDown(e, tab) {
       splitDrop.update(tab, ev.clientX, ev.clientY);
     }
   };
-  const onUp = (ev) => {
+  const onUp = () => {
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onUp);
-    el.classList.remove('drag-detach');
-    if (dragging && ev && ev.type === 'pointerup' && outside(ev) && !groupOf(tab)) { // dropped outside the window
-      tabsEl.classList.remove('tabs-dragging');
-      document.body.classList.remove('grabbing');
-      (els || []).forEach((x) => { x.style.transform = ''; });
-      el.classList.remove('dragging', 'drag-out');
-      splitDrop.clear();
-      detachTab(tab, ev.screenX, ev.screenY);
-      return;
-    }
     if (!dragging) return;
     document.body.classList.remove('grabbing');
     tab.host.classList.remove('pane-dragging');
@@ -6727,10 +6811,20 @@ function onTabPointerDown(e, tab) {
   let from;
   let target;
 
-  const outside = (ev) => ev.clientX < 0 || ev.clientY < 0 || ev.clientX >= innerWidth || ev.clientY >= innerHeight;
+  // Past the window's edge the tab says it will leave (dashed); let go there, it moves to a window of its own.
+  // Where it was let go is taken from whichever comes: the pointerup out there, or (when the system keeps that one
+  // from the window) the capture ending, a cancel, or the pointer coming back with the button already up.
+  const M = 24; // a little past the edge is still a move along the bar
+  const outside = (ev) => ev.clientX < -M || ev.clientY < -M || ev.clientX >= innerWidth + M || ev.clientY >= innerHeight + M;
+  let lastOut = null; // the screen point last seen outside the window while dragging
   const onMove = (ev) => {
+    if (dragging && ev.buttons === 0) { onUp({ type: 'released' }); return; } // let go somewhere we were not told about
     const dx = ev.clientX - startX;
-    if (dragging && !groupOf(tab)) el.classList.toggle('drag-detach', outside(ev));
+    if (dragging && !groupOf(tab)) {
+      const o = outside(ev);
+      el.classList.toggle('drag-detach', o);
+      lastOut = o ? { x: ev.screenX, y: ev.screenY } : null;
+    }
     if (!dragging) {
       if (Math.abs(dx) < 5 && Math.abs(ev.clientY - startY) < 5) return;
       dragging = true;
@@ -6775,10 +6869,25 @@ function onTabPointerDown(e, tab) {
     });
   };
 
-  const onUp = () => {
+  let ended = false;
+  const onUp = (ev) => {
+    if (ended) return;
+    ended = true;
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onUp);
+    el.removeEventListener('lostpointercapture', onLost);
+    el.classList.remove('drag-detach');
+    const at = ev && ev.type === 'pointerup' && outside(ev) ? { x: ev.screenX, y: ev.screenY } : ev && ev.type !== 'pointerup' ? lastOut : null;
+    if (dragging && at && !groupOf(tab)) { // let go outside the window
+      tabsEl.classList.remove('tabs-dragging');
+      document.body.classList.remove('grabbing');
+      (els || []).forEach((x) => { x.style.transform = ''; });
+      el.classList.remove('dragging', 'drag-out');
+      splitDrop.clear();
+      detachTab(tab, at.x, at.y);
+      return;
+    }
     if (!dragging) { // a plain click (on the tab already in front it took the focus off the terminal: hand it back)
       const g = groupOf(tab), f = itemFocus(tab); // a split's item: its last used pane, unless one of its panes is in front
       if (g ? !g.ids.includes(S.activeId) : tab.id !== S.activeId) activate(f.id);
@@ -6807,10 +6916,13 @@ function onTabPointerDown(e, tab) {
     flip(el, visualLeft);
     activeTab()?.term.focus();
   };
+  // the capture ends with the button let go (also when the pointerup itself never reached the window)
+  const onLost = () => { if (dragging) setTimeout(() => onUp({ type: 'lostpointercapture' }), 30); };
 
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
   window.addEventListener('pointercancel', onUp);
+  el.addEventListener('lostpointercapture', onLost);
 }
 
 tabsEl.addEventListener('wheel', (e) => {
@@ -8491,6 +8603,7 @@ function historyHtml(p) {
         <span class="pr-dot"></span>
         <span class="pr-ico">${icon(AGENTS[s.agent].icon)}</span>
         <span class="pr-title${s.title === '(제목 없음)' ? '' : ' no-i18n'}">${esc(s.title)}</span>
+        ${remoteTabOfSession(s.id) ? '<span class="pr-where">다른 창</span>' : ''}
         <span class="pr-time">${relTime(s.mtime)}</span>
         <span class="pr-actions">
           <button class="icon-btn go" data-a="resume" title="이 대화 이어서">${icon('play')}</button>
@@ -8802,6 +8915,8 @@ async function openTrash() {
 }
 
 async function deleteSession(s, cwd) {
+  const there = remoteTabOfSession(s.id);
+  if (there) { toast('다른 창에 열려 있는 대화예요. 그 창에서 닫은 뒤 지워 주세요', { icon: 'info' }); window.mt.tab.focus(there.id); return; }
   const openTab = tabOfSession(s.id);
   const A = AGENTS[s.agent];
   // two whole sentences rather than one with an optional word: each is a phrase the translations can match
@@ -8846,13 +8961,13 @@ function renderStatus() {
   stc.title = t && t.agent ? '프롬프트 작성기 (Ctrl+Shift+E)' : '프롬프트 작성기 · Claude 또는 Codex 탭에서 쓸 수 있어요';
   $('#st-session').hidden = !(t && t.agent && t.sessionId);
   document.getElementById('app').dataset.agent = t && t.agent ? t.agent : '';
-  window.mt.setTitle(t ? `${tabLabel(t)} — MinsuTerm` : 'MinsuTerm');
+  if (!PROGRESS_ONLY) window.mt.setTitle(t ? `${tabLabel(t)} — MinsuTerm` : 'MinsuTerm');
   if (!t) { kind.innerHTML = ''; cwd.textContent = ''; st.innerHTML = ''; return; }
   kind.className = `st-item st-kind${t.agent ? ' ' + t.agent : ''}`;
   kind.innerHTML = t.agent
     ? `${icon(AGENTS[t.agent].icon)}${AGENTS[t.agent].name}${t.permissionMode ? ` <span class="perm">${esc(PERM_LABEL[t.permissionMode] || t.permissionMode)}</span>` : ''}`
     : `${icon('terminal')}${esc(shellName(t.shellId))}`;
-  cwd.textContent = t.cwd;
+  cwd.textContent = shortMiddlePath(prettyPath(t.cwd)); // as 진행도 shows it: home as ~, the middle folders as …
   cwd.title = t.cwd;
   if (t.agent && t.sessionId) {
     $('#st-session').textContent = `세션 ${t.sessionId.slice(0, 8)}`;
@@ -8905,6 +9020,8 @@ function newAgent(type, { cwd, mode = 'new', sessionId = '', permissionMode = ''
 function resumeSession(agent, cwd, sessionId) {
   const open = tabOfSession(sessionId);
   if (open) return activate(open.id);
+  const there = remoteTabOfSession(sessionId); // open in another window: go there
+  if (there) return window.mt.tab.focus(there.id);
   return newAgent(agent, { cwd, mode: 'resume', sessionId });
 }
 
@@ -8999,7 +9116,7 @@ function applySettings() {
   renderStatus();
   promptLookCheck();
   refreshGauges();
-  if (S.progress && S.progress.open) postProgressTheme(); // the open progress page follows theme / accent / light-dark
+  if (S.progress) postProgressTheme(); // the open progress page (and any 진행도 window) follows theme / accent / light-dark
 }
 
 /*
@@ -9056,6 +9173,7 @@ function setSidebarWidth(w, save) {
 })();
 
 function toggleSidebar(force) {
+  if (SOLO) return; // a window tabs went to has none
   const app = document.getElementById('app');
   const show = force != null ? force : app.classList.contains('no-sidebar');
   app.classList.toggle('no-sidebar', !show);
@@ -9219,12 +9337,16 @@ const taskById = (id) => S.tasks.find((k) => k.id === id) || null;
 const MAX_TASKS = 400; // kept in memory and on disk
 let taskSaveTimer = null;
 function saveTasks() {
-  if (SOLO) return;
+  if (PROGRESS_ONLY) return;
   clearTimeout(taskSaveTimer);
   taskSaveTimer = setTimeout(() => {
     const keep = S.tasks.filter((k) => k.status !== 'pending').slice(-MAX_TASKS)
-      .map(({ id, agent, path, text, status, start, end, sessionId }) => ({ id, agent, path, text, status, start, end, sessionId }));
-    window.mt.store.tasks(keep);
+      .map(({ id, agent, path, text, status, start, end, sessionId, tabId }) => ({ id, agent, path, text, status, start, end, sessionId, tabId }));
+    // with what this window took away since it last saved (the merged list keeps the others' tasks)
+    const ids = new Set(keep.map((k) => k.id));
+    const removed = [...(saveTasks.sent || [])].filter((id) => !ids.has(id));
+    saveTasks.sent = ids;
+    window.mt.store.tasks({ list: keep, removed });
   }, 400);
 }
 
@@ -9463,6 +9585,8 @@ function unflagTask(task) {
 async function openTask(task) {
   const tab = (task.tabId && tabById(task.tabId)) || tabOfSession(task.sessionId);
   if (tab) return activate(tab.id);
+  const there = (task.tabId && S.remoteTabs.find((r) => r.id === task.tabId)) || remoteTabOfSession(task.sessionId);
+  if (there) return window.mt.tab.focus(there.id);
   if (task.sessionId) {
     // its conversation may have gone to the trash since: resuming it would only fail, in a new tab
     let ok = true;
@@ -9604,8 +9728,9 @@ function progressTheme() {
 }
 const b64url = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 function postProgressTheme() {
+  const t = progressTheme();
   if (!S.progress.open || !S.progress.origin || PG.frame.hidden) return;
-  try { PG.frame.contentWindow.postMessage(progressTheme(), S.progress.origin); } catch { /* not loaded yet: the hash carried the theme */ }
+  try { PG.frame.contentWindow.postMessage(t, S.progress.origin); } catch { /* not loaded yet: the hash carried the theme */ }
 }
 
 async function openProgress(dir, name) {
@@ -9637,7 +9762,7 @@ async function openProgressWindow(dir, name) {
   try {
     const st = await window.mt.progress.status();
     if (!st.ready && !S.progress.skipSetup) { openProgress(dir, name); return; }
-    await window.mt.progress.window(dir, b64url(JSON.stringify(progressTheme())), name || basename(dir));
+    await window.mt.progress.window(dir, name || basename(dir));
   } catch (err) {
     toast(`진행도 창을 열지 못했어요: ${err.message || err}`, { icon: 'info' });
   }
@@ -9678,20 +9803,20 @@ window.addEventListener('message', (e) => {
  * 방에서 내쫓기: the page's room asks which tab holds the main agent's session (for its warning), then asks to end it.
  * The tab is looked up again here each time from the record's session id; the page never names a tab itself.
  */
-function roomTab(owner, agent, guess) {
+function roomTab(owner, agent, guess, folder = S.progress.path) {
   const live = S.tabs.filter((t) => t.alive && !t.closed && t.agent);
   const own = owner && live.find((t) => t.sessionId === owner);
   if (own || !guess) return own || null;
   // the main agent, its session id not known yet: the folder's one tab of that agent whose session is not known either
-  const same = live.filter((t) => !t.sessionId && (!agent || t.agent === agent) && samePath(t.cwd, S.progress.path));
+  const same = live.filter((t) => !t.sessionId && (!agent || t.agent === agent) && samePath(t.cwd, folder));
   return same.length === 1 ? same[0] : null;
 }
 
 /** Rename a room character's session: its own /rename while it is open and idle, its transcript when it is not open. */
-async function renameRoomSession(owner, agent, guess, raw) {
+async function renameRoomSession(owner, agent, guess, raw, folder = S.progress.path) {
   const name = String(raw ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
   if (!name) return { ok: false, error: '이름이 비어 있어요' };
-  const t = roomTab(owner, agent, guess);
+  const t = roomTab(owner, agent, guess, folder);
   if (t) {
     const A = AGENTS[t.agent].name;
     if (roomTabBusy(t) || t.kicking) return { ok: false, error: `${A}가 일하는 중이라 지금은 바꿀 수 없어요. 일이 끝난 뒤에 다시 해 주세요` };
@@ -9710,7 +9835,7 @@ async function renameRoomSession(owner, agent, guess, raw) {
   }
   if (agent === 'codex') return { ok: false, error: 'Codex 세션은 탭에 열려 있을 때만 이름을 바꿀 수 있어요' };
   let ok = false;
-  try { ok = await window.mt.agent.rename(S.progress.path, owner, name); } catch { /* reported below */ }
+  try { ok = await window.mt.agent.rename(folder, owner, name); } catch { /* reported below */ }
   if (!ok) return { ok: false, error: '그 세션의 대화 기록을 찾지 못했어요' };
   S.sessionCache.delete(normP(S.progress.path)); // the sidebar's list of its conversations shows the new name
   renderProjects();
@@ -9741,35 +9866,53 @@ async function endAgentSession(tab) {
   return gone() ? 'killed' : '';
 }
 
-window.addEventListener('message', async (e) => {
-  const d = e.data;
-  if (!S.progress.open || e.source !== PG.frame.contentWindow || e.origin !== S.progress.origin || !d || d.type !== 'minsuterm-room') return;
-  const reply = (msg) => { try { PG.frame.contentWindow.postMessage({ type: 'minsuterm-room', req: d.req, ...msg }, S.progress.origin); } catch { /* the page went away */ } };
+/**
+ * A room request from a progress page (rename a session, the facts before ending one, end it): the answer, or null
+ * for none. Asked by the page in the terminal area, and by a 진행도 window through main (progress:room).
+ */
+/** Does this window hold the tab a room request is about? (main asks each window in turn) */
+function roomHas(d) {
+  if (!d || typeof d !== 'object') return false;
+  const owner = typeof d.owner === 'string' ? d.owner.toLowerCase() : '';
+  const agent = d.agent === 'codex' ? 'codex' : d.agent === 'claude' ? 'claude' : '';
+  return !!roomTab(owner, agent, d.main === true, typeof d.folder === 'string' && d.folder ? d.folder : S.progress.path);
+}
+async function roomRequest(d) {
+  if (!d || typeof d !== 'object') return null;
   const owner = typeof d.owner === 'string' ? d.owner.toLowerCase() : '';
   const agent = d.agent === 'codex' ? 'codex' : d.agent === 'claude' ? 'claude' : '';
   const guess = d.main === true; // only the main agent may be found by its folder when its session id is not known
-  if (d.op === 'rename') return reply({ op: 'renamed', ...(await renameRoomSession(owner, agent, guess, d.name)) });
-  const t = roomTab(owner, agent, guess);
+  const folder = typeof d.folder === 'string' && d.folder ? d.folder : S.progress.path; // the folder the asking page shows
+  if (d.op === 'rename') return { op: 'renamed', ...(await renameRoomSession(owner, agent, guess, d.name, folder)) };
+  const t = roomTab(owner, agent, guess, folder);
   if (d.op === 'kickInfo') {
-    if (!t) return reply({ op: 'kickInfo', found: false });
+    if (!t) return { op: 'kickInfo', found: false };
     const working = roomTabBusy(t);
-    return reply({
+    return {
       op: 'kickInfo', found: true, label: tabLabel(t), agent: t.agent, sure: !!owner && t.sessionId === owner,
       working, draft: !working && !!promptText(t), // while it works the cursor's line is its spinner, not a draft
       subs: hasRunningSubs(t), bg: hasRunningBg(t),
-    });
+    };
   }
-  if (d.op !== 'kick') return;
-  if (!t) return reply({ op: 'kicked', ok: true, how: 'none' });
-  if (t.kicking) return;
+  if (d.op !== 'kick') return null;
+  if (!t) return { op: 'kicked', ok: true, how: 'none' };
+  if (t.kicking) return null;
   t.kicking = true;
   const name = AGENTS[t.agent].name;
   const label = tabLabel(t);
   let how = '';
   try { how = await endAgentSession(t); } finally { t.kicking = false; }
-  reply({ op: 'kicked', ok: !!how, how });
   if (how) toast(`'${label}' 탭의 ${name} 세션을 끝냈어요`, { icon: 'stop' });
   else toast(`'${label}' 탭의 ${name} 세션을 끝내지 못했어요. 탭에서 직접 ${name === 'Codex' ? '/quit' : '/exit'} 해 주세요`, { icon: 'info', ms: 6000 });
+  return { op: 'kicked', ok: !!how, how };
+}
+window.addEventListener('message', async (e) => {
+  const d = e.data;
+  if (!S.progress.open || e.source !== PG.frame.contentWindow || e.origin !== S.progress.origin || !d || d.type !== 'minsuterm-room') return;
+  // this window's tab: answered here; else the window that holds it (asked through main)
+  const ask = { ...d, folder: S.progress.path };
+  const r = roomHas(ask) ? await roomRequest(ask) : await window.mt.progress.room(ask);
+  if (r) try { PG.frame.contentWindow.postMessage({ type: 'minsuterm-room', req: d.req, ...r }, S.progress.origin); } catch { /* the page went away */ }
 });
 
 /** While the record is still empty: say so, and offer to start the skill in the folder's Claude tab. */
@@ -9841,6 +9984,7 @@ function showProgressSetup(st, seq) {
 }
 
 function closeProgress() {
+  if (PROGRESS_ONLY) { window.close(); return; }
   if (!S.progress.open) return;
   S.progress.open = false;
   S.progress.seq++;
@@ -9957,7 +10101,7 @@ $('#pg-reload').addEventListener('click', () => { if (S.progress.open) loadProgr
 $('#pg-retry').addEventListener('click', () => { if (S.progress.open) openProgress(S.progress.path, S.progress.name); });
 $('#pg-browser').addEventListener('click', () => { if (S.progress.origin && S.progress.key) window.mt.openExternal(`${S.progress.origin}/#p=${S.progress.key}`); });
 window.addEventListener('keydown', (e) => { // Esc closes it, unless a dialog is open or the page itself has the focus
-  if (e.key !== 'Escape' || !S.progress.open || S.overlay || document.activeElement === PG.frame) return;
+  if (e.key !== 'Escape' || PROGRESS_ONLY || !S.progress.open || S.overlay || document.activeElement === PG.frame) return; // (a window of 진행도 alone closes by its button)
   e.preventDefault();
   e.stopPropagation();
   closeProgress();
@@ -10085,7 +10229,7 @@ function openCommandPalette() {
     { group: '분할', icon: 'grid', text: '이 폴더의 탭 한 화면에 보기', hint: 'Ctrl+Shift+G', keywords: 'grid project', run: () => toggleGrid() },
     { group: '탭', icon: 'search', text: '터미널에서 찾기', hint: 'Ctrl+Shift+F', run: openSearch },
     { group: '탭', icon: 'refresh', text: '화면 지우기', run: () => t && t.term.clear() },
-    { group: '보기', icon: 'sidebar', text: '사이드바 표시/숨기기', hint: 'Ctrl+Shift+B', run: () => toggleSidebar() },
+    ...(SOLO ? [] : [{ group: '보기', icon: 'sidebar', text: '사이드바 표시/숨기기', hint: 'Ctrl+Shift+B', run: () => toggleSidebar() }]),
     { group: '보기', icon: 'plus', text: '글꼴 크게', hint: 'Ctrl+=', run: () => setFontSize(S.settings.fontSize + 1) },
     { group: '보기', icon: 'x', text: '글꼴 작게', hint: 'Ctrl+-', run: () => setFontSize(S.settings.fontSize - 1) },
     { group: '보기', icon: 'type', text: '글꼴 크기 초기화', hint: 'Ctrl+0', run: () => setFontSize(14) },
@@ -10129,7 +10273,7 @@ async function openSessionPicker(cwd) {
   let list = [];
   try { list = await window.mt.agent.sessions(cwd, 300); } catch { list = await sessionsFor(cwd, true); }
   const items = list.map((s) => {
-    const open = tabOfSession(s.id);
+    const open = tabOfSession(s.id) || remoteTabOfSession(s.id);
     return {
       icon: AGENTS[s.agent].icon,
       cls: s.agent,
@@ -10895,7 +11039,8 @@ function openSettings() {
   setupPicker(body.querySelector('[data-picker="workGlowStyle"]'), { key: 'workGlowStyle', items: WG_KINDS, preview: previewGlow, onPick: () => applySettings() });
   setupPicker(body.querySelector('[data-picker="progressBar"]'), { key: 'progressBar', items: PROGRESS_BARS, preview: previewProgressBar, onPick: () => postProgressTheme() });
   setupPicker(body.querySelector('[data-picker="roomStyle"]'), { key: 'roomStyle', items: ROOM_STYLES, preview: previewRoomStyle, onPick: () => postProgressTheme() });
-  setupPicker(body.querySelector('[data-picker="agentOutfit"]'), { key: 'agentOutfit', items: agentOutfitItems(), preview: previewAgentOutfit, onPick: () => postProgressTheme() });  setupPicker(body.querySelector('[data-picker="celebrateStyle"]'), { key: 'celebrateStyle', items: CELEB_KINDS, preview: previewCelebrate, onPick: () => applySettings() });
+  setupPicker(body.querySelector('[data-picker="agentOutfit"]'), { key: 'agentOutfit', items: agentOutfitItems(), preview: previewAgentOutfit, onPick: () => postProgressTheme() });
+  setupPicker(body.querySelector('[data-picker="celebrateStyle"]'), { key: 'celebrateStyle', items: CELEB_KINDS, preview: previewCelebrate, onPick: () => applySettings() });
   setupDoneTextSettings(body);
   if (SOUND_ALIASES[S.settings.typingSound]) S.settings.typingSound = SOUND_ALIASES[S.settings.typingSound];
   setupPicker(body.querySelector('[data-picker="typingSound"]'), {
@@ -11023,7 +11168,7 @@ window.mt.onMenuEdit?.((cmd) => {
 });
 
 window.addEventListener('keydown', (e) => {
-  if (S.overlay) return;
+  if (S.overlay || PROGRESS_ONLY) return;
   const t = activeTab();
   // app shortcuts: Ctrl on Windows, ⌘ on macOS (where Ctrl keeps its terminal meaning)
   const c = modKey(e) && !e.altKey && !(IS_MAC ? e.ctrlKey : e.metaKey);
@@ -11250,6 +11395,8 @@ setInterval(() => { if (S.expanded.size) { S.sessionCache.clear(); renderProject
   hydrateIcons();
   const init = await window.mt.init();
   S.settings = init.store.settings;
+  // (only for this window, never saved: nothing animates behind 진행도)
+  if (WINDOW_SETTINGS) Object.assign(S.settings, WINDOW_SETTINGS);
   window.I18N?.start(S.settings.lang || 'auto'); // 한국어 · English · 日本語 · 中文
   S.projects = init.store.projects || [];
   S.tasks = (init.store.tasks || []).map((k) => (k.status === 'working' || k.status === 'attention' ? { ...k, status: 'stopped', end: k.end || k.start } : k));
@@ -11269,15 +11416,29 @@ setInterval(() => { if (S.expanded.size) { S.sessionCache.clear(); renderProject
 
   await document.fonts.ready.catch(() => {});
 
-  if (SOLO) {
+  if (PROGRESS_ONLY) {
+    document.body.classList.add('progress-only');
     document.getElementById('app').classList.add('no-sidebar');
-    const given = await window.mt.solo.init();
-    if (!given) { window.close(); return; }
-    createTab({ attach: given, shellId: given.shellId, cwd: given.cwd, customTitle: given.customTitle });
+    const name = new URLSearchParams(location.search).get('name') || basename(PROGRESS_ONLY);
+    openProgress(PROGRESS_ONLY, name);
+    window.mt.setTitle(`${tr('진행도')} · ${name}`);
     return;
   }
-  const layout = init.store.layout;
-  if (S.settings.restoreSessions && layout?.tabs?.length) {
+  if (SOLO) {
+    document.body.classList.add('solo-win'); // tabs only: the sidebar stays with the main window
+    const given = await window.mt.solo.init();
+    if (given && given.attach) createTab({ attach: given.attach, shellId: given.attach.shellId, cwd: given.attach.cwd, customTitle: given.attach.customTitle });
+    else if (given && given.layout) await restoreLayout(given.layout);
+    if (!S.tabs.length) window.close();
+    return;
+  }
+  if (S.settings.restoreSessions && init.store.layout?.tabs?.length) await restoreLayout(init.store.layout);
+  if (!S.tabs.length) newShell(S.settings.defaultShell, S.home);
+})();
+
+/** Bring a window's saved tabs back (the main window's, or a window tabs had gone to). */
+async function restoreLayout(layout) {
+  {
     // Which conversation each agent tab comes back to: its own, if the transcript is still there. A tab without one
     // continues the folder's latest conversation — but only one tab per folder may, and none where another restored
     // tab resumes its own: `claude --continue` / `codex resume --last` would put two tabs on one conversation.
@@ -11305,5 +11466,4 @@ setInterval(() => { if (S.expanded.size) { S.sessionCache.clear(); renderProject
     const target = S.tabs[Math.min(layout.active || 0, S.tabs.length - 1)];
     if (target) activate(target.id);
   }
-  if (!S.tabs.length) newShell(S.settings.defaultShell, S.home);
-})();
+}

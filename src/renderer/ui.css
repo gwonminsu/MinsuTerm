@@ -978,3 +978,12 @@ body.idle .bgtask .bg-ico::after { animation: none; }
 .tab.drag-detach { opacity: .55; outline: 1.5px dashed var(--violet, #8f73ff); outline-offset: -2px; }
 /* a terminal catching up on piled-up output: the animations in the terminal area wait (app.js outHeavy) */
 body.out-heavy .term-host *:not(.xterm, .xterm *), body.out-heavy .term-host::before, body.out-heavy .term-host::after { animation-play-state: paused !important; }
+/* 꾸미기 → 에이전트 화면 → Claude 사용 한도 받아 오기: the button keeps its width and its word on one line */
+#ugLinkBtn { flex: none; white-space: nowrap; }
+/* a window of 진행도 alone (index.html?progress=…): no tabs, no status bar, no empty-tab screen; 진행도 보기 fills it */
+body.progress-only #tabs-wrap, body.progress-only #btn-sidebar, body.progress-only #statusbar, body.progress-only #empty { display: none !important; }
+body.progress-only .pg-kbd { display: none; } /* (Esc does not close a window of 진행도 alone) */
+/* a past conversation open in another MinsuTerm window: its row says so, and leads there */
+.past-row .pr-where { flex: none; margin-left: 6px; padding: 0 6px; border-radius: 99px; font-size: 10.5px; line-height: 16px; color: var(--violet, #8f73ff); border: 1px solid color-mix(in srgb, var(--violet, #8f73ff) 45%, transparent); }
+/* a window tabs were dragged out into: tabs only, no sidebar (nor its button) */
+body.solo-win #btn-sidebar { display: none; }
