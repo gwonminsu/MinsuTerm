@@ -25,7 +25,11 @@ contextBridge.exposeInMainWorld('mt', {
     onData: (fn) => on('pty:data', fn),
     onExit: (fn) => on('pty:exit', fn),
     onAgent: (fn) => on('pty:agent', fn),
+    claim: (id, cols, rows) => ipcRenderer.invoke('pty:claim', id, cols, rows), // a window a tab was dragged into takes its pty
   },
+  // a tab dragged out of the window: a window of its own (solo), which asks what it is to show
+  tab: { detach: (payload) => ipcRenderer.invoke('tab:detach', payload) },
+  solo: { init: () => ipcRenderer.invoke('solo:init') },
 
   agent: {
     probe: (delays) => ipcRenderer.send('agent:probe', delays),
@@ -39,6 +43,10 @@ contextBridge.exposeInMainWorld('mt', {
     trashPurge: (id) => ipcRenderer.invoke('trash:purge', id),
     lastPrompt: (agent, cwd, id) => ipcRenderer.invoke('agent:lastPrompt', agent, cwd, id),
     turn: (agent, cwd, id) => ipcRenderer.invoke('agent:turn', agent, cwd, id),
+    usage: (agent, cwd, id) => ipcRenderer.invoke('usage:get', agent, cwd, id), // 사용량 게이지
+    usageLinkState: () => ipcRenderer.invoke('usage:linkState'),
+    usageLink: () => ipcRenderer.invoke('usage:link'),
+    usageUnlink: () => ipcRenderer.invoke('usage:unlink'),
     subagents: (agent, cwd, id, since) => ipcRenderer.invoke('agent:subagents', agent, cwd, id, since),
     compactedSince: (agent, cwd, id, since) => ipcRenderer.invoke('agent:compactedSince', agent, cwd, id, since),
     bgOutput: (sid, task) => ipcRenderer.invoke('agent:bgOutput', sid, task),
@@ -77,6 +85,7 @@ contextBridge.exposeInMainWorld('mt', {
     status: () => ipcRenderer.invoke('progress:status'),
     setup: () => ipcRenderer.invoke('progress:setup'),
     open: (dir) => ipcRenderer.invoke('progress:open', dir),
+    window: (dir, theme, title) => ipcRenderer.invoke('progress:window', dir, theme, title), // 진행도 in its own window
     summary: (dir) => ipcRenderer.invoke('progress:summary', dir),
   },
   openUserData: () => ipcRenderer.send('open:userdata'),

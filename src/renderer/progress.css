@@ -217,3 +217,9 @@
 .pg-menu .menu-label { padding: 6px 10px 4px; }
 .pg-menu .pgm-stat { padding-left: 10px; }
 .pg-menu .menu-item.on { background: color-mix(in srgb, var(--violet) 14%, transparent); }
+/* the folder list: a row opens 진행도 here, its window button in a window of its own */
+.pg-menu .pgm-win { flex: none; display: grid; place-items: center; width: 24px; height: 24px; margin-left: 2px; border-radius: 6px; color: var(--dim); opacity: .55; transition: opacity .15s, background-color .15s, color .15s; }
+.pg-menu .pgm-win .ico { width: 13px; height: 13px; }
+.pg-menu .menu-item:hover .pgm-win { opacity: .9; }
+.pg-menu .pgm-win:hover { opacity: 1; color: var(--text); background: var(--surface-2); }
+.pg-menu .pgm-hint + .pgm-hint { border-top: 0; padding-top: 0; }

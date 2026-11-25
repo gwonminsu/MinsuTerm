@@ -974,3 +974,7 @@ body.idle .bgtask .bg-ico::after { animation: none; }
 .tab.group-tab .gt-sep { flex: none; margin: 0 6px; opacity: 0.35; }
 /* a split's tab is as wide as its panes' tabs would be together (within reason) */
 .tab.group-tab { max-width: 440px; flex: 0 1 360px; min-width: 150px; }
+/* a tab dragged past the window's edge: dropped there, it moves to a window of its own */
+.tab.drag-detach { opacity: .55; outline: 1.5px dashed var(--violet, #8f73ff); outline-offset: -2px; }
+/* a terminal catching up on piled-up output: the animations in the terminal area wait (app.js outHeavy) */
+body.out-heavy .term-host *:not(.xterm, .xterm *), body.out-heavy .term-host::before, body.out-heavy .term-host::after { animation-play-state: paused !important; }

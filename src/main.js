@@ -8,6 +8,7 @@ const { StringDecoder } = require('string_decoder');
 const { spawn, execFile } = require('child_process');
 const pty = require('@lydell/node-pty');
 const progress = require('./progress'); // 진행도 보기: the progress page, hosted here, and the skills it installs
+const usage = require('./usage'); // 사용량 게이지: an agent tab's context, limits, model and effort (and Claude's status line link)
 
 const IS_MAC = process.platform === 'darwin';
 const IS_WIN = process.platform === 'win32';
@@ -18,7 +19,7 @@ function buildMenu() {
   if (!IS_MAC) { Menu.setApplicationMenu(null); return; }
   // macOS needs an application menu: it owns ⌘C / ⌘V / ⌘Q / ⌘W / ⌘M and the window menu
   // copy / paste / select-all go to the renderer: a terminal's selection isn't a DOM selection
-  const edit = (cmd) => () => { if (win && !win.isDestroyed()) win.webContents.send('menu:edit', cmd); };
+  const edit = (cmd) => () => { const w = BrowserWindow.getFocusedWindow() || win; if (w && !w.isDestroyed()) w.webContents.send('menu:edit', cmd); };
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { role: 'appMenu' },
     {
@@ -105,6 +106,9 @@ const DEFAULT_STORE = {
     bgImageBlur: 0,
     workGlow: true,
     workGlowStyle: 'orbit',
+    usageGauge: true, // 사용량 게이지 at the bottom right of an agent tab
+    usageRing: 'ctx', // what its collapsed button's ring shows: ctx | h5 | wk | max | none
+    usageStyle: 'glass',
     choiceBubble: 'classic', // 선택 대기 말풍선 style
     promptStyle: 'default', // default | none | subtle | accent | accentText
     hideDarkBg: true,
@@ -275,11 +279,20 @@ let forceClose = false;
 function send(channel, ...args) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args);
 }
+/** To the window that shows a pty's tab (a tab dragged out of the window took its pty along); else the main one. */
+function sendTo(wc, channel, ...args) {
+  if (wc && !wc.isDestroyed()) wc.send(channel, ...args);
+  else send(channel, ...args);
+}
 
 function flushOutput() {
   flushTimer = null;
-  for (const [id, data] of outBuffers) send('pty:data', id, data);
-  outBuffers.clear();
+  for (const [id, data] of outBuffers) {
+    const r = ptys.get(id);
+    if (r && r.hold) continue; // its tab is on its way to a new window: kept until that window takes it
+    sendTo(r && r.wc, 'pty:data', id, data);
+    outBuffers.delete(id);
+  }
 }
 
 /**
@@ -365,7 +378,7 @@ const INSIDE_AGENT = ['CLAUDECODE', 'CODEX_THREAD_ID', 'CODEX_SANDBOX', 'CODEX_S
 const SESSION_MARKERS = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SSE_PORT'];
 
 /** spec: { id, shellId, cwd, agent, cols, rows } */
-function spawnPty(spec) {
+function spawnPty(spec, wc = null) {
   const sh = SHELLS.find((s) => s.id === spec.shellId) || SHELLS.find((s) => s.id === store.settings.defaultShell) || SHELLS[0];
   const cwd = resolveCwd(spec.cwd);
   const initCmd = agentCommand(spec.agent);
@@ -424,7 +437,7 @@ function spawnPty(spec) {
     ...(IS_WIN ? { useConpty: true } : {}),
   });
 
-  const rec = { p, pid: p.pid, agent: null };
+  const rec = { p, pid: p.pid, agent: null, wc }; // wc: the window showing its tab
   ptys.set(spec.id, rec);
   p.onData((data) => {
     outBuffers.set(spec.id, (outBuffers.get(spec.id) || '') + data);
@@ -439,12 +452,22 @@ function spawnPty(spec) {
       try { p._agent._conoutSocketWorker.dispose(); p._agent._inSocket.destroy(); } catch { /* node-pty changed inside */ }
     }
     ptys.delete(spec.id);
-    send('pty:exit', spec.id, exitCode);
+    sendTo(rec.wc, 'pty:exit', spec.id, exitCode);
   });
   if (writeLater) setTimeout(() => { try { p.write(writeLater + '\r'); } catch { /* ignore */ } }, 700);
   if (initCmd) scheduleProbe(900, 2200, 4000);
 
   return { pid: p.pid, cwd, shellId: sh.id };
+}
+
+/** The ptys of one window (and any whose window is gone): what a page that starts or a window that closes leaves. */
+function killOwnedBy(wc) {
+  for (const [id, r] of ptys) {
+    if (r.wc && r.wc !== wc && !r.wc.isDestroyed()) continue; // another window's
+    try { r.p.kill(); } catch { /* ignore */ }
+    ptys.delete(id);
+    outBuffers.delete(id);
+  }
 }
 
 function killAll() {
@@ -618,12 +641,12 @@ function analyze(snap) {
     if (short) {
       const full = attachIds.get(short.id);
       if (full) sid = full;
-      else resolveAttach(short, () => { if (rec.agent === 'claude' && attachIds.get(short.id) && rec.sid !== attachIds.get(short.id)) { rec.sid = attachIds.get(short.id); send('pty:agent', tabId, 'claude', rec.sid); } });
+      else resolveAttach(short, () => { if (rec.agent === 'claude' && attachIds.get(short.id) && rec.sid !== attachIds.get(short.id)) { rec.sid = attachIds.get(short.id); sendTo(rec.wc, 'pty:agent', tabId, 'claude', rec.sid); } });
     }
     if (found !== rec.agent || (found && sid && sid !== rec.sid)) {
       rec.agent = found;
       rec.sid = found ? sid : '';
-      send('pty:agent', tabId, found, rec.sid);
+      sendTo(rec.wc, 'pty:agent', tabId, found, rec.sid);
     }
   }
 }
@@ -1048,11 +1071,10 @@ function cdTarget(cwd, line, shell) {
 /* IPC                                                                 */
 /* ------------------------------------------------------------------ */
 
-ipcMain.handle('app:init', () => {
+ipcMain.handle('app:init', (_e) => {
   // A page that is starting has no pty yet: one that is alive belongs to a page that crashed or was reloaded. Its
   // shell and agent would run on unseen, next to the ones this page starts when it restores the layout.
-  killAll();
-  outBuffers.clear();
+  killOwnedBy(_e.sender);
   return {
     store,
     shells: SHELLS.map(({ id, name, type }) => ({ id, name, type })),
@@ -1063,7 +1085,7 @@ ipcMain.handle('app:init', () => {
 
 ipcMain.handle('pty:create', (_e, spec) => {
   try {
-    return { ok: true, ...spawnPty(spec) };
+    return { ok: true, ...spawnPty(spec, _e.sender) };
   } catch (err) {
     return { ok: false, error: String(err && err.message ? err.message : err) };
   }
@@ -1880,6 +1902,12 @@ ipcMain.handle('agent:compactedSince', (_e, agent, cwd, id, since) => {
   } catch { return false; }
 });
 
+// 사용량 게이지: the numbers for an agent tab, and the status line link Claude Code needs for its limits
+ipcMain.handle('usage:get', (_e, agent, cwd, id) => usage.usageFor(agent, cwd, id, { claudeFile, codexFile }));
+ipcMain.handle('usage:linkState', () => usage.linkState());
+ipcMain.handle('usage:link', () => usage.link());
+ipcMain.handle('usage:unlink', () => usage.unlink());
+
 ipcMain.handle('agent:turn', (_e, agent, cwd, id) => {
   const state = turnState(agent, cwd, id);
   let mtime = 0;
@@ -1993,7 +2021,11 @@ ipcMain.on('store:projects', (_e, projects) => { store.projects = projects; save
 ipcMain.on('store:layout', (_e, layout) => { store.layout = layout; saveStore(); });
 ipcMain.on('store:tasks', (_e, tasks) => { store.tasks = Array.isArray(tasks) ? tasks.slice(-400) : []; saveStore(); });
 ipcMain.on('store:settings', (_e, settings) => { store.settings = { ...store.settings, ...settings }; saveStore(); });
-ipcMain.on('app:running', (_e, n) => { runningCount = n | 0; });
+const runningBy = new Map(); // agent sessions running, per window (the quit question counts them all)
+ipcMain.on('app:running', (_e, n) => {
+  runningBy.set(_e.sender.id, n | 0);
+  runningCount = [...runningBy.values()].reduce((a, b) => a + b, 0);
+});
 
 let fontCache = null;
 /**
@@ -2059,7 +2091,8 @@ ipcMain.handle('fonts:list', () => {
 });
 
 /** Window-level appearance: Windows 11 backdrop material, title-bar overlay colors, UI zoom. */
-function applyWindowAppearance({ material = 'none', opacity = 1, chrome = '#0d0f14', zoom = 1, dark = true } = {}) {
+function applyWindowAppearance({ material = 'none', opacity = 1, chrome = '#0d0f14', zoom = 1, dark = true } = {}, target = win) {
+  const win = target; // (each window applies its own)
   if (!win || win.isDestroyed()) return;
   if (IS_MAC) { // macOS: vibrancy instead of Windows backdrop materials; traffic lights instead of an overlay
     try { win.setOpacity(Math.max(0.5, Math.min(1, Number(opacity) || 1))); } catch { /* ignore */ }
@@ -2082,14 +2115,14 @@ function applyWindowAppearance({ material = 'none', opacity = 1, chrome = '#0d0f
   const z = Math.max(0.8, Math.min(1.3, Number(zoom) || 1));
   win.webContents.setZoomFactor(z);
 }
-ipcMain.on('win:appearance', (_e, a) => applyWindowAppearance(a));
+ipcMain.on('win:appearance', (_e, a) => applyWindowAppearance(a, BrowserWindow.fromWebContents(_e.sender)));
 ipcMain.on('app:lang', (_e, l) => { store.settings.lang = l; if (typeof buildMenu === 'function') buildMenu(); });
 // 라이트 / 다크 / 시스템: the window frame, materials and the page's prefers-color-scheme all follow this
 ipcMain.handle('theme:set', (_e, source) => {
   nativeTheme.themeSource = ['light', 'dark', 'system'].includes(source) ? source : 'dark';
   return nativeTheme.shouldUseDarkColors;
 });
-nativeTheme.on('updated', () => { if (win && !win.isDestroyed()) win.webContents.send('theme:updated', nativeTheme.shouldUseDarkColors); });
+nativeTheme.on('updated', () => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('theme:updated', nativeTheme.shouldUseDarkColors); });
 
 /* Background image: copied into the profile so the original can move or be deleted. */
 const BG_IMAGE_BASE = path.join(app.getPath('userData'), 'background');
@@ -2118,7 +2151,7 @@ ipcMain.handle('bg:pick', async () => {
 ipcMain.handle('bg:get', () => { try { return bgImageData(); } catch { return ''; } });
 ipcMain.handle('bg:clear', () => { const f = bgImageFile(); if (f) fs.rmSync(f, { force: true }); return true; });
 
-ipcMain.on('win:title', (_e, title) => { if (win && typeof title === 'string') win.setTitle(title.slice(0, 200)); });
+ipcMain.on('win:title', (_e, title) => { const w = BrowserWindow.fromWebContents(_e.sender); if (w && typeof title === 'string') w.setTitle(title.slice(0, 200)); });
 
 ipcMain.handle('dialog:folder', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'], title: T('프로젝트 폴더 선택') });
@@ -2137,6 +2170,35 @@ ipcMain.handle('progress:setup', () => progress.setup());
 ipcMain.handle('progress:open', (_e, dir) => {
   if (!isFolder(dir) || !fs.existsSync(dir)) throw new Error('폴더를 찾지 못했어요');
   return progress.open(dir);
+});
+/*
+ * 진행도 in a window of its own (picked in the folder list instead of the terminal area): the same page the browser
+ * gets (#p=<key>, no embed), in the app's theme of the moment. One window per folder; asking again brings it up.
+ */
+const progressWins = new Map();
+ipcMain.handle('progress:window', async (_e, dir, theme, title) => {
+  if (!isFolder(dir) || !fs.existsSync(dir)) throw new Error('폴더를 찾지 못했어요');
+  const key = path.resolve(dir).toLowerCase();
+  const had = progressWins.get(key);
+  if (had && !had.isDestroyed()) { if (had.isMinimized()) had.restore(); had.focus(); return true; }
+  const r = await progress.open(dir);
+  const name = String(title || r.name || path.basename(dir)).slice(0, 80);
+  const dark = nativeTheme.shouldUseDarkColors;
+  const w = new BrowserWindow({
+    width: 1180, height: 820, minWidth: 560, minHeight: 420, title: `진행도 · ${name}`, icon: ICON,
+    backgroundColor: dark ? '#10131a' : '#fafbfc', autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  w.removeMenu();
+  w.on('page-title-updated', (e) => e.preventDefault()); // keeps the folder name in the title
+  // only the progress server's pages inside; links out go to the browser
+  w.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  w.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(r.origin)) { e.preventDefault(); if (/^https?:\/\//i.test(url)) shell.openExternal(url); } });
+  const hash = typeof theme === 'string' && /^[\w-]{0,12000}$/.test(theme) ? `&theme=${theme}` : '';
+  w.loadURL(`${r.url}#p=${r.key}${hash}`);
+  progressWins.set(key, w);
+  w.on('closed', () => progressWins.delete(key));
+  return true;
 });
 ipcMain.handle('progress:summary', (_e, dirs) => (Array.isArray(dirs) ? dirs.slice(0, 60) : [dirs]).map((d) => (isFolder(d) ? progress.summary(d) : null)));
 ipcMain.on('open:userdata', () => shell.openPath(app.getPath('userData')));
@@ -2200,7 +2262,7 @@ function topSelf(profile, n) {
   });
   return [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, t]) => `  ${((100 * t) / Math.max(1, total)).toFixed(1).padStart(5)}%  ${k}`);
 }
-ipcMain.on('win:devtools', () => { if (win) win.webContents.toggleDevTools(); });
+ipcMain.on('win:devtools', (_e) => _e.sender.toggleDevTools());
 
 // A Notification nothing refers to is garbage-collected, and a later click on it then no longer focuses the tab:
 // each one is kept until it closes ('close' is not reported in every case, so only the latest few are kept).
@@ -2212,41 +2274,38 @@ ipcMain.on('notify', (_e, { title, body, tabId }) => {
   if (notifications.size > 20) notifications.delete(notifications.values().next().value);
   n.on('close', () => notifications.delete(n));
   n.on('click', () => {
-    if (!win) return;
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
-    send('focus-tab', tabId);
+    const owner = ptys.get(tabId)?.wc;
+    const w = (owner && !owner.isDestroyed() && BrowserWindow.fromWebContents(owner)) || win;
+    if (!w || w.isDestroyed()) return;
+    if (w.isMinimized()) w.restore();
+    w.show();
+    w.focus();
+    sendTo(owner, 'focus-tab', tabId);
   });
   n.show();
 });
-ipcMain.on('attention', () => {
-  if (!win || win.isFocused()) return;
+ipcMain.on('attention', (_e) => {
+  const w = BrowserWindow.fromWebContents(_e.sender) || win;
+  if (!w || w.isDestroyed() || w.isFocused()) return;
   if (IS_MAC) app.dock?.bounce('informational'); // the Dock icon hops once
-  else win.flashFrame(true);
+  else w.flashFrame(true);
 });
 
 /* ------------------------------------------------------------------ */
 /* Window                                                              */
 /* ------------------------------------------------------------------ */
 
-function createWindow() {
-  const w = store.window;
-  // the saved position counts only while a display still shows part of it (a monitor may have been unplugged since)
-  const shown = Number.isFinite(w.x) && Number.isFinite(w.y) && screen.getAllDisplays().some(({ workArea: a }) => (
-    w.x < a.x + a.width && w.x + w.width > a.x && w.y < a.y + a.height && w.y + w.height > a.y));
-  win = new BrowserWindow({
-    width: w.width,
-    height: w.height,
-    x: shown ? w.x : undefined, // no position: centred
-    y: shown ? w.y : undefined,
+/** A MinsuTerm window: the main one, or one a tab was dragged out into. */
+function appWindowOptions(extra) {
+  const material = ['acrylic', 'mica'].includes(store.settings.bgEffect) ? store.settings.bgEffect : '';
+  return {
     minWidth: 640,
     minHeight: 400,
     show: true, // appear immediately (dark background, no flash) instead of waiting for first paint
     // a backdrop material only shows through if the window itself starts transparent
-    backgroundColor: ['acrylic', 'mica'].includes(store.settings.bgEffect) ? '#00000000' : '#0d0f14',
-    ...(IS_WIN && ['acrylic', 'mica'].includes(store.settings.bgEffect) ? { backgroundMaterial: store.settings.bgEffect } : {}),
-    ...(IS_MAC && ['acrylic', 'mica'].includes(store.settings.bgEffect) ? { vibrancy: store.settings.bgEffect === 'mica' ? 'sidebar' : 'under-window', visualEffectState: 'active' } : {}),
+    backgroundColor: material ? '#00000000' : '#0d0f14',
+    ...(IS_WIN && material ? { backgroundMaterial: material } : {}),
+    ...(IS_MAC && material ? { vibrancy: material === 'mica' ? 'sidebar' : 'under-window', visualEffectState: 'active' } : {}),
     icon: ICON,
     title: 'MinsuTerm',
     ...(IS_MAC
@@ -2259,7 +2318,72 @@ function createWindow() {
       sandbox: true,
       spellcheck: false,
     },
+    ...extra,
+  };
+}
+
+/*
+ * A tab dragged out of the window: a window of its own (the same page, ?solo=1) takes the tab over. Its pty stays
+ * where it runs; its output waits (hold) until the new page claims it, the scrollback goes over as text, and closing
+ * that window closes its tabs. The page asks for what it is to show with solo:init.
+ */
+const soloWins = new Map(); // webContents id → { win, payload }
+ipcMain.handle('tab:detach', (_e, payload) => {
+  const r = payload && ptys.get(payload.id);
+  if (!r) throw new Error('터미널을 찾지 못했어요');
+  const from = BrowserWindow.fromWebContents(_e.sender) || win;
+  const b = from.getBounds();
+  const width = Math.max(640, Math.min(b.width, Number(payload.width) || 1000));
+  const height = Math.max(400, Math.min(b.height, Number(payload.height) || 700));
+  const sx = Number.isFinite(payload.screenX) ? payload.screenX : b.x + 60;
+  const sy = Number.isFinite(payload.screenY) ? payload.screenY : b.y + 60;
+  r.hold = true;
+  const w = new BrowserWindow(appWindowOptions({ width, height, x: Math.round(sx - Math.min(160, width / 3)), y: Math.round(sy - 18) }));
+  const wc = w.webContents;
+  const key = wc.id;
+  soloWins.set(key, { win: w, payload });
+  w.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
   });
+  w.webContents.on('will-navigate', (e) => e.preventDefault());
+  w.webContents.on('render-process-gone', () => { if (!w.isDestroyed()) w.close(); });
+  w.on('focus', () => { w.flashFrame(false); wc.send('win:focus', true); });
+  w.on('blur', () => { if (!wc.isDestroyed()) wc.send('win:focus', false); });
+  w.on('closed', () => {
+    killOwnedBy(wc); // its tabs close with it
+    soloWins.delete(key);
+    runningBy.delete(key);
+    runningCount = [...runningBy.values()].reduce((a, c) => a + c, 0);
+  });
+  w.loadFile(path.join(__dirname, 'renderer', 'index.html'), { query: { solo: '1' } });
+  // a page that never claims it (it failed to start): the tab's output is not held for ever
+  setTimeout(() => { if (r.hold && ptys.get(payload.id) === r) { r.hold = false; flushOutput(); } }, 15000);
+  return true;
+});
+ipcMain.handle('solo:init', (_e) => soloWins.get(_e.sender.id)?.payload || null);
+/** The new window takes its tab's pty: from now on its output goes there. */
+ipcMain.handle('pty:claim', (_e, id, cols, rows) => {
+  const r = ptys.get(id);
+  if (!r) return false;
+  r.wc = _e.sender;
+  r.hold = false;
+  try { r.p.resize(Math.max(2, cols | 0), Math.max(2, rows | 0)); } catch { /* ignore */ }
+  flushOutput();
+  return true;
+});
+
+function createWindow() {
+  const w = store.window;
+  // the saved position counts only while a display still shows part of it (a monitor may have been unplugged since)
+  const shown = Number.isFinite(w.x) && Number.isFinite(w.y) && screen.getAllDisplays().some(({ workArea: a }) => (
+    w.x < a.x + a.width && w.x + w.width > a.x && w.y < a.y + a.height && w.y + w.height > a.y));
+  win = new BrowserWindow(appWindowOptions({
+    width: w.width,
+    height: w.height,
+    x: shown ? w.x : undefined, // no position: centred
+    y: shown ? w.y : undefined,
+  }));
 
   if (w.maximized) win.maximize();
   win.once('ready-to-show', () => { if (!win.isVisible()) win.show(); });
@@ -2319,7 +2443,11 @@ function createWindow() {
     else forceClose = true;
   });
 
-  win.on('closed', () => { killAll(); win = null; });
+  win.on('closed', () => {
+    for (const { win: w } of soloWins.values()) if (!w.isDestroyed()) w.destroy();
+    killAll();
+    win = null;
+  });
 }
 
 app.on('second-instance', () => {
@@ -2334,6 +2462,7 @@ app.whenReady().then(() => {
   createWindow();
   if (TEST_DIR) runTestScript();
   progress.refreshInstalled().catch(() => {}); // the skills MinsuTerm installed follow the app's version
+  usage.refreshBridge(); // and so does the status line link, when it is in
 });
 
 async function runTestScript() {

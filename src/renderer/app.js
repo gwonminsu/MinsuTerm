@@ -229,8 +229,12 @@ function shortMiddlePath(p, max = 44) {
 /* Persistence                                                         */
 /* ------------------------------------------------------------------ */
 
+/** A window a tab was dragged out into (index.html?solo=1): it shows that tab, and saves no layout of its own. */
+const SOLO = new URLSearchParams(location.search).get('solo') === '1';
+
 let layoutTimer = null;
 function saveLayout() {
+  if (SOLO) return;
   clearTimeout(layoutTimer);
   layoutTimer = setTimeout(() => {
     const tabs = S.tabs.map((t) => ({
@@ -249,7 +253,7 @@ function saveLayout() {
   window.mt.setRunning(agentTabs().length);
 }
 
-function saveProjects() { window.mt.store.projects(S.projects); }
+function saveProjects() { if (!SOLO) window.mt.store.projects(S.projects); }
 function saveSettings(patch) {
   Object.assign(S.settings, patch);
   window.mt.store.settings(patch);
@@ -557,7 +561,7 @@ function createFx(canvas) {
   fx.burst = (kind, x, y, o) => { addBurst(fx, kind, x, y, o); if (!fx.raf) fx.raf = requestAnimationFrame(fx.loop); };
   fx.loop = (now) => {
     fx.raf = 0;
-    if (now - (fx.last || 0) < 15) { fx.raf = requestAnimationFrame(fx.loop); return; } // ~60 fps on high-refresh screens
+    if (now - (fx.last || 0) < 15 || OUT_HEAVY.on) { fx.raf = requestAnimationFrame(fx.loop); return; } // ~60 fps on high-refresh screens; held while a terminal catches up
     fx.last = now;
     try { drawFx(fx); } catch (e) { console.error(e); fx.parts = []; } // one bad particle must not stop the effects for good
     fx.raf = fx.parts.length ? requestAnimationFrame(fx.loop) : 0;
@@ -2708,7 +2712,7 @@ function createBg(canvas) {
   };
   bg.frame = (now) => {
     bg.raf = requestAnimationFrame(bg.frame);
-    if (document.hidden || now - bg.last < 33) return; // ~30 fps, paused when hidden
+    if (document.hidden || now - bg.last < 33 || OUT_HEAVY.on) return; // ~30 fps, paused when hidden or while a terminal catches up
     bg.last = now;
     bg.t += 1;
     drawBg(bg);
@@ -5808,7 +5812,7 @@ function createTab(opts = {}) {
   if (launch && launch.type === 'claude' && (launch.mode || 'new') === 'new' && !launch.sessionId) launch.sessionId = uuid();
 
   const tab = {
-    id: uuid(),
+    id: opts.attach ? opts.attach.id : uuid(),
     shellId: opts.shellId || S.settings.defaultShell,
     cwd: opts.cwd || currentCwd(),
     launch,
@@ -6040,7 +6044,7 @@ function createTab(opts = {}) {
 
   // on the next frame, when the pane has its size — or a moment later if the window is hidden and draws no frames
   let started = false;
-  const start = () => { if (!started) { started = true; startPty(tab); } };
+  const start = () => { if (!started) { started = true; if (opts.attach) attachPty(tab, opts.attach); else startPty(tab); } };
   requestAnimationFrame(start);
   setTimeout(start, 500);
   renderSessions();
@@ -6075,6 +6079,57 @@ async function startPty(tab, { withLaunch = true } = {}) {
   if (res.cwd) tab.cwd = res.cwd;
   if (!tab.launch) setStatus(tab, 'shell');
   saveLayout();
+}
+
+/** A tab dragged in from another window: its screen as text, then its pty, which keeps running. */
+async function attachPty(tab, a) {
+  if (tab.closed) return;
+  try { tab.fit.fit(); } catch { /* ignore */ }
+  const { cols, rows } = tab.term;
+  // the lines up to the cursor's, and the cursor in its column: a shell carries on typing there
+  if (a.scroll) tab.term.write(`${a.scroll.split('\n').join('\r\n')}\x1b[${(a.cursorX || 0) + 1}G`);
+  // an agent: one column less first, then the real size: the change makes Claude or Codex redraw its screen
+  const ok = await window.mt.pty.claim(tab.id, a.agent ? Math.max(2, cols - 1) : cols, rows);
+  if (tab.closed) return;
+  if (!ok) {
+    tab.term.write(`\r\n\x1b[31m${tr('터미널을 넘겨받지 못했습니다')}\x1b[0m\r\n`);
+    setStatus(tab, 'exited');
+    return;
+  }
+  if (a.agent) setTimeout(() => window.mt.pty.resize(tab.id, tab.term.cols, tab.term.rows), 120);
+  tab.alive = true;
+  if (a.agent) {
+    setAgent(tab, a.agent);
+    tab.sessionId = a.sessionId || '';
+    tab.permissionMode = a.permissionMode || '';
+    if (a.status === 'working') setStatus(tab, 'working');
+    pollGauge(tab);
+  } else {
+    setStatus(tab, 'shell');
+  }
+  updateTabEl(tab);
+}
+
+/** Drop a tab outside the window: it moves to a window of its own (its shell or agent keeps running). */
+async function detachTab(tab, screenX, screenY) {
+  if (!tab.alive) { toast('끝난 탭은 새 창으로 옮길 수 없어요', { icon: 'info' }); return; }
+  const b = tab.term.buffer.active;
+  const lines = [];
+  const last = b.baseY + b.cursorY; // up to the cursor's line (below it a shell has printed nothing yet)
+  for (let y = Math.max(0, last - 3000); y <= last; y++) lines.push(b.getLine(y)?.translateToString(true) ?? '');
+  const payload = {
+    id: tab.id, shellId: tab.shellId, cwd: tab.cwd, agent: tab.agent, sessionId: tab.sessionId, permissionMode: tab.permissionMode,
+    customTitle: tab.customTitle, status: tab.status, scroll: lines.join('\n'), cursorX: b.cursorX,
+    screenX, screenY, width: window.outerWidth, height: window.outerHeight,
+  };
+  try {
+    await window.mt.tab.detach(payload);
+  } catch (err) {
+    toast(`새 창으로 옮기지 못했어요: ${err.message || err}`, { icon: 'info' });
+    return;
+  }
+  tab.detached = true; // closes here without ending its pty
+  closeTab(tab.id, { confirmWorking: false });
 }
 
 function restartTab(tab) {
@@ -6433,7 +6488,7 @@ async function closeTab(id, { confirmWorking = true } = {}) {
   const idx = S.tabs.indexOf(tab);
   syncTask(tab, 'exited');
   if (tab.agent) S.sessionCache.delete(normP(tab.cwd)); // its conversation is a past one now (a new one may not be listed yet)
-  window.mt.pty.kill(tab.id);
+  if (!tab.detached) window.mt.pty.kill(tab.id);
   tab.alive = false;
   try { tab.term.dispose(); } catch { /* ignore */ }
   syncRunners(tab.host, '', false); // a working pane's runner layer: its size observer goes with it
@@ -6461,6 +6516,7 @@ async function closeTab(id, { confirmWorking = true } = {}) {
   renderStatus();
   updateEmpty();
   saveLayout();
+  if (SOLO && !S.tabs.length) { window.close(); return; }
   // the button that closed it (a tab's X, a sidebar row's stop button) is gone, and the focus went with it
   if (!S.overlay && document.activeElement === document.body) activeTab()?.term.focus();
 }
@@ -6573,10 +6629,20 @@ function onPaneHeadPointerDown(e, tab) {
       splitDrop.update(tab, ev.clientX, ev.clientY);
     }
   };
-  const onUp = () => {
+  const onUp = (ev) => {
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onUp);
+    el.classList.remove('drag-detach');
+    if (dragging && ev && ev.type === 'pointerup' && outside(ev) && !groupOf(tab)) { // dropped outside the window
+      tabsEl.classList.remove('tabs-dragging');
+      document.body.classList.remove('grabbing');
+      (els || []).forEach((x) => { x.style.transform = ''; });
+      el.classList.remove('dragging', 'drag-out');
+      splitDrop.clear();
+      detachTab(tab, ev.screenX, ev.screenY);
+      return;
+    }
     if (!dragging) return;
     document.body.classList.remove('grabbing');
     tab.host.classList.remove('pane-dragging');
@@ -6661,8 +6727,10 @@ function onTabPointerDown(e, tab) {
   let from;
   let target;
 
+  const outside = (ev) => ev.clientX < 0 || ev.clientY < 0 || ev.clientX >= innerWidth || ev.clientY >= innerHeight;
   const onMove = (ev) => {
     const dx = ev.clientX - startX;
+    if (dragging && !groupOf(tab)) el.classList.toggle('drag-detach', outside(ev));
     if (!dragging) {
       if (Math.abs(dx) < 5 && Math.abs(ev.clientY - startY) < 5) return;
       dragging = true;
@@ -7444,9 +7512,27 @@ function decoPreview(kind, el, fg) {
  */
 const FLOW_HIGH = 1_000_000; // characters handed to xterm and not parsed yet
 const FLOW_LOW = 250_000;
+/*
+ * While a terminal has output piling up (an agent redrawing a long conversation, a build flooding), the decorations
+ * step aside: the background scene and the typing effects stop drawing, and the animations inside the terminal
+ * area (self-animated cursors, the working border, prompt decorations, the usage gauge) pause (body.out-heavy).
+ * They compete with xterm for the same thread; with them going on a busy window the screen could stand still for
+ * seconds. Back on as soon as the backlog is down again.
+ */
+const OUT_HEAVY = { on: false, mark: 200_000, t: 0 };
+function outHeavy() {
+  if (!OUT_HEAVY.on) { OUT_HEAVY.on = true; document.body.classList.add('out-heavy'); }
+  clearTimeout(OUT_HEAVY.t);
+  OUT_HEAVY.t = setTimeout(() => {
+    if (S.tabs.some((t) => (t.backlog || 0) > OUT_HEAVY.mark / 4)) { outHeavy(); return; }
+    OUT_HEAVY.on = false;
+    document.body.classList.remove('out-heavy');
+  }, 300);
+}
 function termWrite(tab, data) {
   const n = data.length;
   tab.backlog = (tab.backlog || 0) + n;
+  if (tab.backlog > OUT_HEAVY.mark) outHeavy();
   try {
     tab.term.write(data, () => {
       tab.backlog -= n;
@@ -7567,7 +7653,131 @@ function setAgent(tab, agent) {
   renderProjects();
   if (tab.id === S.activeId) renderStatus();
   saveLayout();
+  tab.ugData = null;
+  syncGauge(tab);
+  if (agent) setTimeout(() => pollGauge(tab), 1500);
 }
+
+/* ------------------------------------------------------------------ */
+/* 사용량 게이지: a button at the bottom right of an agent tab that     */
+/* opens upward into context, 5-hour and weekly limits, model, effort  */
+/* (drawn by usage-gauge.js; the numbers come from main, usage.js)     */
+/* ------------------------------------------------------------------ */
+
+const UG = { linked: null };
+/** 84000 → 84k, 1000000 → 1M */
+function fmtTokens(n) {
+  if (n >= 1e6) return `${Number((n / 1e6).toFixed(n % 1e6 ? 1 : 0))}M`;
+  return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+}
+/** When a limit resets, as its row says it. */
+function resetText(ms) {
+  if (!ms) return '초기화됨';
+  const min = Math.max(1, Math.round((ms - Date.now()) / 60000));
+  if (min < 60) return `${min}분 후 초기화`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h < 24) return m ? `${h}시간 ${m}분 후 초기화` : `${h}시간 후 초기화`;
+  return `${Math.round(h / 24)}일 후 초기화`;
+}
+function gaugeData(tab, u) {
+  const lim = (x) => (x ? { pct: x.pct, text: resetText(x.resetsAt) } : null);
+  const d = {
+    agent: tab.agent,
+    ctx: u && u.ctx ? { pct: u.ctx.pct, text: u.ctx.size ? `${fmtTokens(u.ctx.used)} / ${fmtTokens(u.ctx.size)}` : '' } : null,
+    h5: lim(u && u.h5),
+    wk: lim(u && u.wk),
+    model: (u && u.model) || '',
+    effort: (u && u.effort) || '',
+    extra: '',
+  };
+  // Claude tells its limits only to a status line: offered at the moment they are missing
+  if (tab.agent === 'claude' && u && !u.linked && !d.h5 && !d.wk) {
+    d.extra = UG.linked
+      ? '<div class="ug-extra"><span>연결했어요. 다음 응답부터 한도가 보여요</span></div>'
+      : '<div class="ug-extra"><span>5시간·주간 한도는 연결해야 보여요</span><button type="button" class="ug-link">연결</button></div>';
+  }
+  return d;
+}
+/** Show, hide or redraw a tab's gauge (u: new numbers; left out: the last ones). */
+function syncGauge(tab, u) {
+  if (!tab.host) return;
+  if (S.settings.usageGauge === false || !tab.agent) {
+    if (tab.ug) { tab.ug.remove(); tab.ug = null; tab.ugKey = ''; }
+    return;
+  }
+  if (!tab.ug) { tab.ug = h('div', 'ug'); tab.host.appendChild(tab.ug); tab.ugKey = ''; }
+  if (u !== undefined) tab.ugData = u;
+  const d = gaugeData(tab, tab.ugData);
+  const opts = { style: S.settings.usageStyle || 'glass', ring: S.settings.usageRing || 'ctx' };
+  const key = JSON.stringify([d, opts]);
+  if (key === tab.ugKey) return;
+  tab.ugKey = key;
+  usageGaugeRender(tab.ug, d, opts);
+}
+async function pollGauge(tab) {
+  if (!tab.agent || S.settings.usageGauge === false || !tab.sessionId) return syncGauge(tab);
+  let u;
+  try { u = await window.mt.agent.usage(tab.agent, tab.cwd, tab.sessionId); } catch { return; }
+  syncGauge(tab, u);
+}
+/** Every few seconds, the gauges that can be seen (the active tab, or the tabs on screen in a split or grid). */
+function gaugeTick() {
+  if (document.hidden) return;
+  for (const t of S.tabs) if (t.agent && t.host && t.host.offsetParent !== null) pollGauge(t);
+}
+function refreshGauges() {
+  for (const t of S.tabs) syncGauge(t);
+  gaugeTick();
+}
+async function linkClaudeUsage() {
+  const ok = await confirmDialog('Claude 한도를 받아 올까요?', 'Claude Code 설정(~/.claude/settings.json)의 상태줄 명령 앞에 MinsuTerm 수집기를 연결합니다. 지금 쓰는 상태줄은 그대로 보입니다.\n꾸미기 → 에이전트 화면에서 언제든 해제할 수 있어요.', '연결');
+  if (!ok) return;
+  try {
+    const st = await window.mt.agent.usageLink();
+    UG.linked = st.linked;
+    toast('Claude 상태줄에 연결했어요. 다음 응답부터 한도가 보여요', { icon: 'check' });
+  } catch (err) {
+    toast(`연결하지 못했어요: ${err.message || err}`, { icon: 'info' });
+  }
+  refreshGauges();
+  updateUsageLinkRow();
+}
+async function unlinkClaudeUsage() {
+  try {
+    const st = await window.mt.agent.usageUnlink();
+    UG.linked = st.linked;
+    toast('연결을 해제했어요. 상태줄은 원래대로 돌아갔어요', { icon: 'check' });
+  } catch (err) {
+    toast(`해제하지 못했어요: ${err.message || err}`, { icon: 'info' });
+  }
+  refreshGauges();
+  updateUsageLinkRow();
+}
+/** 꾸미기 → 에이전트 화면 → Claude 사용 한도 받아 오기: its line and button, when that settings window is open. */
+function updateUsageLinkRow() {
+  const txt = document.getElementById('ugLinkText');
+  const btn = document.getElementById('ugLinkBtn');
+  if (!txt || !btn) return;
+  txt.textContent = UG.linked ? '연결됨 · Claude의 5시간·주간 한도와 effort가 게이지에 보여요. 상태줄은 그대로예요' : 'Claude Code 상태줄에 연결하면 5시간·주간 한도와 effort가 보여요. Codex는 연결 없이 보여요';
+  btn.textContent = UG.linked ? '해제' : '연결';
+}
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.ug-btn');
+  if (btn) {
+    const ug = btn.closest('.ug');
+    const open = !ug.classList.contains('open');
+    for (const o of document.querySelectorAll('.ug.open')) o.classList.remove('open');
+    ug.classList.toggle('open', open);
+    const tab = open && S.tabs.find((t) => t.ug === ug);
+    if (tab) pollGauge(tab);
+    return;
+  }
+  if (e.target.closest('.ug-link')) { linkClaudeUsage(); return; }
+  if (!e.target.closest('.ug-panel')) for (const o of document.querySelectorAll('.ug.open')) o.classList.remove('open');
+});
+setInterval(gaugeTick, 5000);
+window.mt.agent.usageLinkState().then((st) => { UG.linked = !!(st && st.linked); refreshGauges(); }).catch(() => {});
 
 function setCwd(tab, cwd) {
   if (!cwd || samePath(cwd, tab.cwd)) return;
@@ -8788,6 +8998,7 @@ function applySettings() {
   for (const t of S.tabs) fitTab(t);
   renderStatus();
   promptLookCheck();
+  refreshGauges();
   if (S.progress && S.progress.open) postProgressTheme(); // the open progress page follows theme / accent / light-dark
 }
 
@@ -9008,6 +9219,7 @@ const taskById = (id) => S.tasks.find((k) => k.id === id) || null;
 const MAX_TASKS = 400; // kept in memory and on disk
 let taskSaveTimer = null;
 function saveTasks() {
+  if (SOLO) return;
   clearTimeout(taskSaveTimer);
   taskSaveTimer = setTimeout(() => {
     const keep = S.tasks.filter((k) => k.status !== 'pending').slice(-MAX_TASKS)
@@ -9313,6 +9525,7 @@ function openProjectMenu(p, x, y) {
     { icon: 'palette', text: '아이콘 변경…', run: () => openProjectIconPicker(p) },
     { icon: 'terminal', text: '터미널 열기', run: () => newShell(null, p.path) },
     { icon: 'progressRing', text: '진행도 보기', run: () => openProgress(p.path, p.name) },
+    { icon: 'openExternal', text: '진행도 새 창에서 보기', run: () => openProgressWindow(p.path, p.name) },
     { icon: 'history', text: 'Claude 마지막 대화 이어서', cls: 'claude', run: () => newAgent('claude', { cwd: p.path, mode: 'continue' }) },
     { icon: 'history', text: 'Codex 마지막 대화 이어서', cls: 'codex', run: () => newAgent('codex', { cwd: p.path, mode: 'continue' }) },
     '-',
@@ -9416,6 +9629,18 @@ async function openProgress(dir, name) {
   if (seq !== S.progress.seq) return;
   if (!st.ready && !S.progress.skipSetup) return showProgressSetup(st, seq);
   loadProgressPage(seq);
+}
+
+/** 진행도 in a window of its own (the setup screen, when needed, still comes up in the terminal area). */
+async function openProgressWindow(dir, name) {
+  if (!dir) return;
+  try {
+    const st = await window.mt.progress.status();
+    if (!st.ready && !S.progress.skipSetup) { openProgress(dir, name); return; }
+    await window.mt.progress.window(dir, b64url(JSON.stringify(progressTheme())), name || basename(dir));
+  } catch (err) {
+    toast(`진행도 창을 열지 못했어요: ${err.message || err}`, { icon: 'info' });
+  }
 }
 
 async function loadProgressPage(seq) {
@@ -9666,7 +9891,14 @@ async function openProgressPicker(anchor, fromKeyboard = !anchor) {
     const ic = f.project ? projectIconHtml(f.project) : icon('folder');
     const on = S.progress.open && samePath(S.progress.path, f.path);
     const b = h('button', 'menu-item' + (on ? ' on' : ''), `${ic}<span class="pgm-text"><span class="pgm-name"><span class="no-i18n">${esc(f.name)}</span>${f.here ? '<span class="pgm-here">지금 탭</span>' : ''}</span><span class="pgm-path no-i18n">${esc(prettyPath(f.path))}</span></span>${stat}`);
-    b.addEventListener('click', () => { closeOverlay(); openProgress(f.path, f.name); });
+    const win = h('span', 'pgm-win', icon('openExternal'));
+    win.title = '새 창에서 열기';
+    b.appendChild(win);
+    b.addEventListener('click', (e) => {
+      closeOverlay();
+      if (e.target.closest('.pgm-win') || e.shiftKey || e.ctrlKey || e.metaKey) openProgressWindow(f.path, f.name);
+      else openProgress(f.path, f.name);
+    });
     menu.appendChild(b);
   };
   if (S.progress.open) {
@@ -9684,6 +9916,7 @@ async function openProgressPicker(anchor, fromKeyboard = !anchor) {
   }
   // which folders these are, and how another one gets here
   menu.appendChild(h('div', 'pgm-hint', `${icon('info')}<span>추가한 프로젝트 폴더만 보여요</span>`));
+  if (folders.length) menu.appendChild(h('div', 'pgm-hint', `${icon('openExternal')}<span>줄을 누르면 터미널 영역에, 오른쪽 버튼을 누르면 새 창에 열려요</span>`));
   scrim.addEventListener('pointerdown', () => closeOverlay());
   overlayRoot.append(scrim, menu);
   const mr = menu.getBoundingClientRect();
@@ -10485,6 +10718,11 @@ function openSettings() {
       <div class="field"><div class="field-label"><b>검은 배경 칸 숨기기</b><span>배경·투명 효과를 쓸 때 글자 뒤 검은 칸을 투명하게 (색 배경은 유지)</span></div>${sw('hideDarkBg')}</div>
       <div class="field"><div class="field-label"><b>CRT 모드</b><span>옛날 브라운관처럼 주사선과 은은한 글자 번짐</span></div>${sw('crt')}</div>`)}
     ${decoSec('agent', 'sparkle', '에이전트 화면', `
+      <div class="field"><div class="field-label"><b>사용량 게이지</b><span>에이전트 탭 오른쪽 아래의 버튼. 누르면 컨텍스트·한도·모델이 펼쳐집니다</span></div><div class="ctl-row">${sw('usageGauge')}${subBtn('usageGauge')}</div></div>
+      ${subBox('usageGauge', `
+        <div class="field"><div class="field-label"><b>접힌 버튼 링</b><span>접혀 있을 때 버튼의 링이 보여 줄 항목</span></div>${pk('usageRing')}</div>
+        <div class="field"><div class="field-label"><b>게이지 스타일</b></div>${pk('usageStyle')}</div>
+        <div class="field"><div class="field-label"><b>Claude 사용 한도 받아 오기</b><span id="ugLinkText"></span></div><button type="button" class="btn small" id="ugLinkBtn"></button></div>`)}
       <div class="field"><div class="field-label"><b>내 프롬프트 표시</b><span>Claude 화면에서 내가 보낸 프롬프트</span></div>${pk('promptStyle')}</div>
       <div class="field"><div class="field-label"><b>선택 대기 말풍선</b><span>에이전트가 선택지를 물어볼 때 사이드바에 뜨는 말풍선</span></div>${pk('choiceBubble')}</div>
       <div class="field"><div class="field-label"><b>작업 중 테두리</b><span>에이전트가 일하는 동안 테두리가 빛납니다</span></div><div class="ctl-row">${sw('workGlow')}${subBtn('workGlow')}</div></div>
@@ -10547,7 +10785,7 @@ function openSettings() {
   showTab(S.settingsTab || 'look');
 
   /* 꾸미기 cards and "세부" groups (open state is kept while the app runs) */
-  const deco = S.decoUi || (S.decoUi = { open: new Set(), sub: new Set() });
+  const deco = S.decoUi || (S.decoUi = { open: new Set(), sub: new Set(['usageGauge']) }); // (the gauge details start open)
   const cur = (k) => S.settings[k];
   const nameOf = (list, v) => tr((list.find((i) => i[0] === v) || list[0])[1]);
   const subEnabled = {
@@ -10556,6 +10794,7 @@ function openSettings() {
     bgAnim: () => (cur('bgAnim') || 'none') !== 'none',
     bgImage: () => !!cur('bgImage'),
     workGlow: () => !!cur('workGlow'),
+    usageGauge: () => cur('usageGauge') !== false,
     celebrate: () => !!cur('celebrate'),
     doneText: () => !!cur('doneText'),
   };
@@ -10563,7 +10802,7 @@ function openSettings() {
     cursor: () => `${nameOf(CURSOR_KINDS, cur('cursorStyle'))} · ${{ theme: '테마 색', accent: '강조 색', white: '흰색' }[cur('cursorColor')] || '테마 색'}`,
     typing: () => `${tr('효과')} ${nameOf(FX_KINDS, cur('typingFx') || 'none')} · ${tr('소리')} ${nameOf(SOUND_KINDS, SOUND_ALIASES[cur('typingSound')] || cur('typingSound') || 'none')}`,
     bg: () => [nameOf(BG_KINDS, cur('bgAnim') || 'none'), cur('bgImage') ? '이미지' : '', cur('crt') ? 'CRT' : ''].filter(Boolean).join(' · '),
-    agent: () => `${nameOf(PROMPT_STYLES, cur('promptStyle') || 'default')} · ${tr('테두리')} ${cur('workGlow') ? nameOf(WG_KINDS, cur('workGlowStyle')) : tr('끔')} · ${tr('말풍선')} ${nameOf(BUBBLE_STYLES, cur('choiceBubble') || 'classic')}`,
+    agent: () => `${tr('게이지')} ${cur('usageGauge') !== false ? nameOf(USAGE_STYLES, cur('usageStyle') || 'glass') : tr('끔')} · ${nameOf(PROMPT_STYLES, cur('promptStyle') || 'default')} · ${tr('테두리')} ${cur('workGlow') ? nameOf(WG_KINDS, cur('workGlowStyle')) : tr('끔')} · ${tr('말풍선')} ${nameOf(BUBBLE_STYLES, cur('choiceBubble') || 'classic')}`,
     progress: () => [nameOf(PROGRESS_BARS, cur('progressBar') || 'plain'), nameOf(ROOM_STYLES, cur('roomStyle') || 'default'), (cur('agentOutfit') || 'none') !== 'none' ? nameOf(AGENT_OUTFITS, cur('agentOutfit')) : ''].filter(Boolean).join(' · '),
     done: () => `${cur('celebrate') ? nameOf(CELEB_KINDS, cur('celebrateStyle') || 'party') : '축하 끔'} · ${cur('doneText') ? `${tr('텍스트')} ${nameOf(DONE_TEXT_STYLES, cur('doneTextStyle') || 'pop')}` : '텍스트 끔'}`,
   };
@@ -10649,6 +10888,10 @@ function openSettings() {
   setupPicker(body.querySelector('[data-picker="bgAnim"]'), { key: 'bgAnim', items: BG_KINDS, preview: previewBg, onPick: (v) => { depToggle('bgAnim', v); applySettings(); } });
   setupPicker(body.querySelector('[data-picker="promptStyle"]'), { key: 'promptStyle', items: PROMPT_STYLES, preview: previewPrompt, onPick: () => applySettings() });
   setupPicker(body.querySelector('[data-picker="choiceBubble"]'), { key: 'choiceBubble', items: BUBBLE_STYLES, preview: previewBubble, onPick: () => { renderSessions(); renderProjects(); } });
+  setupPicker(body.querySelector('[data-picker="usageRing"]'), { key: 'usageRing', items: USAGE_RINGS, preview: previewUsageRing, onPick: () => refreshGauges() });
+  setupPicker(body.querySelector('[data-picker="usageStyle"]'), { key: 'usageStyle', items: USAGE_STYLES, preview: previewUsageStyle, onPick: () => refreshGauges() });
+  updateUsageLinkRow();
+  body.querySelector('#ugLinkBtn')?.addEventListener('click', () => (UG.linked ? unlinkClaudeUsage() : linkClaudeUsage()));
   setupPicker(body.querySelector('[data-picker="workGlowStyle"]'), { key: 'workGlowStyle', items: WG_KINDS, preview: previewGlow, onPick: () => applySettings() });
   setupPicker(body.querySelector('[data-picker="progressBar"]'), { key: 'progressBar', items: PROGRESS_BARS, preview: previewProgressBar, onPick: () => postProgressTheme() });
   setupPicker(body.querySelector('[data-picker="roomStyle"]'), { key: 'roomStyle', items: ROOM_STYLES, preview: previewRoomStyle, onPick: () => postProgressTheme() });
@@ -11026,6 +11269,13 @@ setInterval(() => { if (S.expanded.size) { S.sessionCache.clear(); renderProject
 
   await document.fonts.ready.catch(() => {});
 
+  if (SOLO) {
+    document.getElementById('app').classList.add('no-sidebar');
+    const given = await window.mt.solo.init();
+    if (!given) { window.close(); return; }
+    createTab({ attach: given, shellId: given.shellId, cwd: given.cwd, customTitle: given.customTitle });
+    return;
+  }
   const layout = init.store.layout;
   if (S.settings.restoreSessions && layout?.tabs?.length) {
     // Which conversation each agent tab comes back to: its own, if the transcript is still there. A tab without one
