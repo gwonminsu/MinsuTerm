@@ -49,7 +49,7 @@
 
 ### 하네스 보기
 
-사이드바 폴더 머리의 하네스 버튼을 누르고 이 화면에서 열지 새 창으로 열지 고르세요. 지도에는 그 폴더에서 Claude Code와 Codex가 어떤 지침 파일을 어떤 순서로 읽는지(전역, 상위 폴더, 이 폴더, 규칙) 나오고, 두 에이전트가 함께 읽는 파일과 깨진 `@import`도 보입니다. 지침은 규칙 하나하나를 문서처럼 바로 고칩니다. `/`로 형식을 고르고, 글을 고르면 서식 도구가 뜨고, 끌어서 옮기고 Tab으로 들여씁니다. 저장하면 손댄 줄만 바뀌고, 저장 전 내용은 기록에 남습니다. 도구 탭은 스킬, MCP, 훅을 이 폴더에만 걸린 것과 전역으로 나눠 보여 주고, 스위치를 누르면 켜고 끄는 방법을 에이전트 탭에 넣어 줍니다. 지도 위에서 모든 지침 파일을 검색하고, 에이전트가 시작할 때 실제로 받는 글 전체를 볼 수 있습니다. 점검 탭은 너무 긴 지침, 겹친 줄, 키처럼 보이는 값 같은 문제를 찾아 주고, 항목마다 고쳐 달라는 부탁을 에이전트 탭에 넣어 줍니다. 지침이 없는 폴더에서는 첫 AGENTS.md를 만들도록 안내하고, 새 지침 파일의 초안은 에이전트에게 부탁할 수 있습니다.
+사이드바 폴더 머리의 하네스 버튼을 누르면, 그 폴더에서 Claude Code와 Codex가 어떤 지침 파일을 어떤 순서로 읽는지 지도로 보여 줍니다. 지침은 문서처럼 바로 고치고, 점검에서 찾은 문제는 에이전트에게 고쳐 달라고 부탁할 수 있습니다.
 
 <img src="docs/media/harness.gif" width="880" alt="폴더 머리의 하네스 버튼에서 이 화면에서 열기를 고르면 지침 지도와 규칙 보기가 열리고, 새 규칙을 써서 굵게 하고 / 목록으로 체크 목록을 만든 뒤 저장하고, 도구 탭에서 이 폴더와 전역 스킬을 보고 스위치를 눌러 끄는 방법을 보고, 지도를 접었다 편 뒤 점검 탭에서 항목마다 부탁하기 버튼을 보는 화면">
 
@@ -119,7 +119,7 @@ Run `claude` or `codex` in your usual shell (cmd, PowerShell, zsh) and the tab s
 - **Session restore.** Close the app and your tabs and Claude / Codex conversations come back next time.
 - **Split panes.** Drag a tab onto the terminal to split it.
 - **Prompt composer.** Write long, multi-line prompts in a separate editor and send them in one go. Open it from the status bar, with Ctrl+Shift+E, or from the hint at the end of the agent's input row.
-- **Harness view.** For each folder, a map of which instruction files (CLAUDE.md, AGENTS.md, rules) Claude Code and Codex read and in what order, with skills, MCP servers and hooks split into this folder only and global. Edit the instructions like a document; a save changes only the lines you touched, and the text before it is kept in a history. Search every instruction file, see the whole text each agent gets at start, hand any problem the checks find to an agent tab as a ready-made request, and have an agent draft a new instruction file.
+- **Harness view.** For each folder, a map of the instruction files (CLAUDE.md, AGENTS.md) Claude Code and Codex read, in order. Edit them like a document and hand problems the checks find to an agent.
 - **Progress view.** Open a folder's progress from the progress button in the sidebar's folder header (Ctrl+Shift+J), which also counts what needs your attention: what the agent is doing, what's next, what's done and what it needs from you, live in the terminal area. One click sets up the skills it needs (`minsuterm-progress`, `minsuterm-dreaming`); it works without Node, and the page is served on 127.0.0.1 only.
 - **Decorations.** Working borders (a relay race, Santa's sleigh...), celebrations when a task is done, animated backgrounds, typing effects and sounds, animated cursors, dark and light themes.
 - **Languages.** Korean, English, Japanese, Chinese.
