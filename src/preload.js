@@ -99,6 +99,20 @@ contextBridge.exposeInMainWorld('mt', {
     room: (d) => ipcRenderer.invoke('progress:room', d), // (that window) its page's room request, answered by the main window
     summary: (dir) => ipcRenderer.invoke('progress:summary', dir),
   },
+  // 하네스 보기: a folder's instruction files (read, written with a snapshot first), skills, MCP servers, hooks
+  harness: {
+    scan: (project, at, opts) => ipcRenderer.invoke('harness:scan', project, at, opts),
+    combined: (project, at) => ipcRenderer.invoke('harness:combined', project, at),
+    read: (file) => ipcRenderer.invoke('harness:read', file),
+    write: (file, text, opts) => ipcRenderer.invoke('harness:write', file, text, opts),
+    history: (file) => ipcRenderer.invoke('harness:history', file),
+    snapshot: (file, id) => ipcRenderer.invoke('harness:snapshot', file, id),
+    codexLoaded: (sessionId) => ipcRenderer.invoke('harness:codexLoaded', sessionId),
+    watch: (project) => ipcRenderer.invoke('harness:watch', project),
+    unwatch: (project) => ipcRenderer.send('harness:unwatch', project),
+    onChanged: (fn) => on('harness:changed', fn),
+    window: (dir, title) => ipcRenderer.invoke('harness:window', dir, title),
+  },
   openUserData: () => ipcRenderer.send('open:userdata'),
   diagRecord: (ms, snapshot) => ipcRenderer.invoke('diag:record', ms, snapshot),
   devtools: () => ipcRenderer.send('win:devtools'),

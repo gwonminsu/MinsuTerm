@@ -9,6 +9,7 @@ const { spawn, execFile } = require('child_process');
 const pty = require('@lydell/node-pty');
 const progress = require('./progress'); // 진행도 보기: the progress page, hosted here, and the skills it installs
 const usage = require('./usage'); // 사용량 게이지: an agent tab's context, limits, model and effort (and Claude's status line link)
+const harness = require('./harness'); // 하네스 보기: a folder's CLAUDE.md / AGENTS.md, skills, MCP servers and hooks
 
 const IS_MAC = process.platform === 'darwin';
 const IS_WIN = process.platform === 'win32';
@@ -2280,6 +2281,92 @@ ipcMain.handle('progress:room', async (_e, d) => {
   try { return await at.webContents.executeJavaScript(`roomRequest(${arg})`, true); } catch { return null; }
 });
 ipcMain.handle('progress:summary', (_e, dirs) => (Array.isArray(dirs) ? dirs.slice(0, 60) : [dirs]).map((d) => (isFolder(d) ? progress.summary(d) : null)));
+
+/*
+ * 하네스 보기 (src/harness.js): what shapes the agents in a sidebar folder. Only folders the user added can be opened;
+ * the page may read the files a scan listed and write instruction files only (inside an added folder, or the
+ * user-wide CLAUDE.md / AGENTS.md), each write snapshotted first. Skills, MCP servers and hooks are read only.
+ */
+let harnessSet = false;
+function harnessReady() {
+  if (harnessSet) return;
+  harness.configure({
+    home: HOME, claudeDir: process.env.CLAUDE_CONFIG_DIR || path.join(HOME, '.claude'), codexHome: CODEX_HOME,
+    historyDir: path.join(app.getPath('userData'), 'harness-history'),
+    top: (TEST_DIR && process.env.MT_HARNESS_TOP) || '', // tests: a made-up home must not reach the real one
+  });
+  harnessSet = true;
+}
+const projectRoots = () => (Array.isArray(store.projects) ? store.projects : []).map((p) => p && p.path).filter((p) => typeof p === 'string' && p);
+const harnessProject = (dir) => {
+  if (!isFolder(dir) || !projectRoots().some((r) => samePath(r, dir))) throw new Error('폴더를 찾지 못했어요');
+  return dir;
+};
+const harnessFile = (file) => {
+  harnessReady();
+  if (typeof file !== 'string' || !path.isAbsolute(file) || !harness.readable(file, projectRoots())) throw new Error('열 수 없는 파일이에요');
+  return file;
+};
+ipcMain.handle('harness:scan', (_e, project, at, opts) => {
+  harnessReady();
+  harnessProject(project);
+  if (at && !isFolder(at)) throw new Error('폴더를 찾지 못했어요');
+  return harness.scan({ project, at: at || project, light: !!(opts && opts.light) });
+});
+ipcMain.handle('harness:combined', (_e, project, at) => {
+  harnessReady();
+  harnessProject(project);
+  if (at && !isFolder(at)) throw new Error('폴더를 찾지 못했어요');
+  return harness.combined({ project, at: at || project });
+});
+ipcMain.handle('harness:read', (_e, file) => harness.read(harnessFile(file)));
+ipcMain.handle('harness:write', (_e, file, text, opts) => {
+  harnessReady();
+  if (typeof file !== 'string' || !path.isAbsolute(file) || typeof text !== 'string') throw new Error('저장할 수 없어요');
+  const o = opts && typeof opts === 'object' ? opts : {};
+  return harness.write(file, text, { base: typeof o.base === 'string' ? o.base : null, create: o.create === true, projects: projectRoots() });
+});
+ipcMain.handle('harness:history', (_e, file) => harness.history(harnessFile(file)));
+ipcMain.handle('harness:snapshot', (_e, file, id) => harness.snapshot(harnessFile(file), String(id || '')));
+/** What a running Codex session read at its start (its first message), to compare with the files now. */
+ipcMain.handle('harness:codexLoaded', (_e, sessionId) => {
+  const f = typeof sessionId === 'string' && /^[\w-]{8,80}$/.test(sessionId) ? codexFile(sessionId) : '';
+  return f ? harness.codexLoaded(f) : null;
+});
+const harnessWatches = new Map(); // `${webContents id}|${project}` -> stop
+ipcMain.handle('harness:watch', (e, project) => {
+  harnessReady();
+  harnessProject(project);
+  const wc = e.sender;
+  const key = `${wc.id}|${path.resolve(project).toLowerCase()}`;
+  if (harnessWatches.has(key)) return true;
+  const stop = harness.watch(project, (paths) => { if (!wc.isDestroyed()) wc.send('harness:changed', { project, paths }); });
+  harnessWatches.set(key, stop);
+  wc.once('destroyed', () => { const s = harnessWatches.get(key); if (s) { s(); harnessWatches.delete(key); } });
+  return true;
+});
+ipcMain.on('harness:unwatch', (e, project) => {
+  const key = `${e.sender.id}|${path.resolve(String(project || '')).toLowerCase()}`;
+  const s = harnessWatches.get(key);
+  if (s) { s(); harnessWatches.delete(key); }
+});
+/* 하네스 보기 in a window of its own (index.html?harness=<folder>), one per folder, as 진행도 windows are */
+const harnessWins = new Map();
+ipcMain.handle('harness:window', async (_e, dir, title) => {
+  harnessProject(dir);
+  const key = path.resolve(dir).toLowerCase();
+  const had = harnessWins.get(key);
+  if (had && !had.isDestroyed()) { if (had.isMinimized()) had.restore(); had.focus(); return true; }
+  const name = String(title || path.basename(dir)).slice(0, 80);
+  const w = new BrowserWindow(appWindowOptions({ width: 1240, height: 840, minWidth: 620, minHeight: 440 }));
+  w.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  w.webContents.on('will-navigate', (ev) => ev.preventDefault());
+  w.webContents.on('render-process-gone', () => { if (!w.isDestroyed()) w.close(); });
+  w.loadFile(path.join(__dirname, 'renderer', 'index.html'), { query: { harness: dir, name } });
+  harnessWins.set(key, w);
+  w.on('closed', () => harnessWins.delete(key));
+  return true;
+});
 ipcMain.on('open:userdata', () => shell.openPath(app.getPath('userData')));
 
 /*
@@ -2623,6 +2710,9 @@ async function runTestScript() {
   const log = [];
   win.webContents.on('console-message', (_e, level, message) => { if (level >= 2) log.push(`CONSOLE(${level}) ${message}`); });
   if (process.env.MT_TEST_ONTOP) { win.setAlwaysOnTop(true); win.focus(); }
+  if (process.env.MT_TEST_FOCUS) { // the page keeps its focus while another window is in front (tests run beside other work)
+    try { win.webContents.debugger.attach('1.3'); await win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true }); } catch { /* without it */ }
+  }
   try {
     win.setBounds({ width: 1280, height: 800 });
     await wait(4000);
@@ -2706,6 +2796,42 @@ async function runTestScript() {
         await shot(`step-${log.length}-${step.startsWith('pjs:') ? 'pjs' : 'pclick'}`);
         continue;
       }
+      if (step === 'wins' || step.startsWith('wjs:')) { // "wins": the open windows' addresses; "wjs:<code>": run in the newest other window, its value logged
+        const all = BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed());
+        if (step === 'wins') log.push('WINS ' + JSON.stringify(all.map((w) => decodeURIComponent(w.webContents.getURL().replace(/^.*?index\.html/, '')))));
+        else {
+          const other = all.filter((w) => w !== win).pop();
+          let v;
+          try { v = other ? await other.webContents.executeJavaScript(`(async () => { ${step.slice(4)} })()`, true) : 'NO WINDOW'; } catch (e) { v = 'ERR ' + e.message; }
+          log.push('WJS ' + JSON.stringify(v));
+          if (other) fs.writeFileSync(path.join(TEST_DIR, `step-${log.length}-wjs.png`), (await other.capturePage()).toPNG());
+        }
+        await wait(300);
+        continue;
+      }
+      if (step.startsWith('hover:') || step.startsWith('click:')) { // real mouse at an element: "hover:<selector>" moves onto its centre, "click:<selector>" moves there and clicks (hover first when it shows only on hover)
+        const sel = step.slice(6).trim();
+        const wc = win.webContents;
+        const find = () => js(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return null; const r = el.getBoundingClientRect(); if (r.width) return [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)]; let p = el.parentElement; while (p && !p.getBoundingClientRect().width) p = p.parentElement; if (!p) return null; const q = p.getBoundingClientRect(); return { parent: [Math.round(q.left + q.width / 2), Math.round(q.top + q.height / 2)] }; })()`);
+        let at = await find();
+        if (at && at.parent) { // shown only on hover (and drawn again since): move over what holds it, then look again
+          wc.sendInputEvent({ type: 'mouseMove', x: at.parent[0] - 2, y: at.parent[1] });
+          wc.sendInputEvent({ type: 'mouseMove', x: at.parent[0], y: at.parent[1] });
+          await wait(200);
+          at = await find();
+        }
+        if (!at || at.parent) { log.push(`${step}: NOT FOUND`); continue; }
+        wc.sendInputEvent({ type: 'mouseMove', x: at[0], y: at[1] });
+        if (step.startsWith('click:')) {
+          await wait(120);
+          wc.sendInputEvent({ type: 'mouseDown', x: at[0], y: at[1], button: 'left', clickCount: 1 });
+          wc.sendInputEvent({ type: 'mouseUp', x: at[0], y: at[1], button: 'left', clickCount: 1 });
+        }
+        log.push(`${step}: at ${at.join(',')}`);
+        await wait(step.startsWith('click:') ? 700 : 300);
+        await shot(`step-${log.length}-${step.slice(0, 5)}`);
+        continue;
+      }
       if (step.startsWith('mouse:') || step.startsWith('fmouse:')) { // "mouse:<down|move|up>:<x>:<y>[:<buttons>]": a mouse event at window coordinates (may lie outside it); fmouse: to the window in front
         const [pre, kind, xs, ys, bs] = step.split(':');
         const type = { down: 'mouseDown', move: 'mouseMove', up: 'mouseUp' }[kind];
@@ -2745,6 +2871,17 @@ async function runTestScript() {
         const m = await post('Profiler.stop'); fs.writeFileSync(path.join(TEST_DIR, 'main.cpuprofile'), JSON.stringify(m.profile));
         ses.disconnect(); try { dbg.detach(); } catch { /* ignore */ }
         log.push(`prof: main event-loop lag max ${lag} ms`);
+        continue;
+      }
+      if (step.startsWith('press:')) { // one key with modifiers: "press:Tab", "press:Shift+Tab", "press:Control+B", "press:Alt+Up"
+        win.webContents.focus();
+        const parts = step.slice(6).split('+');
+        const keyCode = parts.pop();
+        const modifiers = parts.map((m) => m.toLowerCase());
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
+        await wait(150);
+        log.push(`${step}: pressed`);
         continue;
       }
       if (step.startsWith('keys:')) { // real key presses, typed at a human pace ("\n" = Enter)
@@ -2798,6 +2935,7 @@ app.on('before-quit', (e) => {
   if (!quitting) { quitting = true; saveWindows(); }
   saveStoreNow();
   progress.stopServer();
+  harness.closeAll(); // the folder watchers of 하네스 보기
 });
 app.on('window-all-closed', () => {
   killAll();

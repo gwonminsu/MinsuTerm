@@ -233,13 +233,15 @@ function shortMiddlePath(p, max = 44) {
 /** A window of 진행도 alone (index.html?progress=<folder>&name=<name>): 진행도 보기 over the whole window, no tabs. */
 const PROGRESS_ONLY = new URLSearchParams(location.search).get('progress') || '';
 const PROGRESS_ONLY_SETTINGS = { bgAnim: 'none', typingFx: 'none', crt: false, sidebarVisible: false }; // (in that window only, never saved)
-const SOLO = new URLSearchParams(location.search).get('solo') === '1' || !!PROGRESS_ONLY;
+/** A window of 하네스 보기 alone (index.html?harness=<folder>&name=<name>; HX_ONLY is read in harness.js): no tabs either. */
+const PANEL_ONLY = !!(PROGRESS_ONLY || HX_ONLY); // a window of one panel: never saves layout, tabs, tasks or projects
+const SOLO = new URLSearchParams(location.search).get('solo') === '1' || PANEL_ONLY;
 // what a window of its own keeps whatever is set: a window tabs went to has no sidebar (that is the main window's)
-const WINDOW_SETTINGS = PROGRESS_ONLY ? PROGRESS_ONLY_SETTINGS : SOLO ? { sidebarVisible: false } : null;
+const WINDOW_SETTINGS = PANEL_ONLY ? PROGRESS_ONLY_SETTINGS : SOLO ? { sidebarVisible: false } : null;
 
 let layoutTimer = null;
 function saveLayout() {
-  if (PROGRESS_ONLY) return;
+  if (PANEL_ONLY) return;
   clearTimeout(layoutTimer);
   layoutTimer = setTimeout(() => {
     const tabs = S.tabs.map((t) => ({
@@ -266,7 +268,7 @@ function saveLayout() {
 S.remoteTabs = [];
 let reportT = null;
 function reportTabs() {
-  if (PROGRESS_ONLY) return;
+  if (PANEL_ONLY) return;
   clearTimeout(reportT);
   reportT = setTimeout(() => {
     window.mt.tab.report(S.tabs.filter((t) => !t.closed).map((t) => ({
@@ -301,7 +303,7 @@ function mergeTasks(list) {
   renderProjects();
 }
 
-function saveProjects() { if (!PROGRESS_ONLY) window.mt.store.projects(S.projects); }
+function saveProjects() { if (!PANEL_ONLY) window.mt.store.projects(S.projects); }
 function saveSettings(patch) {
   Object.assign(S.settings, patch);
   window.mt.store.settings(patch);
@@ -2680,7 +2682,7 @@ function composerHint() {
   }
   const t = activeTab();
   const hide = () => composerHintEl.classList.remove('show');
-  if (!t || !t.agent || !t.alive || S.overlay || (S.progress && S.progress.open) || !['ready', 'done'].includes(t.status)) return hide();
+  if (!t || !t.agent || !t.alive || S.overlay || (S.progress && S.progress.open) || HX.open || !['ready', 'done'].includes(t.status)) return hide();
   const b = t.term.buffer.active;
   if (b.viewportY !== b.baseY) return hide();
   const screen = t.host.querySelector('.xterm-screen');
@@ -6185,7 +6187,7 @@ async function attachPty(tab, a) {
 
 /** A tab another MinsuTerm window let go over this one (one going back, or two windows joining): it joins these tabs. */
 function adoptTab(p) {
-  if (PROGRESS_ONLY || !p || !p.id || tabById(p.id)) return;
+  if (PANEL_ONLY || !p || !p.id || tabById(p.id)) return;
   createTab({ attach: p, shellId: p.shellId, cwd: p.cwd, customTitle: p.customTitle });
 }
 window.mt.tab.onAdopt(adoptTab);
@@ -8663,10 +8665,14 @@ function folderHtml(p, agents, ownerOf = ownerProject) {
     ? `<span class="fb-stat st-${top}" title="${esc(tip)}"><i></i>${sessions.length > 1 ? `<b>${sessions.length}</b>` : ''}</span>`
     : '';
 
+  // 하네스: the warnings its last look found, as a number on the button
+  const hxN = p.temp ? 0 : harnessIssues(p.path);
+  const hxTip = hxN ? `하네스 열기 · 점검에서 주의할 점 ${hxN}개` : '하네스 열기 · CLAUDE.md, AGENTS.md, 스킬, MCP';
+  const hxBadge = hxN ? `<b class="fb-hx-n no-i18n">${hxN > 9 ? '9+' : hxN}</b>` : '';
   const actions = p.temp
     ? `<button class="icon-btn" data-a="add" title="프로젝트로 추가">${icon('folderPlus')}</button>`
     : `${openTabs.length >= 2 ? `<button class="icon-btn${gridOn ? ' on' : ''}" data-a="grid" title="이 폴더의 탭을 한 화면에 보기 (Ctrl+Shift+G)">${icon('grid')}</button>` : ''}
-       <button class="icon-btn" data-a="shell" title="이 폴더에서 터미널 열기">${icon('terminal')}</button>
+       <button class="icon-btn fb-hx${harnessOpenFor(p.path) ? ' on' : ''}" data-a="harness" title="${hxTip}">${icon('harness')}${hxBadge}</button>
        <button class="icon-btn" data-a="more" title="더보기">${icon('more')}</button>`;
 
   let body = '';
@@ -8716,7 +8722,7 @@ function folderHtml(p, agents, ownerOf = ownerProject) {
       <div class="fbox-head" data-p="${esc(p.id)}" data-path="${esc(p.path)}" title="${esc(p.path)}">
         ${projectIconHtml(p)}
         <span class="fb-text">
-          <span class="fb-name no-i18n">${esc(p.name)}</span>
+          <span class="fb-name"><span class="no-i18n">${esc(p.name)}</span>${!p.temp && harnessIssues(p.path) ? `<i class="fb-hx-dot" title="하네스 점검에서 주의할 점 ${harnessIssues(p.path)}개"></i>` : ''}</span>
           <span class="fb-path">${p.temp ? '프로젝트 아님 · ' : ''}<span class="no-i18n">${esc(prettyPath(p.path))}</span></span>
         </span>
         <span class="fb-badges">${badges}</span>
@@ -8821,7 +8827,7 @@ function openProjectIconPicker(p) {
     if (a === 'add') return addProject(head.dataset.path);
     const p = projectOf(head);
     if (a === 'grid' && p) return toggleGrid(p.path);
-    if (a === 'shell' && p) return newShell(null, p.path);
+    if (a === 'harness' && p) return harnessOpenFor(p.path) ? closeHarness() : hxOpenChoice(p.path, p.name);
     if (a === 'more' && p) { const r = e.target.closest('button').getBoundingClientRect(); return openProjectMenu(p, r.left, r.bottom + 4); }
     // accordion: open this box, close the others (click again to close)
     const isOpen = head.parentElement.classList.contains('open');
@@ -8961,7 +8967,7 @@ function renderStatus() {
   stc.title = t && t.agent ? '프롬프트 작성기 (Ctrl+Shift+E)' : '프롬프트 작성기 · Claude 또는 Codex 탭에서 쓸 수 있어요';
   $('#st-session').hidden = !(t && t.agent && t.sessionId);
   document.getElementById('app').dataset.agent = t && t.agent ? t.agent : '';
-  if (!PROGRESS_ONLY) window.mt.setTitle(t ? `${tabLabel(t)} — MinsuTerm` : 'MinsuTerm');
+  if (!PANEL_ONLY) window.mt.setTitle(t ? `${tabLabel(t)} — MinsuTerm` : 'MinsuTerm');
   if (!t) { kind.innerHTML = ''; cwd.textContent = ''; st.innerHTML = ''; return; }
   kind.className = `st-item st-kind${t.agent ? ' ' + t.agent : ''}`;
   kind.innerHTML = t.agent
@@ -9238,16 +9244,29 @@ $('#search-close').addEventListener('click', () => closeSearch());
 
 const overlayRoot = $('#overlay-root');
 
+/** With 하네스 open: the app shortcuts that do not act on the hidden terminal (palette, sidebar, 진행도, history,
+ *  settings, font size, devtools). */
+function hxAppKey(e) {
+  const c = modKey(e) && !e.altKey && !(IS_MAC ? e.ctrlKey : e.metaKey);
+  if (c && e.shiftKey) return ['KeyP', 'KeyB', 'KeyJ', 'KeyO', 'KeyI'].includes(e.code);
+  return c && ['Comma', 'Equal', 'NumpadAdd', 'Minus', 'NumpadSubtract', 'Digit0', 'Numpad0'].includes(e.code);
+}
 function closeOverlay() {
   if (!S.overlay) return;
   const o = S.overlay;
   S.overlay = null;
   o.cleanup?.();
   o.nodes.forEach((n) => n.remove());
-  activeTab()?.term.focus();
+  const back = o.back;
+  if (back && back.isConnected && back.closest('.hx-view')) back.focus({ preventScroll: true });
+  else if (typeof HX !== 'undefined' && HX.open && typeof HV !== 'undefined' && HV) HV.view.querySelector('.hx-close')?.focus({ preventScroll: true });
+  else activeTab()?.term.focus();
 }
+/** Where the focus was before a menu or dialog took it (kept across one overlay replacing another). */
+const overlayBack = () => (S.overlay ? S.overlay.back : document.activeElement);
 
 function openMenu(items, x, y) {
+  const back = overlayBack();
   closeOverlay();
   const scrim = h('div');
   scrim.style.cssText = 'position:fixed;inset:0;z-index:99';
@@ -9267,9 +9286,26 @@ function openMenu(items, x, y) {
   menu.style.left = `${Math.max(6, Math.min(x, innerWidth - r.width - 6))}px`;
   menu.style.top = `${Math.max(6, Math.min(y, innerHeight - r.height - 6))}px`;
   // stopPropagation: focus is still in the terminal (a right-click doesn't move it), which would send this Esc to the agent
-  const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeOverlay(); } };
+  const onKey = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeOverlay(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopPropagation();
+      const its = [...menu.querySelectorAll('.menu-item:not(:disabled)')];
+      if (!its.length) return;
+      const at = its.findIndex((x) => x.classList.contains('focus'));
+      const d = e.key === 'ArrowDown' ? 1 : -1;
+      const k = at < 0 ? (d > 0 ? 0 : its.length - 1) : (at + d + its.length) % its.length;
+      its.forEach((x) => x.classList.remove('focus'));
+      its[k].classList.add('focus');
+      its[k].scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'Enter') { const on = menu.querySelector('.menu-item.focus'); if (on) { e.preventDefault(); e.stopPropagation(); on.click(); } }
+  };
+  menu.addEventListener('pointermove', () => menu.querySelectorAll('.menu-item.focus').forEach((x) => x.classList.remove('focus')));
   window.addEventListener('keydown', onKey, true);
-  S.overlay = { nodes: [scrim, menu], cleanup: () => window.removeEventListener('keydown', onKey, true) };
+  S.overlay = { nodes: [scrim, menu], back, cleanup: () => window.removeEventListener('keydown', onKey, true) };
 }
 
 function agentQuickItems(t) {
@@ -9337,7 +9373,7 @@ const taskById = (id) => S.tasks.find((k) => k.id === id) || null;
 const MAX_TASKS = 400; // kept in memory and on disk
 let taskSaveTimer = null;
 function saveTasks() {
-  if (PROGRESS_ONLY) return;
+  if (PANEL_ONLY) return;
   clearTimeout(taskSaveTimer);
   taskSaveTimer = setTimeout(() => {
     const keep = S.tasks.filter((k) => k.status !== 'pending').slice(-MAX_TASKS)
@@ -9650,6 +9686,8 @@ function openProjectMenu(p, x, y) {
     { icon: 'terminal', text: '터미널 열기', run: () => newShell(null, p.path) },
     { icon: 'progressRing', text: '진행도 보기', run: () => openProgress(p.path, p.name) },
     { icon: 'openExternal', text: '진행도 새 창에서 보기', run: () => openProgressWindow(p.path, p.name) },
+    { icon: 'harness', text: '하네스 보기', run: () => openHarness(p.path, p.name) },
+    { icon: 'openExternal', text: '하네스 새 창에서 보기', run: () => openHarnessWindow(p.path, p.name) },
     { icon: 'history', text: 'Claude 마지막 대화 이어서', cls: 'claude', run: () => newAgent('claude', { cwd: p.path, mode: 'continue' }) },
     { icon: 'history', text: 'Codex 마지막 대화 이어서', cls: 'codex', run: () => newAgent('codex', { cwd: p.path, mode: 'continue' }) },
     '-',
@@ -9736,6 +9774,7 @@ function postProgressTheme() {
 
 async function openProgress(dir, name) {
   if (!dir) return;
+  if (typeof HX !== 'undefined' && HX.open && !PROGRESS_ONLY && !(await closeHarness({ focus: false }))) return;
   const seq = ++S.progress.seq;
   Object.assign(S.progress, { open: true, path: dir, name: name || String(dir).replace(/[\\/]+$/, '').split(/[\\/]/).pop() || dir });
   PG.view.querySelector('.pg-title').textContent = S.progress.name;
@@ -9984,7 +10023,7 @@ function showProgressSetup(st, seq) {
   };
 }
 
-function closeProgress() {
+function closeProgress({ focus = true } = {}) {
   if (PROGRESS_ONLY) { window.close(); return; }
   if (!S.progress.open) return;
   S.progress.open = false;
@@ -10001,7 +10040,7 @@ function closeProgress() {
   renderProjects();
   syncTitleActions();
   const t = activeTab();
-  if (t && t.term) requestAnimationFrame(() => t.term.focus());
+  if (focus && t && t.term) requestAnimationFrame(() => t.term.focus());
 }
 
 /* ---------- the title bar's 진행도: pick one of the folders, then its page ---------- */
@@ -10237,6 +10276,10 @@ function openCommandPalette() {
     { group: '보기', icon: 'type', text: '글꼴 크기 초기화', hint: 'Ctrl+0', run: () => setFontSize(14) },
     { group: '앱', icon: 'folderPlus', text: '프로젝트 추가', run: () => addProject() },
     { group: '앱', icon: 'progressRing', text: '진행도 보기', hint: 'Ctrl+Shift+J', keywords: 'progress todo board', run: () => openProgressPicker() },
+    { group: '앱', icon: 'harness', text: '하네스 보기', sub: '이 폴더의 CLAUDE.md, AGENTS.md, 스킬, MCP, 훅', keywords: 'harness claude.md agents.md instructions skills mcp hooks', run: () => {
+      const p = (t && t.cwd && ownerProject(t.cwd)) || sortedProjects()[0];
+      if (p) openHarness(p.path, p.name); else toast('먼저 사이드바에 프로젝트 폴더를 추가하세요', { icon: 'info' });
+    } },
     { group: '앱', icon: 'settings', text: '설정', hint: 'Ctrl+,', run: openSettings },
     { group: '앱', icon: 'folderOpen', text: '설정 폴더 열기', run: () => window.mt.openUserData() },
     { group: '앱', icon: 'bolt', text: '성능 기록 (30초)', sub: '느릴 때 실행: 무엇이 CPU를 쓰는지 파일로 저장', keywords: 'performance profile cpu diagnostics lag', run: () => recordPerformance(30000) },
@@ -10291,6 +10334,7 @@ async function openSessionPicker(cwd) {
 /* --- modal helpers -------------------------------------------------- */
 
 function openModal({ title, body, foot, width }) {
+  const back = overlayBack();
   closeOverlay();
   const scrim = h('div', 'scrim');
   const m = h('div', 'modal');
@@ -10322,7 +10366,7 @@ function openModal({ title, body, foot, width }) {
     closeOverlay();
   };
   window.addEventListener('keydown', onKey, true);
-  S.overlay = { nodes: [scrim, m], cleanup: () => window.removeEventListener('keydown', onKey, true) };
+  S.overlay = { nodes: [scrim, m], back, cleanup: () => window.removeEventListener('keydown', onKey, true) };
   return m;
 }
 
@@ -11160,7 +11204,7 @@ function toast(text, { icon: ic = 'info', ms = 3500, onClick } = {}) {
 // macOS Edit menu: ⌘C / ⌘V / ⌘A act on a text box if one has focus, otherwise on the terminal
 window.mt.onMenuEdit?.((cmd) => {
   const el = document.activeElement;
-  const textBox = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && !el.closest('.xterm');
+  const textBox = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable) && !el.closest('.xterm');
   if (textBox) { document.execCommand(cmd); return; }
   const t = activeTab();
   if (!t) return;
@@ -11170,7 +11214,8 @@ window.mt.onMenuEdit?.((cmd) => {
 });
 
 window.addEventListener('keydown', (e) => {
-  if (S.overlay || PROGRESS_ONLY) return;
+  if (S.overlay || PANEL_ONLY) return;
+  if (typeof HX !== 'undefined' && HX.open && !hxAppKey(e)) return;
   const t = activeTab();
   // app shortcuts: Ctrl on Windows, ⌘ on macOS (where Ctrl keeps its terminal meaning)
   const c = modKey(e) && !e.altKey && !(IS_MAC ? e.ctrlKey : e.metaKey);
@@ -11424,6 +11469,14 @@ setInterval(() => { if (S.expanded.size) { S.sessionCache.clear(); renderProject
     const name = new URLSearchParams(location.search).get('name') || basename(PROGRESS_ONLY);
     openProgress(PROGRESS_ONLY, name);
     window.mt.setTitle(`${tr('진행도')} · ${name}`);
+    return;
+  }
+  if (HX_ONLY) {
+    document.body.classList.add('harness-only');
+    document.getElementById('app').classList.add('no-sidebar');
+    const name = new URLSearchParams(location.search).get('name') || basename(HX_ONLY);
+    openHarness(HX_ONLY, name);
+    window.mt.setTitle(`${tr('하네스')} · ${name}`);
     return;
   }
   if (SOLO) {

@@ -25,6 +25,7 @@
 - **화면 분할** 탭을 끌어다 놓으면 끝.
 - **프롬프트 작성기** 긴 프롬프트는 따로 편하게 쓰고 한 번에 보내기.
 - **진행도 보기** 폴더마다 에이전트가 지금 하는 일, 다음 할 일, 끝낸 일과 내가 해 줘야 할 일을 한 화면에서.
+- **하네스 보기** 폴더마다 Claude Code와 Codex가 읽는 CLAUDE.md, AGENTS.md와 스킬, MCP, 훅을 지도로 보고, 지침은 문서처럼 바로 고치기.
 - **꾸미기** 일하는 동안 테두리를 달리는 계주 선수, 끝나면 터지는 축하 효과, 배경, 타이핑 효과와 효과음, 움직이는 커서까지.
 - **한국어 / English / 日本語 / 中文**
 
@@ -45,6 +46,12 @@
 사이드바 폴더 머리의 진행도 버튼(Ctrl+Shift+J)을 누르고 추가한 프로젝트 폴더를 고르면, 그 폴더에서 에이전트가 적는 할 일과 진행 상황이 터미널 자리에 실시간으로 뜹니다. 확인할 일이 생기면 버튼에 그 수가 표시됩니다. 요청을 남기거나 먼저 할 일을 고를 수도 있습니다. 처음 한 번 **구축하기**를 누르면 필요한 스킬이 설치되고, Node가 없는 컴퓨터에서도 동작합니다.
 
 <img src="docs/media/progress.gif" width="880" alt="폴더 머리의 진행도 버튼에서 my-app을 고르면 진행도가 열리고, 끝낸 일과 지금 하는 일이 실시간으로 바뀌고 해 주셔야 할 일이 뜨며, 요청을 보내면 할 일에 들어가는 화면">
+
+### 하네스 보기
+
+사이드바 폴더 머리의 하네스 버튼을 누르고 이 화면에서 열지 새 창으로 열지 고르세요. 지도에는 그 폴더에서 Claude Code와 Codex가 어떤 지침 파일을 어떤 순서로 읽는지(전역, 상위 폴더, 이 폴더, 규칙) 나오고, 두 에이전트가 함께 읽는 파일과 깨진 `@import`도 보입니다. 지침은 규칙 하나하나를 문서처럼 바로 고칩니다. `/`로 형식을 고르고, 글을 고르면 서식 도구가 뜨고, 끌어서 옮기고 Tab으로 들여씁니다. 저장하면 손댄 줄만 바뀌고, 저장 전 내용은 기록에 남습니다. 도구 탭은 스킬, MCP, 훅을 이 폴더에만 걸린 것과 전역으로 나눠 보여 주고, 스위치를 누르면 켜고 끄는 방법을 에이전트 탭에 넣어 줍니다. 지도 위에서 모든 지침 파일을 검색하고, 에이전트가 시작할 때 실제로 받는 글 전체를 볼 수 있습니다. 점검 탭은 너무 긴 지침, 겹친 줄, 키처럼 보이는 값 같은 문제를 찾아 주고, 항목마다 고쳐 달라는 부탁을 에이전트 탭에 넣어 줍니다. 지침이 없는 폴더에서는 첫 AGENTS.md를 만들도록 안내하고, 새 지침 파일의 초안은 에이전트에게 부탁할 수 있습니다.
+
+<img src="docs/media/harness.gif" width="880" alt="폴더 머리의 하네스 버튼에서 이 화면에서 열기를 고르면 지침 지도와 규칙 보기가 열리고, 새 규칙을 써서 굵게 하고 / 목록으로 체크 목록을 만든 뒤 저장하고, 도구 탭에서 이 폴더와 전역 스킬을 보고 스위치를 눌러 끄는 방법을 보고, 지도를 접었다 편 뒤 점검 탭에서 항목마다 부탁하기 버튼을 보는 화면">
 
 ### 작업 중 테두리와 테마
 
@@ -89,7 +96,10 @@ MinsuTerm이 그 용도로 만든 터미널입니다. 작업 현황과 서브에
 아니요. cmd, PowerShell, zsh 등 원래 쓰던 셸을 그대로 씁니다.
 
 **무료인가요? 내 데이터는 어디로 가나요?**
-무료(MIT)이고, 인터넷으로 보내는 건 없습니다. Claude Code / Codex가 원래 PC에 저장하는 대화 기록 파일을 읽기만 합니다.
+무료(MIT)이고, 인터넷으로 보내는 건 없습니다. Claude Code / Codex가 원래 PC에 저장하는 대화 기록 파일을 읽고, 하네스 보기에서는 지침과 설정 파일을 읽습니다. 쓰는 것은 하네스 보기에서 저장을 누른 지침 파일뿐입니다.
+
+**하네스 보기는 무엇을 바꾸나요?**
+저장을 누른 지침 파일(CLAUDE.md, AGENTS.md, `.claude/rules`)만 바꾸고, 저장하기 전 내용은 기록에 남아 되돌릴 수 있습니다. 스킬, MCP, 훅, 플러그인 설정은 보여 주기만 하고 고치지 않습니다. 켜고 끄기는 에이전트에게 맡기며, MCP의 키와 환경 변수는 보여 주지 않습니다.
 
 **진행도 보기는 무엇을 설치하나요?**
 처음 구축하기를 누를 때만 `~/.claude/skills`에 `minsuterm-progress`(진행 보고)와 `minsuterm-dreaming`(자러 가기 때 기억 정리) 스킬을 넣습니다. 진행 기록은 그 폴더의 `progress/`에 남고 git에는 올라가지 않으며, 진행도 페이지는 이 컴퓨터 안(127.0.0.1)에서만 열립니다.
@@ -109,13 +119,14 @@ Run `claude` or `codex` in your usual shell (cmd, PowerShell, zsh) and the tab s
 - **Session restore.** Close the app and your tabs and Claude / Codex conversations come back next time.
 - **Split panes.** Drag a tab onto the terminal to split it.
 - **Prompt composer.** Write long, multi-line prompts in a separate editor and send them in one go. Open it from the status bar, with Ctrl+Shift+E, or from the hint at the end of the agent's input row.
+- **Harness view.** For each folder, a map of which instruction files (CLAUDE.md, AGENTS.md, rules) Claude Code and Codex read and in what order, with skills, MCP servers and hooks split into this folder only and global. Edit the instructions like a document; a save changes only the lines you touched, and the text before it is kept in a history. Search every instruction file, see the whole text each agent gets at start, hand any problem the checks find to an agent tab as a ready-made request, and have an agent draft a new instruction file.
 - **Progress view.** Open a folder's progress from the progress button in the sidebar's folder header (Ctrl+Shift+J), which also counts what needs your attention: what the agent is doing, what's next, what's done and what it needs from you, live in the terminal area. One click sets up the skills it needs (`minsuterm-progress`, `minsuterm-dreaming`); it works without Node, and the page is served on 127.0.0.1 only.
 - **Decorations.** Working borders (a relay race, Santa's sleigh...), celebrations when a task is done, animated backgrounds, typing effects and sounds, animated cursors, dark and light themes.
 - **Languages.** Korean, English, Japanese, Chinese.
 
 **Download** from [Releases](../../releases/latest): the `.exe` for Windows, or the `.zip` for your Mac (`arm64` for Apple Silicon, `x64` for Intel). On Windows, choose *More info > Run anyway* if SmartScreen appears. On macOS, if the app is reported as damaged, run `xattr -cr .` in the unzipped folder, then `bash "MinsuTerm 설치.command"`. The app isn't notarized yet.
 
-**Privacy.** Nothing is sent over the network. MinsuTerm only reads the transcript files Claude Code and Codex already keep on your computer.
+**Privacy.** Nothing is sent over the network. MinsuTerm reads the transcript files Claude Code and Codex already keep on your computer and, for the harness view, their instruction and settings files. It writes only the instruction files you save there.
 
 **Support.** It's a one-person project. If you like it, [buy me a coffee](https://buymeacoffee.com/minsugwon) or sponsor on GitHub. It goes toward Apple notarization and Windows code signing first.
 

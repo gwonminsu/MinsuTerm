@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 
 const ROOT = path.resolve(process.env.PROGRESS_ROOT ?? process.cwd());
 const REGISTRY = path.join(os.homedir(), '.claude', 'progress', 'projects.json');
@@ -27,7 +28,7 @@ const USAGE = `사용법: node cli.mjs <명령> ...
   done <번호> [해시,해시] ["<설명>"]       끝내고 오늘 기록에 쌓기
   log "<제목>" [해시,해시] ["<설명>"]      칸에 없던 일을 오늘 기록에 쌓기
   drop <번호>                           항목 지우기
-  req <요청번호> [added|drop]            페이지 요청을 할 일에 넣음으로 표시 / 지우기
+  req <요청번호> [added|drop]            페이지 요청을 이 세션이 맡음(할 일에 넣음) / 지우기
   notice add <id> "<내용>"               사용자가 해 줘야 할 일 알리기
   notice rm <id>                        공지 지우기
   sleep now                             잠들기
@@ -370,10 +371,29 @@ const COMMANDS = {
     const r = d.requests.find((x) => Number(x.id) === id);
     if (!r) fail(`요청 ${args[0] ?? '(없음)'}이(가) 없어요`);
     const mode = args[1] ?? 'added';
-    if (mode === 'added') r.status = 'added';
-    else if (mode === 'drop') d.requests = d.requests.filter((x) => x !== r);
-    else fail(`added 또는 drop만 쓸 수 있어요: ${mode}`);
-    return `요청 ${r.id} ${mode === 'added' ? '할 일에 넣음' : '지움'}`;
+    if (mode !== 'added' && mode !== 'drop') fail(`added 또는 drop만 쓸 수 있어요: ${mode}`);
+    // 같은 폴더의 세션 여럿이 같은 요청 알림을 받는다: 먼저 맡은 세션만 한다. 같은 순간에 맡으려 해도 하나만 되게,
+    // 요청마다 표시 파일을 만들 수 있는 쪽(파일이 없을 때만 만들어진다)이 맡는다
+    const mark = path.join(path.dirname(dataFile(ROOT)), 'claims', `req-${r.id}-${createHash('sha1').update(`${r.at}\n${r.text}`).digest('hex').slice(0, 10)}`);
+    if (mode === 'added') {
+      const taken = (by) => fail(`요청 ${r.id}은(는) 다른 세션이 이미 맡았어요. 이 세션은 하지 않아요${by ? ` (맡은 세션: ${by})` : ''}`);
+      if (r.status === 'added' && r.by && session && r.by !== session) taken(r.by);
+      if (session) {
+        fs.mkdirSync(path.dirname(mark), { recursive: true });
+        try { fs.writeFileSync(mark, session, { flag: 'wx' }); } catch (e) {
+          if (e.code !== 'EEXIST') throw e;
+          const by = fs.readFileSync(mark, 'utf8').trim();
+          if (by && by !== session) taken(by);
+        }
+      }
+      r.status = 'added';
+      if (session) r.by = session;
+      if (agent) r.agent = agent;
+    } else {
+      d.requests = d.requests.filter((x) => x !== r);
+      try { fs.rmSync(mark, { force: true }); } catch { /* 없으면 그만 */ }
+    }
+    return `요청 ${r.id} ${mode === 'added' ? '이 세션이 맡음 (할 일에 넣음)' : '지움'}`;
   },
   notice() {
     const sub = args[0];
